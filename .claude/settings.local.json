@@ -14,7 +14,10 @@
       "Bash(dotnet run:*)",
       "Bash(timeout:*)",
       "Bash(curl:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd ASP.NET Core 8.0 REST API with authentication and game save functionality\n\n- JWT-based authentication with ASP.NET Identity \\(register, login, change password\\)\n- Game save endpoints with JSONB storage for flexible game state\n- PostgreSQL database via Docker Compose\n- EF Core migrations for Identity tables and GameSaves\n- Swagger UI for API documentation and testing\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUpdate Claude Code local settings with approved commands\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
