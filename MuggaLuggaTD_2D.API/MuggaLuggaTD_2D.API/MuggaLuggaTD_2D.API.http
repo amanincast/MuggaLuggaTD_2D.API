@@ -1,0 +1,6 @@
+@MuggaLuggaTD_2D.API_HostAddress = http://localhost:5081
+
+GET {{MuggaLuggaTD_2D.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
