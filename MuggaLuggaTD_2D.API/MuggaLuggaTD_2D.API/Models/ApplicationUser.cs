@@ -10,4 +10,10 @@ public class ApplicationUser : IdentityUser
 
     // Navigation property for game saves
     public ICollection<GameSave> GameSaves { get; set; } = new List<GameSave>();
+
+    // Navigation properties for game instances
+    public ICollection<GameInstance> OwnedGameInstances { get; set; } = new List<GameInstance>();
+    public ICollection<PlayerGameData> PlayerGameData { get; set; } = new List<PlayerGameData>();
+    public ICollection<MarketplaceListing> MarketplaceListingsAsSeller { get; set; } = new List<MarketplaceListing>();
+    public ICollection<MarketplaceListing> MarketplaceListingsAsBuyer { get; set; } = new List<MarketplaceListing>();
 }
