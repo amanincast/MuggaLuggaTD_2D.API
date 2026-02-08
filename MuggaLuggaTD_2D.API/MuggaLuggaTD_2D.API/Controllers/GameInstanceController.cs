@@ -30,7 +30,7 @@ public class GameInstanceController : ControllerBase
         var gameInstances = await _context.GameInstances
             .Where(g => g.OwnerId == userId || g.PlayerGameData.Any(p => p.UserId == userId))
             .OrderByDescending(g => g.UpdatedAt)
-            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.CreatedAt, g.UpdatedAt))
+            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt))
             .ToListAsync();
 
         return Ok(new GameInstanceListResponse(gameInstances));
@@ -60,6 +60,8 @@ public class GameInstanceController : ControllerBase
             gameInstance.Id,
             gameInstance.Name,
             gameInstance.OwnerId,
+            gameInstance.AccessType,
+            gameInstance.Capacity,
             gameInstance.CreatedAt,
             gameInstance.UpdatedAt));
     }
@@ -74,6 +76,8 @@ public class GameInstanceController : ControllerBase
         {
             Name = request.Name,
             OwnerId = userId,
+            AccessType = request.AccessType,
+            Capacity = request.Capacity,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -88,6 +92,8 @@ public class GameInstanceController : ControllerBase
                 gameInstance.Id,
                 gameInstance.Name,
                 gameInstance.OwnerId,
+                gameInstance.AccessType,
+                gameInstance.Capacity,
                 gameInstance.CreatedAt,
                 gameInstance.UpdatedAt));
     }
@@ -113,6 +119,8 @@ public class GameInstanceController : ControllerBase
         }
 
         gameInstance.Name = request.Name;
+        gameInstance.AccessType = request.AccessType;
+        gameInstance.Capacity = request.Capacity;
         gameInstance.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -121,6 +129,8 @@ public class GameInstanceController : ControllerBase
             gameInstance.Id,
             gameInstance.Name,
             gameInstance.OwnerId,
+            gameInstance.AccessType,
+            gameInstance.Capacity,
             gameInstance.CreatedAt,
             gameInstance.UpdatedAt));
     }
