@@ -34,13 +34,14 @@ public class AuthController : ControllerBase
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser != null)
         {
-            return BadRequest(new AuthResponse(false, null, null, null, null, new[] { "Email already registered" }));
+            return BadRequest(new AuthResponse(false, null, null, null, null, null, new[] { "Email already registered" }));
         }
 
         var user = new ApplicationUser
         {
             UserName = request.Username,
             Email = request.Email,
+            DisplayName = request.DisplayName,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -48,13 +49,13 @@ public class AuthController : ControllerBase
 
         if (!result.Succeeded)
         {
-            return BadRequest(new AuthResponse(false, null, null, null, null, result.Errors.Select(e => e.Description)));
+            return BadRequest(new AuthResponse(false, null, null, null, null, null, result.Errors.Select(e => e.Description)));
         }
 
         var token = GenerateJwtToken(user);
         var expiration = DateTime.UtcNow.AddDays(GetTokenExpirationDays());
 
-        return Ok(new AuthResponse(true, token, expiration, user.Id, user.UserName, null));
+        return Ok(new AuthResponse(true, token, expiration, user.Id, user.UserName, user.DisplayName, null));
     }
 
     [HttpPost("login")]
@@ -63,14 +64,14 @@ public class AuthController : ControllerBase
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user == null)
         {
-            return Unauthorized(new AuthResponse(false, null, null, null, null, new[] { "Invalid email or password" }));
+            return Unauthorized(new AuthResponse(false, null, null, null, null, null, new[] { "Invalid email or password" }));
         }
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: false);
 
         if (!result.Succeeded)
         {
-            return Unauthorized(new AuthResponse(false, null, null, null, null, new[] { "Invalid email or password" }));
+            return Unauthorized(new AuthResponse(false, null, null, null, null, null, new[] { "Invalid email or password" }));
         }
 
         // Update last login
@@ -80,7 +81,7 @@ public class AuthController : ControllerBase
         var token = GenerateJwtToken(user);
         var expiration = DateTime.UtcNow.AddDays(GetTokenExpirationDays());
 
-        return Ok(new AuthResponse(true, token, expiration, user.Id, user.UserName, null));
+        return Ok(new AuthResponse(true, token, expiration, user.Id, user.UserName, user.DisplayName, null));
     }
 
     [Authorize]
@@ -90,23 +91,23 @@ public class AuthController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized(new AuthResponse(false, null, null, null, null, new[] { "User not found" }));
+            return Unauthorized(new AuthResponse(false, null, null, null, null, null, new[] { "User not found" }));
         }
 
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            return Unauthorized(new AuthResponse(false, null, null, null, null, new[] { "User not found" }));
+            return Unauthorized(new AuthResponse(false, null, null, null, null, null, new[] { "User not found" }));
         }
 
         var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
 
         if (!result.Succeeded)
         {
-            return BadRequest(new AuthResponse(false, null, null, null, null, result.Errors.Select(e => e.Description)));
+            return BadRequest(new AuthResponse(false, null, null, null, null, null, result.Errors.Select(e => e.Description)));
         }
 
-        return Ok(new AuthResponse(true, null, null, user.Id, user.UserName, null));
+        return Ok(new AuthResponse(true, null, null, user.Id, user.UserName, user.DisplayName, null));
     }
 
     [Authorize]
@@ -130,6 +131,37 @@ public class AuthController : ControllerBase
             user.Id,
             user.UserName,
             user.Email,
+            user.DisplayName,
+            user.CreatedAt,
+            user.LastLoginAt
+        });
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<ActionResult<object>> UpdateProfile([FromBody] UpdateProfileRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        user.DisplayName = request.DisplayName;
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new
+        {
+            user.Id,
+            user.UserName,
+            user.Email,
+            user.DisplayName,
             user.CreatedAt,
             user.LastLoginAt
         });
