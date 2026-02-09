@@ -19,7 +19,8 @@
       "Bash(git push)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nUpdate Claude Code local settings with approved commands\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(taskkill:*)",
-      "Bash(cmd //c \"taskkill /PID 4232 /F\")"
+      "Bash(cmd //c \"taskkill /PID 4232 /F\")",
+      "Bash(git commit:*)"
     ]
   }
 }

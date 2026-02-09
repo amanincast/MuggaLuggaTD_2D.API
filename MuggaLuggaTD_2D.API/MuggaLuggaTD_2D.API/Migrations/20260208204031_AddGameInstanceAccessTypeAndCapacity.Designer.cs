@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MuggaLuggaTD_2D.API.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MuggaLuggaTD_2D.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260208204031_AddGameInstanceAccessTypeAndCapacity")]
+    partial class AddGameInstanceAccessTypeAndCapacity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -261,43 +264,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
-            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Friendship", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AddresseeId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RequesterId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AddresseeId");
-
-                    b.HasIndex("RequesterId");
-
-                    b.HasIndex("Status");
-
-                    b.HasIndex("RequesterId", "AddresseeId")
-                        .IsUnique();
-
-                    b.ToTable("Friendships");
-                });
-
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.GameInstance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -446,35 +412,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("PlayerGameData");
                 });
 
-            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.UserBlock", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BlockedUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BlockerId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BlockedUserId");
-
-                    b.HasIndex("BlockerId");
-
-                    b.HasIndex("BlockerId", "BlockedUserId")
-                        .IsUnique();
-
-                    b.ToTable("UserBlocks");
-                });
-
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.WorldViewGameData", b =>
                 {
                     b.Property<Guid>("Id")
@@ -564,25 +501,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Navigation("GameInstance");
                 });
 
-            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Friendship", b =>
-                {
-                    b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "Addressee")
-                        .WithMany("ReceivedFriendRequests")
-                        .HasForeignKey("AddresseeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "Requester")
-                        .WithMany("SentFriendRequests")
-                        .HasForeignKey("RequesterId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Addressee");
-
-                    b.Navigation("Requester");
-                });
-
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.GameInstance", b =>
                 {
                     b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "Owner")
@@ -650,25 +568,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.UserBlock", b =>
-                {
-                    b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "BlockedUser")
-                        .WithMany("BlockedByUsers")
-                        .HasForeignKey("BlockedUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "Blocker")
-                        .WithMany("BlockedUsers")
-                        .HasForeignKey("BlockerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("BlockedUser");
-
-                    b.Navigation("Blocker");
-                });
-
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.WorldViewGameData", b =>
                 {
                     b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", "GameInstance")
@@ -682,10 +581,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.ApplicationUser", b =>
                 {
-                    b.Navigation("BlockedByUsers");
-
-                    b.Navigation("BlockedUsers");
-
                     b.Navigation("GameSaves");
 
                     b.Navigation("MarketplaceListingsAsBuyer");
@@ -695,10 +590,6 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Navigation("OwnedGameInstances");
 
                     b.Navigation("PlayerGameData");
-
-                    b.Navigation("ReceivedFriendRequests");
-
-                    b.Navigation("SentFriendRequests");
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.GameInstance", b =>

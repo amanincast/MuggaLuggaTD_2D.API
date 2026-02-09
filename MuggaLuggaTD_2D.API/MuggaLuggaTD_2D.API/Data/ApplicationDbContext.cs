@@ -17,6 +17,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerGameData> PlayerGameData => Set<PlayerGameData>();
     public DbSet<Alliance> Alliances => Set<Alliance>();
     public DbSet<MarketplaceListing> MarketplaceListings => Set<MarketplaceListing>();
+    public DbSet<Friendship> Friendships => Set<Friendship>();
+    public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -105,6 +107,43 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(u => u.MarketplaceListingsAsBuyer)
                 .HasForeignKey(e => e.BuyerId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Configure Friendship entity
+        builder.Entity<Friendship>(entity =>
+        {
+            entity.HasIndex(e => new { e.RequesterId, e.AddresseeId }).IsUnique();
+            entity.HasIndex(e => e.RequesterId);
+            entity.HasIndex(e => e.AddresseeId);
+            entity.HasIndex(e => e.Status);
+
+            entity.HasOne(e => e.Requester)
+                .WithMany(u => u.SentFriendRequests)
+                .HasForeignKey(e => e.RequesterId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Addressee)
+                .WithMany(u => u.ReceivedFriendRequests)
+                .HasForeignKey(e => e.AddresseeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Configure UserBlock entity
+        builder.Entity<UserBlock>(entity =>
+        {
+            entity.HasIndex(e => new { e.BlockerId, e.BlockedUserId }).IsUnique();
+            entity.HasIndex(e => e.BlockerId);
+            entity.HasIndex(e => e.BlockedUserId);
+
+            entity.HasOne(e => e.Blocker)
+                .WithMany(u => u.BlockedUsers)
+                .HasForeignKey(e => e.BlockerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.BlockedUser)
+                .WithMany(u => u.BlockedByUsers)
+                .HasForeignKey(e => e.BlockedUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
