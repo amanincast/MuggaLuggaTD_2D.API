@@ -36,6 +36,31 @@ public class GameInstanceController : ControllerBase
         return Ok(new GameInstanceListResponse(gameInstances));
     }
 
+    [HttpGet("browse")]
+    public async Task<ActionResult<GameInstanceListResponse>> BrowseGameInstances()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var gameInstances = await _context.GameInstances
+            .Where(g => g.OwnerId != userId
+                && !g.PlayerGameData.Any(p => p.UserId == userId)
+                && !_context.UserBlocks.Any(b =>
+                    (b.BlockerId == userId && b.BlockedUserId == g.OwnerId) ||
+                    (b.BlockerId == g.OwnerId && b.BlockedUserId == userId))
+                && (g.AccessType == GameInstanceAccessType.Public
+                    || (g.AccessType == GameInstanceAccessType.FriendsAndInviteOnly
+                        && _context.Friendships.Any(f =>
+                            f.Status == FriendshipStatus.Accepted
+                            && ((f.RequesterId == userId && f.AddresseeId == g.OwnerId)
+                                || (f.RequesterId == g.OwnerId && f.AddresseeId == userId))))))
+            .OrderByDescending(g => g.UpdatedAt)
+            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt))
+            .ToListAsync();
+
+        return Ok(new GameInstanceListResponse(gameInstances));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<GameInstanceResponse>> GetGameInstance(Guid id)
     {
@@ -50,10 +75,9 @@ public class GameInstanceController : ControllerBase
             return NotFound(new { message = "Game instance not found" });
         }
 
-        // Check access: owner or player
-        if (!await HasAccessToGameInstance(id, userId))
+        if (!await HasAccessToGameInstance(gameInstance, userId))
         {
-            return Forbid();
+            return NotFound(new { message = "Game instance not found" });
         }
 
         return Ok(new GameInstanceResponse(
@@ -166,10 +190,33 @@ public class GameInstanceController : ControllerBase
         return User.FindFirstValue(ClaimTypes.NameIdentifier);
     }
 
-    private async Task<bool> HasAccessToGameInstance(Guid gameInstanceId, string userId)
+    private async Task<bool> HasAccessToGameInstance(GameInstance gameInstance, string userId)
     {
-        return await _context.GameInstances
-            .AnyAsync(g => g.Id == gameInstanceId &&
-                (g.OwnerId == userId || g.PlayerGameData.Any(p => p.UserId == userId)));
+        // Block check: if a block exists in either direction, deny access
+        var blockExists = await _context.UserBlocks.AnyAsync(b =>
+            (b.BlockerId == userId && b.BlockedUserId == gameInstance.OwnerId) ||
+            (b.BlockerId == gameInstance.OwnerId && b.BlockedUserId == userId));
+
+        if (blockExists)
+            return false;
+
+        // Owner or existing player always has access
+        var isOwnerOrPlayer = gameInstance.OwnerId == userId
+            || await _context.PlayerGameData.AnyAsync(p => p.GameInstanceId == gameInstance.Id && p.UserId == userId);
+
+        if (isOwnerOrPlayer)
+            return true;
+
+        // Access based on AccessType
+        return gameInstance.AccessType switch
+        {
+            GameInstanceAccessType.Public => true,
+            GameInstanceAccessType.FriendsAndInviteOnly => await _context.Friendships.AnyAsync(f =>
+                f.Status == FriendshipStatus.Accepted
+                && ((f.RequesterId == userId && f.AddresseeId == gameInstance.OwnerId)
+                    || (f.RequesterId == gameInstance.OwnerId && f.AddresseeId == userId))),
+            GameInstanceAccessType.InviteOnly => false,
+            _ => false
+        };
     }
 }
