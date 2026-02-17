@@ -2,9 +2,11 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
+using MuggaLuggaTD_2D.API.Hubs;
 using MuggaLuggaTD_2D.API.Models;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
@@ -15,10 +17,12 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 public class WorldViewGameDataController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IHubContext<GameHub> _hubContext;
 
-    public WorldViewGameDataController(ApplicationDbContext context)
+    public WorldViewGameDataController(ApplicationDbContext context, IHubContext<GameHub> hubContext)
     {
         _context = context;
+        _hubContext = hubContext;
     }
 
     [HttpGet]
@@ -81,6 +85,10 @@ public class WorldViewGameDataController : ControllerBase
             existingData.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            await _hubContext.Clients.Group(gameInstanceId.ToString())
+                .SendAsync("WorldViewGameDataUpdated", new WorldViewGameDataUpdated(
+                    gameInstanceId, request.GameData, existingData.UpdatedAt));
+
             return Ok(new WorldViewGameDataResponse(
                 existingData.Id,
                 existingData.GameInstanceId,
@@ -99,6 +107,10 @@ public class WorldViewGameDataController : ControllerBase
 
         _context.WorldViewGameData.Add(worldData);
         await _context.SaveChangesAsync();
+
+        await _hubContext.Clients.Group(gameInstanceId.ToString())
+            .SendAsync("WorldViewGameDataUpdated", new WorldViewGameDataUpdated(
+                gameInstanceId, request.GameData, worldData.UpdatedAt));
 
         return CreatedAtAction(
             nameof(GetWorldViewGameData),
