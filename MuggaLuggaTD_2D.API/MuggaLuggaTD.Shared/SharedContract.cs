@@ -14,6 +14,9 @@ namespace MuggaLuggaTD.Shared
     /// </summary>
     public static class SharedContract
     {
-        public const string Version = "1.0.0";
+        // 1.1.0 — conquest rules (ConquestResolver + location enums) moved into this assembly when
+        // PvE conquest became server-applied; a 1.0.0 client still writes conquests through the
+        // world blob and must not be allowed to.
+        public const string Version = "1.1.0";
     }
 }

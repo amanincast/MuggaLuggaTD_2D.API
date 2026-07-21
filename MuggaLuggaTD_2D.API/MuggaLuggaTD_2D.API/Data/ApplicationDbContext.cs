@@ -19,6 +19,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<MarketplaceListing> MarketplaceListings => Set<MarketplaceListing>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
+    public DbSet<PveRun> PveRuns => Set<PveRun>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -43,6 +44,23 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(e => e.Owner)
                 .WithMany(u => u.OwnedGameInstances)
                 .HasForeignKey(e => e.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure PveRun entity (a player's attempt at a PvE location)
+        builder.Entity<PveRun>(entity =>
+        {
+            // Claims look up a user's open runs for an instance, so index that path.
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.ClaimedAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

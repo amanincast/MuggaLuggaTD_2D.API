@@ -73,8 +73,9 @@ builder.Services.AddSignalR();
 // Authoritative game content, read from GameContent/ once at startup.
 builder.Services.AddSingleton<IGameContentProvider, GameContentProvider>();
 
-// Server-side PvP resolution (see WorldPvPService).
+// Server-side conquest resolution (see WorldPvPService / WorldPveService).
 builder.Services.AddScoped<WorldPvPService>();
+builder.Services.AddScoped<WorldPveService>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support
