@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
@@ -15,10 +17,14 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 public class PlayerGameDataController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly PlayerSaveValidator _saveValidator;
+    private readonly ISessionLog _sessionLog;
 
-    public PlayerGameDataController(ApplicationDbContext context)
+    public PlayerGameDataController(ApplicationDbContext context, PlayerSaveValidator saveValidator, ISessionLog sessionLog)
     {
         _context = context;
+        _saveValidator = saveValidator;
+        _sessionLog = sessionLog;
     }
 
     [HttpGet]
@@ -98,7 +104,23 @@ public class PlayerGameDataController : ControllerBase
             return NotFound(new { message = "Game instance not found" });
         }
 
-        var gameDataJson = JsonSerializer.Serialize(request.GameData);
+        // Strip any applied ability upgrade that isn't in the content pool before persisting. This is
+        // an anti-cheat gate: illegal upgrades inflate ability damage, and PvP power is recomputed
+        // from this saved roster. Editing the blob as a JsonNode keeps every other field intact.
+        var saveNode = JsonSerializer.SerializeToNode(request.GameData);
+        var validation = _saveValidator.StripIllegalUpgrades(saveNode);
+        if (validation.Rejected > 0)
+        {
+            _sessionLog.Log("SAVE-REJECT",
+                $"user={userId} accepted={validation.Accepted} rejected={validation.Rejected} " +
+                $"[{string.Join(", ", validation.RejectedDetails)}]");
+        }
+        else if (_sessionLog.Enabled)
+        {
+            _sessionLog.Log("SAVE", $"user={userId} upgrades ok={validation.Accepted}");
+        }
+
+        var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
         var existingData = await _context.PlayerGameData
             .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
 
@@ -112,7 +134,7 @@ public class PlayerGameDataController : ControllerBase
                 existingData.Id,
                 existingData.GameInstanceId,
                 existingData.UserId,
-                request.GameData,
+                (object?)saveNode ?? request.GameData,
                 existingData.CreatedAt,
                 existingData.UpdatedAt));
         }
@@ -136,7 +158,7 @@ public class PlayerGameDataController : ControllerBase
                 playerData.Id,
                 playerData.GameInstanceId,
                 playerData.UserId,
-                request.GameData,
+                (object?)saveNode ?? request.GameData,
                 playerData.CreatedAt,
                 playerData.UpdatedAt));
     }

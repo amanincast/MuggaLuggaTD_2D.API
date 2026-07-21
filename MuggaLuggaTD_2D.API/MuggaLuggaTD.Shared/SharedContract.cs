@@ -15,8 +15,10 @@ namespace MuggaLuggaTD.Shared
     public static class SharedContract
     {
         // 1.1.0 — conquest rules (ConquestResolver + location enums) moved into this assembly when
-        // PvE conquest became server-applied; a 1.0.0 client still writes conquests through the
-        // world blob and must not be allowed to.
-        public const string Version = "1.1.0";
+        //   PvE conquest became server-applied; a 1.0.0 client still writes conquests through the
+        //   world blob and must not be allowed to.
+        // 1.2.0 — PvE rewards and ability-upgrade legality moved server-side. Older clients grant
+        //   their own rewards and persist unvalidated upgrades, so must re-sync before playing.
+        public const string Version = "1.2.0";
     }
 }

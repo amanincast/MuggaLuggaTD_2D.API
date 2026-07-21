@@ -419,3 +419,6 @@ FodyWeavers.xsd
 
 # Claude Code local (machine-specific) settings
 .claude/settings.local.json
+
+# Session diagnostics logs (Diagnostics:SessionLog)
+logs/
