@@ -55,11 +55,13 @@ public class WorldPveService
     public static readonly TimeSpan RunExpiry = TimeSpan.FromHours(6);
 
     private readonly ApplicationDbContext _context;
+    private readonly IGameContentProvider _content;
     private readonly ILogger<WorldPveService> _logger;
 
-    public WorldPveService(ApplicationDbContext context, ILogger<WorldPveService> logger)
+    public WorldPveService(ApplicationDbContext context, IGameContentProvider content, ILogger<WorldPveService> logger)
     {
         _context = context;
+        _content = content;
         _logger = logger;
     }
 
@@ -179,10 +181,24 @@ public class WorldPveService
 
         run.ClaimedAt = DateTime.UtcNow;
 
-        _logger.LogInformation("PvE conquest {Outcome} at {Location} by {User} (run {RunId}, {Seconds:F0}s).",
-            outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds);
+        // Rewards are rolled here, from the location, rather than accepted from the client. A
+        // self-reported total is unbounded, and fabricated XP/gear inflates the same persisted roster
+        // that PvP power is computed from.
+        var rewards = RunRewardCalculator.Calculate(
+            location["Level"]?.GetValue<int>() ?? 1,
+            location["Tier"]?.GetValue<int>() ?? 1,
+            _content.RunTuning,
+            _content.DroppableItems,
+            Random.Shared);
 
-        return (new PveOutcome(PveError.None), new PveClaimResponse(run.LocationId, outcome.ToString()), world);
+        _logger.LogInformation(
+            "PvE conquest {Outcome} at {Location} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s).",
+            outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count);
+
+        var response = new PveClaimResponse(
+            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items);
+
+        return (new PveOutcome(PveError.None), response, world);
     }
 
     /// <summary>
