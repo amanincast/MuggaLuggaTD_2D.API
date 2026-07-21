@@ -1,0 +1,10 @@
+{
+    "CharacterDeathCleanUp": {
+        "PrefabAssetLocation": "Prefabs/VFX/VFX_FloatUp",
+        "PrefabName": "VFX_FloatUp"
+    },
+    "AbilityTelegraph": {
+        "PrefabAssetLocation": "Prefabs/VFX/VFX_Telegraph_Circle",
+        "DefaultDuration": 2.0
+    }
+}

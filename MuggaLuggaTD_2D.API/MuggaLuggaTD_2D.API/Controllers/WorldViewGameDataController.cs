@@ -61,7 +61,6 @@ public class WorldViewGameDataController : ControllerBase
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        // Only owner can write world view data
         var gameInstance = await _context.GameInstances
             .FirstOrDefaultAsync(g => g.Id == gameInstanceId);
 
@@ -70,7 +69,13 @@ public class WorldViewGameDataController : ControllerBase
             return NotFound(new { message = "Game instance not found" });
         }
 
-        if (gameInstance.OwnerId != userId)
+        // Any member of the instance may write the shared world, not just its owner. Restricting
+        // this to the owner silently dropped every non-owner's conquest: their capture applied
+        // locally, 403'd here, and was overwritten on the next sync from someone else.
+        //
+        // This is still a last-writer-wins blob write. Outcomes that must not be forgeable are not
+        // resolved here at all — PvP goes through PvPController, which decides the result itself.
+        if (!await HasAccessToGameInstance(gameInstanceId, userId))
         {
             return Forbid();
         }

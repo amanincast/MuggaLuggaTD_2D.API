@@ -1,0 +1,399 @@
+{
+  "Abilities": [
+    {
+      "AbilityName": "Melee Stab",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Melee_Stab_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 2.0
+      },
+      "Range": {
+        "BaseValue": 1.5
+      },
+      "AnimationPrefix": "Stab",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100.0
+    },
+    {
+      "AbilityName": "Melee Slash",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Melee_Slash_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 2.0
+      },
+      "Range": {
+        "BaseValue": 1.5
+      },
+      "AnimationPrefix": "Attack",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100.0
+    },
+    {
+      "AbilityName": "Magic Missile",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
+      "AbilityLinkName": "Magic_Missile_1",
+      "AnimationState": {
+        "ActivationFrameCount": 5
+      },
+      "ActivationCooldown": {
+        "BaseValue": 5.0
+      },
+      "Range": {
+        "BaseValue": 10.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 30.0
+    },
+    {
+      "AbilityName": "Lightning Strike",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Lightning_Strike_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Lightning_Strike_1",
+      "AbilityLinkName": "Lightning_Strike_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 5,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 5.0
+      },
+      "Range": {
+        "BaseValue": 10.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 4,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Magic Burst",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Burst_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Magic_Burst_1",
+      "AbilityLinkName": "Magic_Burst_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 10,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 5.0
+      },
+      "Range": {
+        "BaseValue": 10.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Bow Attack",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Bow_Attack_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Arrow_1",
+      "AbilityLinkName": "Bow_Attack_1",
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 3.0
+      },
+      "Range": {
+        "BaseValue": 20.0
+      },
+      "AnimationPrefix": "Shoot",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 80.0
+    },
+    {
+      "AbilityName": "Arcane Shield",
+      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Arcane_Shield_1",
+      "AbilityLinkName": "Arcane_Shield_1",
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 10.0
+      },
+      "Duration": 5.0,
+      "DamageMultiplier": 0.5,
+      "MaxActivations": 1,
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "Damage": {
+            "BaseValue": 50.0
+          }
+        }
+      ],
+      "Classification": 2
+    },
+    {
+      "AbilityName": "Snipe Shot",
+      "PrefabLocation": "Prefabs/Abilities/Offense/Snipe_Shot_1",
+      "AbilityLinkName": "Snipe_Shot_1",
+      "ActivationCooldown": {
+        "BaseValue": 3.0
+      },
+      "Range": {
+        "BaseValue": 12.0
+      },
+      "AnimationPrefix": "Shoot"
+    },
+    {
+      "AbilityName": "Evasion",
+      "PrefabLocation": "Prefabs/Abilities/Defense/Evasion_1",
+      "AbilityLinkName": "Evasion_1",
+      "ActivationCooldown": {
+        "BaseValue": 8.0
+      },
+      "Duration": 4.0,
+      "DodgeChance": 0.25,
+      "AnimationPrefix": "SpellCast"
+    },
+    {
+      "AbilityName": "Shield Bash",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Shield_Bash_1",
+      "AbilityLinkName": "Shield_Bash_1",
+      "ActivationCooldown": {
+        "BaseValue": 6.0
+      },
+      "StunDuration": 2.0,
+      "AnimationPrefix": "Attack"
+    },
+    {
+      "AbilityName": "Fortify",
+      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Fortify_1",
+      "AbilityLinkName": "Fortify_1",
+      "ActivationCooldown": {
+        "BaseValue": 12.0
+      },
+      "Duration": 5.0,
+      "DamageReduction": 0.3,
+      "AnimationPrefix": "SpellCast"
+    },
+    {
+      "AbilityName": "Inferno Blast",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_1",
+      "AbilityLinkName": "Inferno_Blast_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 10,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 8.0
+      },
+      "Range": {
+        "BaseValue": 12.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 1,
+          "Damage": {
+            "BaseValue": 80.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Arcane Detonation",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_4_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_4_1",
+      "AbilityLinkName": "Arcane_Detonation_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 6,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 6.0
+      },
+      "Range": {
+        "BaseValue": 10.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "Damage": {
+            "BaseValue": 65.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Impact Strike",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_7_2",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_7_2",
+      "AbilityLinkName": "Impact_Strike_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 3,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 4.0
+      },
+      "Range": {
+        "BaseValue": 8.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 55.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Volatile Eruption",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_7_3",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_7_3",
+      "AbilityLinkName": "Volatile_Eruption_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 6,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 7.0
+      },
+      "Range": {
+        "BaseValue": 11.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 1,
+          "Damage": {
+            "BaseValue": 70.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Plasma Burst",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_7_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_7_1",
+      "AbilityLinkName": "Plasma_Burst_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 5,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 5.5
+      },
+      "Range": {
+        "BaseValue": 9.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 4,
+          "Damage": {
+            "BaseValue": 60.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    },
+    {
+      "AbilityName": "Shadow Explosion",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_2",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_2",
+      "AbilityLinkName": "Shadow_Explosion_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 10,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 9.0
+      },
+      "Range": {
+        "BaseValue": 13.0
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 6,
+          "Damage": {
+            "BaseValue": 75.0
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0.0
+    }
+  ]
+}

@@ -7,6 +7,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Authoritative game content served by GameContentController; must sit next to the binary. -->
+    <Content Update="GameContent\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Gameplay rules shared with the Unity client, so PvP is resolved server-side from the same
+         code the client runs rather than a second implementation that can drift. -->
+    <ProjectReference Include="..\MuggaLuggaTD.Shared\MuggaLuggaTD.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.*" />
@@ -14,6 +25,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- The Unity client authors and parses game content and save blobs with Newtonsoft. The server
+         reads the same documents, so it uses the same parser: System.Text.Json is stricter and
+         silently disagrees (e.g. it refuses a JSON `50.0` for a long field, which cost us all ability
+         damage in PvP power until it was caught). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>

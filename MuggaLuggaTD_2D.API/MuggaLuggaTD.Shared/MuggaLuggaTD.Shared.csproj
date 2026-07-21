@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Gameplay math shared by the Unity client and the API.
+
+    This library holds the parts of the game that are pure functions over saved data: the ability
+    upgrade pipeline, modifiable properties, and power calculation. It deliberately has NO Unity
+    dependency, which is what lets the server recompute PvP outcomes itself instead of trusting the
+    client — without a second copy of the rules drifting out of sync.
+
+    Real-time combat stays in the Unity assembly, where it needs GameObjects and colliders. The split
+    follows the interactivity boundary: PvE is interactive and client-side, PvP is a pure contest
+    between two saved parties and is resolved by the server.
+
+    Targets netstandard2.1 so the built DLL can be dropped into Unity's Assets/Plugins.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>MuggaLuggaTD.Shared</AssemblyName>
+    <RootNamespace>MuggaLuggaTD.Shared</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    Convenience for local development: when the Unity repo is checked out beside this one, a Release
+    build refreshes the DLL Unity consumes. Without this the committed DLL silently goes stale and the
+    client resolves PvP under different rules than the server (SharedContract.Version then makes the
+    server reject the attack rather than let the two disagree).
+
+    Conditioned on the directory existing, so a standalone/CI build of the API just skips it.
+  -->
+  <PropertyGroup>
+    <UnityPluginDir>$(MSBuildThisFileDirectory)..\..\..\MuggaLuggaTD_2D\Assets\Plugins\MuggaLuggaTD.Shared\</UnityPluginDir>
+  </PropertyGroup>
+
+  <Target Name="CopyToUnityPlugins" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' AND Exists('$(UnityPluginDir)')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(UnityPluginDir)" />
+    <Message Importance="high" Text="Copied $(TargetFileName) to the Unity project's Plugins folder." />
+  </Target>
+
+</Project>
