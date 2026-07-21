@@ -2,6 +2,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD.Shared.World;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using StateManagement.Models;
@@ -40,8 +41,8 @@ public record PvPAttackOutcome(PvPAttackError Error, PvPAttackResponse? Response
 /// </summary>
 public class WorldPvPService
 {
-    // Mirrors the client's LocationOwnership enum, which Newtonsoft writes as an integer.
-    private const int OwnershipPlayer = 2;
+
+
 
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
@@ -78,14 +79,14 @@ public class WorldPvPService
             return (new PvPAttackOutcome(PvPAttackError.WorldNotFound, null, "World view data not found."), null);
 
         var world = JsonNode.Parse(worldRow.GameData);
-        var location = FindLocation(world, request.LocationId);
+        var location = WorldBlobEditor.FindLocation(world, request.LocationId);
         if (location == null)
             return (new PvPAttackOutcome(PvPAttackError.LocationNotFound, null, "Location not found in this world."), null);
 
         // Only another player's location can be attacked this way. Neutral/enemy locations are PvE.
-        var ownership = location["Ownership"]?.GetValue<int>() ?? 0;
-        var ownerUserId = location["OwnerUserId"]?.GetValue<string>();
-        if (ownership != OwnershipPlayer || string.IsNullOrEmpty(ownerUserId))
+        var ownership = WorldBlobEditor.GetOwnership(location);
+        var ownerUserId = WorldBlobEditor.GetOwnerUserId(location);
+        if (ownership != LocationOwnership.Player || string.IsNullOrEmpty(ownerUserId))
             return (new PvPAttackOutcome(PvPAttackError.NotAttackable, null, "That location is not held by another player."), null);
 
         if (string.Equals(ownerUserId, attackerUserId, StringComparison.Ordinal))
@@ -98,7 +99,7 @@ public class WorldPvPService
             .Where(c => c?.Id != null).Select(c => c.Id).ToHashSet(StringComparer.Ordinal)
             ?? new HashSet<string>(StringComparer.Ordinal);
 
-        var unavailable = CollectCommittedCharacterIds(world, attackerUserId);
+        var unavailable = WorldBlobEditor.CollectCommittedCharacterIds(world, attackerUserId);
         var attackers = (request.AttackerCharacterIds ?? new List<string>())
             .Where(id => !string.IsNullOrEmpty(id) && ownedIds.Contains(id) && !unavailable.Contains(id))
             .Distinct(StringComparer.Ordinal)
@@ -123,7 +124,8 @@ public class WorldPvPService
 
         if (result.AttackerWins)
         {
-            conquestOutcome = Capture(location, attackerUserId, attackerDisplayName);
+            WorldBlobEditor.Capture(location, attackerUserId, attackerDisplayName);
+            conquestOutcome = "Captured";
         }
         else
         {
@@ -151,33 +153,6 @@ public class WorldPvPService
     }
 
     /// <summary>
-    /// Flips the location to the attacker and seizes any garrison stationed there — the defenders
-    /// become prisoners held at the location, rescuable if their owner retakes it.
-    /// </summary>
-    private static string Capture(JsonNode location, string attackerUserId, string? attackerDisplayName)
-    {
-        var garrison = location["GarrisonCharacterIds"] as JsonArray;
-        if (garrison is { Count: > 0 })
-        {
-            var captured = location["CapturedCharacterIds"] as JsonArray ?? new JsonArray();
-            var existing = captured.Select(n => n?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
-
-            foreach (var id in garrison.Select(n => n?.GetValue<string>()).OfType<string>())
-                if (existing.Add(id)) captured.Add(JsonValue.Create(id));
-
-            location["CapturedCharacterIds"] = captured;
-            location["GarrisonCharacterIds"] = new JsonArray();
-            location["GarrisonPower"] = JsonValue.Create(0f);
-        }
-
-        location["Ownership"] = JsonValue.Create(OwnershipPlayer);
-        location["OwnerUserId"] = JsonValue.Create(attackerUserId);
-        location["OwnerDisplayName"] = JsonValue.Create(attackerDisplayName);
-
-        return "Captured";
-    }
-
-    /// <summary>
     /// Rolls the D4 defeat consequence for a failed attack. Captured attackers are recorded on the
     /// location server-side, so a client that ignores its own defeat still finds them imprisoned:
     /// the world blob is authoritative and CapturedCharacterReconciler re-applies it on next load.
@@ -200,68 +175,15 @@ public class WorldPvPService
                 break;
             case "PartyMemberCaptured":
                 affected.Add(attackers[Random.Shared.Next(attackers.Count)]);
-                RecordCaptured(location, affected);
+                WorldBlobEditor.AddCaptured(location, affected);
                 break;
             case "PartyCaptured":
                 affected.AddRange(attackers);
-                RecordCaptured(location, affected);
+                WorldBlobEditor.AddCaptured(location, affected);
                 break;
         }
 
         return outcome;
-    }
-
-    private static void RecordCaptured(JsonNode location, List<string> characterIds)
-    {
-        var captured = location["CapturedCharacterIds"] as JsonArray ?? new JsonArray();
-        var existing = captured.Select(n => n?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
-
-        foreach (var id in characterIds)
-            if (existing.Add(id)) captured.Add(JsonValue.Create(id));
-
-        location["CapturedCharacterIds"] = captured;
-    }
-
-    private static JsonNode? FindLocation(JsonNode? world, string locationId)
-    {
-        if (world?["Locations"] is not JsonArray locations)
-            return null;
-
-        return locations.FirstOrDefault(l =>
-            string.Equals(l?["LocationId"]?.GetValue<string>(), locationId, StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// Ids the attacker cannot field: already garrisoned at one of their own locations, or currently
-    /// held prisoner anywhere. Read from the world blob so the client cannot claim otherwise.
-    /// </summary>
-    private static HashSet<string> CollectCommittedCharacterIds(JsonNode? world, string userId)
-    {
-        var committed = new HashSet<string>(StringComparer.Ordinal);
-        if (world?["Locations"] is not JsonArray locations)
-            return committed;
-
-        foreach (var location in locations)
-        {
-            if (location == null) continue;
-
-            var ownerUserId = location["OwnerUserId"]?.GetValue<string>();
-            if (string.Equals(ownerUserId, userId, StringComparison.Ordinal)
-                && location["GarrisonCharacterIds"] is JsonArray garrison)
-            {
-                foreach (var id in garrison.Select(n => n?.GetValue<string>()).OfType<string>())
-                    committed.Add(id);
-            }
-
-            // Prisoners are held at whichever location captured them, regardless of who owns it.
-            if (location["CapturedCharacterIds"] is JsonArray captured)
-            {
-                foreach (var id in captured.Select(n => n?.GetValue<string>()).OfType<string>())
-                    committed.Add(id);
-            }
-        }
-
-        return committed;
     }
 
     private async Task<UserSaveData?> LoadPlayerSaveAsync(Guid gameInstanceId, string userId)
