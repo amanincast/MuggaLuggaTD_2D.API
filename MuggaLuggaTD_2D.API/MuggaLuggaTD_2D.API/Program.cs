@@ -76,6 +76,10 @@ builder.Services.AddSingleton<IGameContentProvider, GameContentProvider>();
 // Server-side conquest resolution (see WorldPvPService / WorldPveService).
 builder.Services.AddScoped<WorldPvPService>();
 builder.Services.AddScoped<WorldPveService>();
+
+// Reviewable per-session diagnostics log (off unless Diagnostics:SessionLog is true).
+builder.Services.AddSingleton<ISessionLog, SessionLog>();
+builder.Services.AddScoped<PlayerSaveValidator>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support

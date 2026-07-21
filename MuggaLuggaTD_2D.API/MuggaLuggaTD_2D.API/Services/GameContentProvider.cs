@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -34,6 +35,12 @@ public interface IGameContentProvider
 
     /// <summary>Droppable base items, from ItemData. The pool PvE rewards roll from.</summary>
     IReadOnlyList<ItemTemplate> DroppableItems { get; }
+
+    /// <summary>
+    /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
+    /// validated against these so an upgrade outside the pool can't be persisted.
+    /// </summary>
+    IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools { get; }
 }
 
 public class GameContentProvider : IGameContentProvider
@@ -87,6 +94,54 @@ public class GameContentProvider : IGameContentProvider
     public RunTuning RunTuning => _snapshot.RunTuning;
 
     public IReadOnlyList<ItemTemplate> DroppableItems => _snapshot.DroppableItems;
+
+    public IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools => _snapshot.AbilityUpgradePools;
+
+    /// <summary>
+    /// Reads AbilityUpgradeData into the per-ability legal upgrade pools used to validate saves.
+    /// </summary>
+    private IReadOnlyDictionary<string, List<AbilityUpgrade>> ParseUpgradePools(string rawUpgradeData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<UpgradeContentDocument>(rawUpgradeData);
+            var pools = new Dictionary<string, List<AbilityUpgrade>>(StringComparer.Ordinal);
+
+            foreach (var entry in document?.AbilityUpgrades ?? new List<UpgradesByAbilityEntry>())
+            {
+                if (entry?.AbilityLinkName == null) continue;
+
+                // Accumulate rather than assign: the content can list the same ability more than once
+                // (e.g. a second, empty Bow_Attack_1 entry), and a plain assignment let an empty
+                // duplicate clobber the real pool — every legitimate upgrade for that ability was then
+                // rejected on save. The client dodged this because it reads the first match only.
+                if (!pools.TryGetValue(entry.AbilityLinkName, out var list))
+                    pools[entry.AbilityLinkName] = list = new List<AbilityUpgrade>();
+
+                if (entry.Upgrades != null)
+                    list.AddRange(entry.Upgrades);
+            }
+
+            _logger.LogInformation("Parsed upgrade pools for {Count} abilities.", pools.Count);
+            return pools;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("AbilityUpgradeData.json could not be parsed into upgrade pools.", ex);
+        }
+    }
+
+    /// <summary>Mirrors the client's AbilityUpgradeDefaultData layout.</summary>
+    private sealed class UpgradeContentDocument
+    {
+        public List<UpgradesByAbilityEntry> AbilityUpgrades { get; set; } = new();
+    }
+
+    private sealed class UpgradesByAbilityEntry
+    {
+        public string AbilityLinkName { get; set; } = string.Empty;
+        public List<AbilityUpgrade> Upgrades { get; set; } = new();
+    }
 
     /// <summary>
     /// Reads the run tuning that both the combat scene's pacing and the reward budget come from.
@@ -195,6 +250,7 @@ public class GameContentProvider : IGameContentProvider
         string rawAbilityData = null!;
         string rawSurvivalData = null!;
         string rawItemData = null!;
+        string rawUpgradeData = null!;
 
         // Hash the raw file bytes rather than the re-serialized nodes: the version must change when
         // a file changes, and must not change just because System.Text.Json reformats it.
@@ -227,6 +283,7 @@ public class GameContentProvider : IGameContentProvider
             if (name == "AbilityData") rawAbilityData = raw;
             if (name == "SurvivalData") rawSurvivalData = raw;
             if (name == "ItemData") rawItemData = raw;
+            if (name == "AbilityUpgradeData") rawUpgradeData = raw;
 
             var segment = Encoding.UTF8.GetBytes($"{name}:{raw}\n");
             hash.TransformBlock(segment, 0, segment.Length, null, 0);
@@ -237,7 +294,8 @@ public class GameContentProvider : IGameContentProvider
 
         _logger.LogInformation("Loaded {Count} game content documents (version {Version}).", documents.Count, version);
         return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
-            ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData));
+            ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData),
+            ParseUpgradePools(rawUpgradeData));
     }
 
     private sealed record Snapshot(
@@ -245,5 +303,6 @@ public class GameContentProvider : IGameContentProvider
         IReadOnlyDictionary<string, JsonNode> Documents,
         IReadOnlyCollection<GameAbility> AbilityTemplates,
         RunTuning RunTuning,
-        IReadOnlyList<ItemTemplate> DroppableItems);
+        IReadOnlyList<ItemTemplate> DroppableItems,
+        IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools);
 }

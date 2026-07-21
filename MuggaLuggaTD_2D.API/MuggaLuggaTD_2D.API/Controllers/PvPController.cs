@@ -25,12 +25,14 @@ public class PvPController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldPvPService _pvp;
+    private readonly ISessionLog _sessionLog;
 
-    public PvPController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldPvPService pvp)
+    public PvPController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldPvPService pvp, ISessionLog sessionLog)
     {
         _context = context;
         _hubContext = hubContext;
         _pvp = pvp;
+        _sessionLog = sessionLog;
     }
 
     [HttpPost("attack")]
@@ -69,6 +71,12 @@ public class PvPController : ControllerBase
         }
 
         await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
+
+        var r = outcome.Response;
+        _sessionLog.Log("PVP-ATTACK",
+            $"user={userId} loc={r.LocationId} {(r.AttackerWins ? "WIN" : "LOSS")} " +
+            $"atk={r.AttackerPower:F0} def={r.DefenderPower:F0} roll={r.D20Roll}{(r.Modifier >= 0 ? "+" : "")}{r.Modifier}={r.Total} " +
+            $"{r.ConquestOutcome ?? r.DefeatOutcome}");
 
         return Ok(outcome.Response);
     }

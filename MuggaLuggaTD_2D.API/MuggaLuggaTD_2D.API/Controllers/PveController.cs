@@ -24,12 +24,14 @@ public class PveController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldPveService _pve;
+    private readonly ISessionLog _sessionLog;
 
-    public PveController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldPveService pve)
+    public PveController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldPveService pve, ISessionLog sessionLog)
     {
         _context = context;
         _hubContext = hubContext;
         _pve = pve;
+        _sessionLog = sessionLog;
     }
 
     /// <summary>Opens a run as the player enters the combat scene.</summary>
@@ -41,8 +43,13 @@ public class PveController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
-        if (!outcome.Succeeded) return ToError(outcome);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("PVE-BEGIN-DENY", $"user={userId} loc={request.LocationId} {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
 
+        _sessionLog.Log("PVE-BEGIN", $"user={userId} loc={request.LocationId} run={runId}");
         return Ok(new PveBeginResponse(runId));
     }
 
@@ -58,7 +65,11 @@ public class PveController : ControllerBase
         var displayName = user?.DisplayName ?? user?.UserName;
 
         var (outcome, response, updatedWorld) = await _pve.ClaimAsync(gameInstanceId, userId, displayName, request);
-        if (!outcome.Succeeded) return ToError(outcome);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("PVE-CLAIM-DENY", $"user={userId} run={request.RunId} {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
 
         if (updatedWorld == null || response == null)
         {
@@ -67,6 +78,9 @@ public class PveController : ControllerBase
         }
 
         await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
+        _sessionLog.Log("PVE-CLAIM",
+            $"user={userId} loc={response.LocationId} outcome={response.ConquestOutcome} " +
+            $"xp={response.Experience} items={response.Items.Count}");
         return Ok(response);
     }
 
