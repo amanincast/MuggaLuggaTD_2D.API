@@ -1,0 +1,44 @@
+{
+  "DialogueSequences": [
+    {
+      "SequenceId": "grasslands_enter",
+      "Lines": [
+        {
+          "SpeakerName": "Scout",
+          "SpeakerPortraitPath": "",
+          "Text": "Commander, we've arrived at the Grasslands. The enemy has been spotted ahead."
+        },
+        {
+          "SpeakerName": "Commander",
+          "SpeakerPortraitPath": "",
+          "Text": "Good. Set up defenses along the ridge. We can't let them break through."
+        },
+        {
+          "SpeakerName": "Scout",
+          "SpeakerPortraitPath": "",
+          "Text": "Understood. I'll position our allies at the chokepoints."
+        }
+      ]
+    },
+    {
+      "SequenceId": "grasslands_complete",
+      "Lines": [
+        {
+          "SpeakerName": "Commander",
+          "SpeakerPortraitPath": "",
+          "Text": "The Grasslands are secured. Well fought, everyone."
+        },
+        {
+          "SpeakerName": "Scout",
+          "SpeakerPortraitPath": "",
+          "Text": "We found some supplies the enemy left behind. Should we bring them back to the guild?"
+        },
+        {
+          "SpeakerName": "Commander",
+          "SpeakerPortraitPath": "",
+          "Text": "Absolutely. Every bit helps for the battles ahead."
+        }
+      ]
+    }
+  ]
+}

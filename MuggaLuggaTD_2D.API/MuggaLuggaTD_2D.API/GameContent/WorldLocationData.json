@@ -1,0 +1,264 @@
+{
+  "Locations": [
+    {
+      "LocationType": 0,
+      "Tier": 1,
+      "Name": "Grave",
+      "PrefabAssetLocation": "Prefabs/Worldview/Grave",
+      "DefaultClearRadius": 0,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 2,
+      "Name": "StoneMine",
+      "PrefabAssetLocation": "Prefabs/Worldview/StoneMine",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 2,
+      "Name": "DesertTomb",
+      "PrefabAssetLocation": "Prefabs/Worldview/DesertTomb",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 3,
+      "Name": "MountainMine",
+      "PrefabAssetLocation": "Prefabs/Worldview/MountainMine",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 3,
+      "Name": "ReinforcedStoneMine",
+      "PrefabAssetLocation": "Prefabs/Worldview/ReinforcedStoneMine",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 3,
+      "Name": "AncientTomb",
+      "PrefabAssetLocation": "Prefabs/Worldview/AncientTomb",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 4,
+      "Name": "ReinforcedMountainMine",
+      "PrefabAssetLocation": "Prefabs/Worldview/ReinforcedMountainMine",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 0,
+      "Tier": 4,
+      "Name": "MythicTomb",
+      "PrefabAssetLocation": "Prefabs/Worldview/MythicTomb",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 1,
+      "Name": "Pool",
+      "PrefabAssetLocation": "Prefabs/Worldview/Pool",
+      "DefaultClearRadius": 0,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 2,
+      "Name": "SinkHole",
+      "PrefabAssetLocation": "Prefabs/Worldview/SinkHole",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 2,
+      "Name": "SandHole",
+      "PrefabAssetLocation": "Prefabs/Worldview/SandHole",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 3,
+      "Name": "DustDevil",
+      "PrefabAssetLocation": "Prefabs/Worldview/DustDevil",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 3,
+      "Name": "WhirlPool",
+      "PrefabAssetLocation": "Prefabs/Worldview/WhirlPool",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 3,
+      "Name": "DormantVolcano",
+      "PrefabAssetLocation": "Prefabs/Worldview/DormantVolcano",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 1,
+      "Tier": 4,
+      "Name": "ActiveVolcano",
+      "PrefabAssetLocation": "Prefabs/Worldview/ActiveVolcano",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 2,
+      "Tier": 1,
+      "Name": "TentOutpost",
+      "PrefabAssetLocation": "Prefabs/Worldview/TentOutpost",
+      "DefaultClearRadius": 0,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 2,
+      "Tier": 2,
+      "Name": "WoodOutpost",
+      "PrefabAssetLocation": "Prefabs/Worldview/WoodOutpost",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 2,
+      "Tier": 2,
+      "Name": "CircularTower",
+      "PrefabAssetLocation": "Prefabs/Worldview/CircularTower",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 2,
+      "Tier": 3,
+      "Name": "StoneOutpost",
+      "PrefabAssetLocation": "Prefabs/Worldview/StoneOutpost",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 2,
+      "Tier": 3,
+      "Name": "SquareTower",
+      "PrefabAssetLocation": "Prefabs/Worldview/SquareTower",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 3,
+      "Tier": 1,
+      "Name": "LightCastleMedium",
+      "PrefabAssetLocation": "Prefabs/Worldview/LightCastleMedium",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": true,
+      "OwnershipSpecific": 2
+    },
+    {
+      "LocationType": 3,
+      "Tier": 1,
+      "Name": "DarkCastleMedium",
+      "PrefabAssetLocation": "Prefabs/Worldview/DarkCastleMedium",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": true,
+      "OwnershipSpecific": 1
+    },
+    {
+      "LocationType": 3,
+      "Tier": 2,
+      "Name": "LightCastleLarge",
+      "PrefabAssetLocation": "Prefabs/Worldview/LightCastleLarge",
+      "DefaultClearRadius": 3,
+      "DefaultRequirePathAccess": true,
+      "OwnershipSpecific": 2
+    },
+    {
+      "LocationType": 3,
+      "Tier": 2,
+      "Name": "DarkCastleLarge",
+      "PrefabAssetLocation": "Prefabs/Worldview/DarkCastleLarge",
+      "DefaultClearRadius": 3,
+      "DefaultRequirePathAccess": true,
+      "OwnershipSpecific": 1
+    },
+    {
+      "LocationType": 4,
+      "Tier": 1,
+      "Name": "Sign",
+      "PrefabAssetLocation": "Prefabs/Worldview/Sign",
+      "DefaultClearRadius": 0,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 4,
+      "Tier": 1,
+      "Name": "Farm",
+      "PrefabAssetLocation": "Prefabs/Worldview/Farm",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 4,
+      "Tier": 2,
+      "Name": "House",
+      "PrefabAssetLocation": "Prefabs/Worldview/House",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 4,
+      "Tier": 2,
+      "Name": "Hive",
+      "PrefabAssetLocation": "Prefabs/Worldview/Hive",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 4,
+      "Tier": 2,
+      "Name": "Mound",
+      "PrefabAssetLocation": "Prefabs/Worldview/Mound",
+      "DefaultClearRadius": 1,
+      "DefaultRequirePathAccess": false
+    },
+    {
+      "LocationType": 4,
+      "Tier": 3,
+      "Name": "Village",
+      "PrefabAssetLocation": "Prefabs/Worldview/Village",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 4,
+      "Tier": 3,
+      "Name": "Mansion",
+      "PrefabAssetLocation": "Prefabs/Worldview/Mansion",
+      "DefaultClearRadius": 2,
+      "DefaultRequirePathAccess": true
+    },
+    {
+      "LocationType": 4,
+      "Tier": 4,
+      "Name": "Town",
+      "PrefabAssetLocation": "Prefabs/Worldview/Town",
+      "DefaultClearRadius": 3,
+      "DefaultRequirePathAccess": true
+    }
+  ]
+}

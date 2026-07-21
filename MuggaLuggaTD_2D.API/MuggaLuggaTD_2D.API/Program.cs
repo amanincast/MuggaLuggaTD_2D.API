@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.Hubs;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,6 +69,12 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+
+// Authoritative game content, read from GameContent/ once at startup.
+builder.Services.AddSingleton<IGameContentProvider, GameContentProvider>();
+
+// Server-side PvP resolution (see WorldPvPService).
+builder.Services.AddScoped<WorldPvPService>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support

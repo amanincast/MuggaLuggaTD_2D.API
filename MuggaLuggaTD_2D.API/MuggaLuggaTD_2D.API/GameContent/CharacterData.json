@@ -1,0 +1,184 @@
+{
+  "Enemies": [
+    {
+      "TypeName": "Grasslands Drakan Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_1",
+      "LinkName": "Enemy_Grassland_Drakan_1",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 50.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Burst_1",
+          "ValidTargetTags": [ "Player"]
+        }
+        //{
+        //  "AbilityLinkName": "Magic_Missile_1",
+        //  "ValidTargetTags": [ "Player", "Ally" ]
+        //},
+        //{
+        //  "AbilityLinkName": "Arcane_Shield_1"
+        //}
+      ]
+    },
+    //{
+    //    "TypeName": "Arcane Mage",
+    //    "PrefabAssetLocation": "Prefabs/Characters/Enemies/Enemy_Mage_1",
+    //    "PrefabName": "Enemy_Mage_1",
+    //    "BaseMovementSpeed": 5.0,
+    //    "BaseHealth": 100,
+    //    "UnlockableAbilities": [
+    //        {
+    //            "AbilityLinkName": "Magic_Missile_1",
+    //            "ValidTargetTags": [ "Player", "Ally" ]
+    //        },
+    //        {
+    //            "AbilityLinkName": "Arcane_Shield_1"
+    //        }
+    //    ]
+    //},
+    {
+      "TypeName": "Grasslands Drakan Pikeman",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_2",
+      "LinkName": "Enemy_Grassland_Drakan_2",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 50.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Stab_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    }
+  ],
+  "Allies": [
+    {
+      "TypeName": "Archer",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Archer/Ally_Archer_2",
+      "LinkName": "Ally_Archer_2",
+      "MovementSpeed": {
+        "BaseValue": 4.0
+      },
+      "MaxHealth": {
+        "BaseValue": 50.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Bow_Attack_1",
+          "ValidTargetTags": [ "Enemy" ]
+        },
+        {
+          "AbilityLinkName": "Impact_Strike_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+        //{
+        //  "AbilityLinkName": "Lightning_Strike_1",
+        //  "ValidTargetTags": [ "Enemy" ]
+        //}
+        //,
+        //{
+        //  "AbilityLinkName": "Magic_Burst_1",
+        //  "ValidTargetTags": [ "Enemy" ]
+        //}
+      ]
+    },
+    {
+      "TypeName": "Lightning Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_1",
+      "LinkName": "Ally_Mage_1",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Lightning_Strike_1",
+          "ValidTargetTags": [ "Enemy" ]
+        },
+        {
+          "AbilityLinkName": "Plasma_Burst_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Lightning Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_2",
+      "LinkName": "Ally_Mage_2",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Lightning_Strike_1",
+          "ValidTargetTags": [ "Enemy" ]
+        },
+        {
+          "AbilityLinkName": "Plasma_Burst_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Water Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_3",
+      "LinkName": "Ally_Mage_3",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Burst_1",
+          "ValidTargetTags": [ "Enemy" ]
+        },
+        {
+          "AbilityLinkName": "Arcane_Detonation_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Water Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_4",
+      "LinkName": "Ally_Mage_4",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Burst_1",
+          "ValidTargetTags": [ "Enemy" ]
+        },
+        {
+          "AbilityLinkName": "Arcane_Detonation_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    }
+  ]
+}

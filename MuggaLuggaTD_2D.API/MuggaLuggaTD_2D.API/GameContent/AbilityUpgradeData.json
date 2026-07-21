@@ -1,0 +1,383 @@
+{
+  "AbilityUpgrades": [
+    {
+      "AbilityLinkName": "Bow_Attack_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Bow Attack by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Bow Attack by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Bow Attack by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Travel Speed",
+          "Description": "Increase the travel speed of Bow Attack by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.10,
+              "Property": "TravelSpeed"
+            }
+          ]
+        },
+        {
+          "Name": "Larger Arrows",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Piercing Shot",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Multi-Shot",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 2,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Add Water Affinity",
+          "Description": "Add Water affinity to Bow Attack, increasing its damage against Fire enemies.",
+          "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Arrow_1_Water",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 2
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 2,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Add +1 Chaining",
+          "Description": "Causes the ability to chain to the next enemy one more time.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Inferno_Blast_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Inferno Blast by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Inferno Blast by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Inferno Blast by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Inferno Blast by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Arcane_Detonation_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Arcane Detonation by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Arcane Detonation by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Arcane Detonation by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Arcane Detonation by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Impact_Strike_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Impact Strike by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Impact Strike by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Impact Strike by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Impact Strike by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Volatile_Eruption_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Volatile Eruption by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Volatile Eruption by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Volatile Eruption by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Volatile Eruption by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Plasma_Burst_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Plasma Burst by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Plasma Burst by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Plasma Burst by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Plasma Burst by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Shadow_Explosion_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Shadow Explosion by 10%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Shadow Explosion by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Shadow Explosion by 5%.",
+          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Shadow Explosion by 25%.",
+          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+        }
+      ]
+    },
+    {
+      "AbilityName": "Melee Stab",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Melee_Stab_1",
+      "ActivationCooldown": 2.0,
+      "Damage": 20,
+      "Range": 1.5,
+      "AnimationPrefix": "Stab",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "BaseDamage": 50
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100.0
+    },
+    {
+      "AbilityName": "Melee Slash",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Melee_Slash_1",
+      "ActivationCooldown": 2.0,
+      "Damage": 20,
+      "Range": 1.5,
+      "AnimationPrefix": "Attack",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "BaseDamage": 50
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100.0
+    },
+    {
+      "AbilityName": "Magic Missile",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
+      "AbilityLinkName": "Magic_Missile_1",
+      "ActivationCooldown": 5.0,
+      "Damage": 20,
+      "Range": 10.0,
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "BaseDamage": 50
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 30.0
+    },
+    {
+      "AbilityName": "Bow Attack",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Bow_Attack_1",
+      "AbilityLinkName": "Bow_Attack_1",
+      "ActivationCooldown": 3.0,
+      "Damage": 20,
+      "Range": 20.0,
+      "AnimationPrefix": "Shoot",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "BaseDamage": 50
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 80.0
+    },
+    {
+      "AbilityName": "Arcane Shield",
+      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Arcane_Shield_1",
+      "AbilityLinkName": "Arcane_Shield_1",
+      "ActivationCooldown": 10.0,
+      "Duration": 5.0,
+      "DamageMultiplier": 0.5,
+      "MaxActivations": 1,
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 7,
+          "BaseDamage": 50
+        }
+      ],
+      "Classification": 2
+    },
+    {
+      "AbilityName": "Snipe Shot",
+      "PrefabLocation": "Prefabs/Abilities/Offense/Snipe_Shot_1",
+      "AbilityLinkName": "Snipe_Shot_1",
+      "Cooldown": 3.0,
+      "Damage": 15,
+      "Range": 12.0,
+      "AnimationPrefix": "Shoot"
+    },
+    {
+      "AbilityName": "Evasion",
+      "PrefabLocation": "Prefabs/Abilities/Defense/Evasion_1",
+      "AbilityLinkName": "Evasion_1",
+      "Cooldown": 8.0,
+      "Duration": 4.0,
+      "DodgeChance": 0.25,
+      "AnimationPrefix": "SpellCast"
+    },
+    {
+      "AbilityName": "Shield Bash",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Shield_Bash_1",
+      "AbilityLinkName": "Shield_Bash_1",
+      "Cooldown": 6.0,
+      "Damage": 10,
+      "StunDuration": 2.0,
+      "AnimationPrefix": "Attack"
+    },
+    {
+      "AbilityName": "Fortify",
+      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Fortify_1",
+      "AbilityLinkName": "Fortify_1",
+      "Cooldown": 12.0,
+      "Duration": 5.0,
+      "DamageReduction": 0.3,
+      "AnimationPrefix": "SpellCast"
+    }
+  ]
+}
