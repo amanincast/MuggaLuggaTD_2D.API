@@ -22,5 +22,12 @@ public record PveClaimRequest(
 public record PveClaimResponse(
     string LocationId,
     /// <summary>"CaptureForPlayer" or "RemoveLocation", as decided by the server.</summary>
-    string ConquestOutcome
+    string ConquestOutcome,
+    /// <summary>
+    /// Experience earned for the clear, rolled by the server from the location's wave budget.
+    /// The client persists this rather than a total of its own.
+    /// </summary>
+    long Experience,
+    /// <summary>Items earned for the clear, rolled by the server. Already fully specified.</summary>
+    List<StateManagement.Models.ItemSaveData> Items
 );

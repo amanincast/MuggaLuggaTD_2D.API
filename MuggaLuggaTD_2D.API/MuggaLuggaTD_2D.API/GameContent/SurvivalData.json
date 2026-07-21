@@ -1,0 +1,18 @@
+{
+  // How long a PvE run is, and how its enemies scale.
+  //
+  // The combat scene paces the fight from these numbers and the server pays out the run's rewards
+  // from them, so they must live in one place: if the two drifted, the server would pay for a fight
+  // of a different length than the one actually fought.
+  "WavesRequiredTier1": 3,
+  "WavesRequiredTier2": 4,
+  "WavesRequiredTier3": 5,
+  "WavesRequiredTier4": 6,
+
+  "EnemiesRequiredPerWave": 10,
+  "EnemyLevelIncreaseInterval": 3,
+
+  // A representative enemy, used to value a kill (see RunRewardCalculator.ExperienceForEnemy).
+  "BaseEnemyHealth": 50,
+  "EnemyHealthMultiplierPerLevel": 0.15
+}

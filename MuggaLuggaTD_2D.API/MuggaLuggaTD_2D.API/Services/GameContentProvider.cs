@@ -28,6 +28,12 @@ public interface IGameContentProvider
     /// re-derive each saved ability's damage, and content is immutable for the process lifetime.
     /// </summary>
     IReadOnlyCollection<GameAbility> AbilityTemplates { get; }
+
+    /// <summary>Run length and enemy scaling, from SurvivalData. Drives the PvE reward budget.</summary>
+    RunTuning RunTuning { get; }
+
+    /// <summary>Droppable base items, from ItemData. The pool PvE rewards roll from.</summary>
+    IReadOnlyList<ItemTemplate> DroppableItems { get; }
 }
 
 public class GameContentProvider : IGameContentProvider
@@ -45,7 +51,8 @@ public class GameContentProvider : IGameContentProvider
         "MaterialData",
         "VisualEffectData",
         "WorldLocationData",
-        "DialogueData"
+        "DialogueData",
+        "SurvivalData"
     };
 
     /// <summary>
@@ -77,6 +84,90 @@ public class GameContentProvider : IGameContentProvider
 
     public IReadOnlyCollection<GameAbility> AbilityTemplates => _snapshot.AbilityTemplates;
 
+    public RunTuning RunTuning => _snapshot.RunTuning;
+
+    public IReadOnlyList<ItemTemplate> DroppableItems => _snapshot.DroppableItems;
+
+    /// <summary>
+    /// Reads the run tuning that both the combat scene's pacing and the reward budget come from.
+    /// Missing or unreadable content is fatal rather than defaulted: silently paying out against
+    /// different numbers than the fight used is worse than refusing to start.
+    /// </summary>
+    private RunTuning ParseRunTuning(string rawSurvivalData)
+    {
+        try
+        {
+            return JsonConvert.DeserializeObject<RunTuning>(rawSurvivalData)
+                   ?? throw new InvalidOperationException("SurvivalData.json produced no tuning.");
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("SurvivalData.json could not be parsed into run tuning.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Flattens the item content into the droppable pool PvE rewards roll from. Mirrors the client's
+    /// ItemDefaultData categories; anything not marked droppable is excluded.
+    /// </summary>
+    private IReadOnlyList<ItemTemplate> ParseDroppableItems(string rawItemData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<ItemContentDocument>(rawItemData);
+            if (document == null) return Array.Empty<ItemTemplate>();
+
+            var templates = document.AllCategories()
+                .Where(i => i != null && i.IsDroppable && !string.IsNullOrEmpty(i.ItemName))
+                .Select(i => new ItemTemplate
+                {
+                    ItemName = i.ItemName,
+                    ItemType = i.ItemType,
+                    ImplicitPool = i.ImplicitPool,
+                    ExplicitPool = i.ExplicitPool
+                })
+                .ToList();
+
+            _logger.LogInformation("Parsed {Count} droppable item templates for PvE rewards.", templates.Count);
+            return templates;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("ItemData.json could not be parsed into item templates.", ex);
+        }
+    }
+
+    /// <summary>Mirrors the client's GameApplication.Models.ItemDefaultData category layout.</summary>
+    private sealed class ItemContentDocument
+    {
+        public List<ItemEntry> General { get; set; } = new();
+        public List<ItemEntry> Helmets { get; set; } = new();
+        public List<ItemEntry> BodyArmor { get; set; } = new();
+        public List<ItemEntry> LegArmor { get; set; } = new();
+        public List<ItemEntry> Boots { get; set; } = new();
+        public List<ItemEntry> Gloves { get; set; } = new();
+        public List<ItemEntry> Rings { get; set; } = new();
+        public List<ItemEntry> Amulets { get; set; } = new();
+        public List<ItemEntry> Bracelets { get; set; } = new();
+        public List<ItemEntry> Capes { get; set; } = new();
+        public List<ItemEntry> Weapons { get; set; } = new();
+        public List<ItemEntry> Offhand { get; set; } = new();
+
+        public IEnumerable<ItemEntry> AllCategories() =>
+            General.Concat(Helmets).Concat(BodyArmor).Concat(LegArmor).Concat(Boots)
+                   .Concat(Gloves).Concat(Rings).Concat(Amulets).Concat(Bracelets)
+                   .Concat(Capes).Concat(Weapons).Concat(Offhand);
+    }
+
+    private sealed class ItemEntry
+    {
+        public string ItemName { get; set; } = string.Empty;
+        public bool IsDroppable { get; set; }
+        public Enums.ItemTypes ItemType { get; set; }
+        public List<Enums.ItemImplicitTypes> ImplicitPool { get; set; } = new();
+        public List<Enums.ItemExplicitTypes> ExplicitPool { get; set; } = new();
+    }
+
     /// <summary>
     /// Parses AbilityData into typed templates with Newtonsoft — the same parser the Unity client
     /// uses to read these files. System.Text.Json rejects values the content legitimately contains
@@ -102,6 +193,8 @@ public class GameContentProvider : IGameContentProvider
     {
         var documents = new Dictionary<string, JsonNode>(DocumentNames.Length, StringComparer.OrdinalIgnoreCase);
         string rawAbilityData = null!;
+        string rawSurvivalData = null!;
+        string rawItemData = null!;
 
         // Hash the raw file bytes rather than the re-serialized nodes: the version must change when
         // a file changes, and must not change just because System.Text.Json reformats it.
@@ -132,6 +225,8 @@ public class GameContentProvider : IGameContentProvider
 
             documents[name] = node;
             if (name == "AbilityData") rawAbilityData = raw;
+            if (name == "SurvivalData") rawSurvivalData = raw;
+            if (name == "ItemData") rawItemData = raw;
 
             var segment = Encoding.UTF8.GetBytes($"{name}:{raw}\n");
             hash.TransformBlock(segment, 0, segment.Length, null, 0);
@@ -141,11 +236,14 @@ public class GameContentProvider : IGameContentProvider
         var version = Convert.ToHexString(hash.Hash!).ToLowerInvariant()[..16];
 
         _logger.LogInformation("Loaded {Count} game content documents (version {Version}).", documents.Count, version);
-        return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData));
+        return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
+            ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData));
     }
 
     private sealed record Snapshot(
         string Version,
         IReadOnlyDictionary<string, JsonNode> Documents,
-        IReadOnlyCollection<GameAbility> AbilityTemplates);
+        IReadOnlyCollection<GameAbility> AbilityTemplates,
+        RunTuning RunTuning,
+        IReadOnlyList<ItemTemplate> DroppableItems);
 }
