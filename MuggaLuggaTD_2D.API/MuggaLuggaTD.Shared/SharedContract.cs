@@ -19,6 +19,11 @@ namespace MuggaLuggaTD.Shared
         //   world blob and must not be allowed to.
         // 1.2.0 — PvE rewards and ability-upgrade legality moved server-side. Older clients grant
         //   their own rewards and persist unvalidated upgrades, so must re-sync before playing.
-        public const string Version = "1.2.0";
+        // 1.3.0 — GameAbility no longer pre-fills the adjusted layers of Range, CollisionScale,
+        //   PierceCount, ProjectileCount and ChainCount. Those defaults outranked the content values
+        //   in GetCurrentValue(), so a 1.2.0 client resolves every ability's range as 5 and every
+        //   projectile count as 1 whatever the data says. That changes damage output and therefore
+        //   power, so the two sides must not be allowed to disagree about it.
+        public const string Version = "1.3.0";
     }
 }
