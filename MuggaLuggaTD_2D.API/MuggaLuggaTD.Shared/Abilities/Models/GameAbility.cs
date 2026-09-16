@@ -45,11 +45,20 @@ namespace Abilities.Models
         public string AbilityName { get; set; }
         public string AbilityLinkName { get; set; }
         public string Description { get; set; }
+        // Only BaseValue is defaulted. The adjusted layers MUST stay null until something actually
+        // adjusts them.
+        //
+        // GetCurrentValue() returns the first non-default layer — AdjustedValue, then
+        // AdjustedBaseValue, then BaseValue — so pre-filling the adjusted layers makes them win over
+        // whatever the content says. Deserialization only writes BaseValue (the JSON is
+        // "Range": { "BaseValue": 20.0 }) and Newtonsoft populates this existing instance rather than
+        // replacing it, so the defaults survive. The result was that EVERY ability in the game had an
+        // effective range of exactly 5 regardless of its data: Bow Attack 20 -> 5, Magic Missile
+        // 10 -> 5, and melee 1.5 -> 5, which let melee enemies reach three times further than
+        // intended. The same trap applied to every property below.
         public AbilityModifiableProperty<float?> Range { get; set; } = new AbilityModifiableProperty<float?>
         {
-            BaseValue = 5f,
-            AdjustedBaseValue = 5f,
-            AdjustedValue = 5f
+            BaseValue = 5f
         };
         public float TravelSpeed { get; set; }
         public int ManaCost { get; set; }
@@ -69,27 +78,19 @@ namespace Abilities.Models
         public float? TelegraphDuration { get; set; }
         public AbilityModifiableProperty<double?> CollisionScale { get; set; } = new AbilityModifiableProperty<double?>
         {
-            BaseValue = 1.0,
-            AdjustedBaseValue = 1.0,
-            AdjustedValue = 1.0
+            BaseValue = 1.0
         };
         public AbilityModifiableProperty<long?> PierceCount { get; set; } = new AbilityModifiableProperty<long?>
         {
-            BaseValue = 0,
-            AdjustedBaseValue = 0,
-            AdjustedValue = 0
+            BaseValue = 0
         };
         public AbilityModifiableProperty<long?> ProjectileCount { get; set; } = new AbilityModifiableProperty<long?>
         {
-            BaseValue = 1,
-            AdjustedBaseValue = 1,
-            AdjustedValue = 1
+            BaseValue = 1
         };
         public AbilityModifiableProperty<long?> ChainCount { get; set; } = new AbilityModifiableProperty<long?>
         {
-            BaseValue = 0,
-            AdjustedBaseValue = 0,
-            AdjustedValue = 0
+            BaseValue = 0
         };
 
         public List<AffinityTypes> GetAffinityTypes()
