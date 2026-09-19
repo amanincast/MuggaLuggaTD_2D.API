@@ -24,6 +24,8 @@ namespace MuggaLuggaTD.Shared
         //   in GetCurrentValue(), so a 1.2.0 client resolves every ability's range as 5 and every
         //   projectile count as 1 whatever the data says. That changes damage output and therefore
         //   power, so the two sides must not be allowed to disagree about it.
-        public const string Version = "1.3.0";
+        // 1.4.0 — the wrist and cape slots are saved and count toward power. A 1.3.0 client drops
+        //   those items on save, so the two sides would price the same party differently.
+        public const string Version = "1.4.0";
     }
 }

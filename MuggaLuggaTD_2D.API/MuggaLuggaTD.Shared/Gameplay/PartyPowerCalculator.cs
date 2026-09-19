@@ -131,7 +131,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 character.Equipment.Ring1SlotItemId,
                 character.Equipment.Ring2SlotItemId,
                 character.Equipment.WeaponSlotItemId,
-                character.Equipment.OffHandSlotItemId
+                character.Equipment.OffHandSlotItemId,
+                character.Equipment.Wrist1SlotItemId,
+                character.Equipment.Wrist2SlotItemId,
+                character.Equipment.CapeSlotItemId
             }.Where(id => !string.IsNullOrEmpty(id)).ToList();
 
             if (equippedIds.Count == 0)
