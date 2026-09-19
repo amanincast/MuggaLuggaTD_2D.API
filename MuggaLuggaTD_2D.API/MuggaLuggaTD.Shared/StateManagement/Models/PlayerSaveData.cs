@@ -134,6 +134,9 @@ namespace StateManagement.Models
         public string Ring2SlotItemId { get; set; }
         public string WeaponSlotItemId { get; set; }
         public string OffHandSlotItemId { get; set; }
+        public string Wrist1SlotItemId { get; set; }
+        public string Wrist2SlotItemId { get; set; }
+        public string CapeSlotItemId { get; set; }
     }
 
     /// <summary>
