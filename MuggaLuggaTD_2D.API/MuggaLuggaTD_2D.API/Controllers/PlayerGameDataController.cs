@@ -104,10 +104,18 @@ public class PlayerGameDataController : ControllerBase
             return NotFound(new { message = "Game instance not found" });
         }
 
+        var existingData = await _context.PlayerGameData
+            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+
+        // Merge rather than replace: the roster save and fog discovery each send only their own
+        // fields, and replacing the blob let either one erase the other (see PlayerDataMerger).
+        var saveNode = PlayerDataMerger.Merge(existingData?.GameData,
+            JsonSerializer.SerializeToNode(request.GameData));
+
         // Strip any applied ability upgrade that isn't in the content pool before persisting. This is
         // an anti-cheat gate: illegal upgrades inflate ability damage, and PvP power is recomputed
-        // from this saved roster. Editing the blob as a JsonNode keeps every other field intact.
-        var saveNode = JsonSerializer.SerializeToNode(request.GameData);
+        // from this saved roster. It runs on the merged document, so it always sees the full roster.
+        // Editing the blob as a JsonNode keeps every other field intact.
         var validation = _saveValidator.StripIllegalUpgrades(saveNode);
         if (validation.Rejected > 0)
         {
@@ -121,8 +129,6 @@ public class PlayerGameDataController : ControllerBase
         }
 
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
-        var existingData = await _context.PlayerGameData
-            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
 
         if (existingData != null)
         {
