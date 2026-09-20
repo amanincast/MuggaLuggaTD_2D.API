@@ -26,6 +26,10 @@ namespace MuggaLuggaTD.Shared
         //   power, so the two sides must not be allowed to disagree about it.
         // 1.4.0 — the wrist and cape slots are saved and count toward power. A 1.3.0 client drops
         //   those items on save, so the two sides would price the same party differently.
-        public const string Version = "1.5.0";
+        // 1.6.0 — RegionGenerator grows terrain by accretion instead of by random walk. Terrain is
+        //   not stored, so the generator *is* the data: a 1.5.0 client would draw different ground
+        //   and, worse, place sites on different cells, so the server would reject its claims as
+        //   naming sites that do not exist. Worlds are regenerated — see WorldRegionBlob v3.
+        public const string Version = "1.6.0";
     }
 }
