@@ -35,6 +35,10 @@ namespace MuggaLuggaTD.Shared
         //   an unattended region could be taken with nothing at all. Hold now adds a per-tier floor
         //   for the walls and locals, and resolve counts for no less than a quarter. A 1.6.0 client
         //   would show the player a gate the server does not agree with.
-        public const string Version = "1.7.0";
+        // 1.8.0 — a region is 32x18 cells rather than 24x24, so the territory view fills a 16:9
+        //   screen instead of floating in it. Same 576 cells, so nothing about the land or the site
+        //   budget changes — but every cell index means a different place, so a 1.7.0 client would
+        //   draw the wrong ground and put sites where the server does not have them.
+        public const string Version = "1.8.0";
     }
 }
