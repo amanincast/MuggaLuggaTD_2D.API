@@ -30,6 +30,11 @@ namespace MuggaLuggaTD.Shared
         //   not stored, so the generator *is* the data: a 1.5.0 client would draw different ground
         //   and, worse, place sites on different cells, so the server would reject its claims as
         //   naming sites that do not exist. Worlds are regenerated — see WorldRegionBlob v3.
-        public const string Version = "1.6.0";
+        // 1.7.0 — a region's hold has a floor. It was garrison x entrench x supply x resolve, which
+        //   is zero with no garrison or with resolve ground to zero, so the siege gate was zero and
+        //   an unattended region could be taken with nothing at all. Hold now adds a per-tier floor
+        //   for the walls and locals, and resolve counts for no less than a quarter. A 1.6.0 client
+        //   would show the player a gate the server does not agree with.
+        public const string Version = "1.7.0";
     }
 }
