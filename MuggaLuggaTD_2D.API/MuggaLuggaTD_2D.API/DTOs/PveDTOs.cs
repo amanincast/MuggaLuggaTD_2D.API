@@ -2,9 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MuggaLuggaTD_2D.API.DTOs;
 
-/// <summary>Opens a run against a PvE location, as the player enters combat.</summary>
+/// <summary>
+/// Opens a run against a site, as the player enters combat.
+///
+/// <para><c>SiteId</c> is "&lt;regionId&gt;:&lt;index&gt;". The server does not take the client's
+/// word for what that site is: it finds the region, rebuilds the interior from the region's seed,
+/// and looks the site up in what it generated.</para>
+/// </summary>
 public record PveBeginRequest(
-    [Required] string LocationId,
+    [Required] string SiteId,
     [Required] string SharedContractVersion
 );
 
@@ -12,7 +18,7 @@ public record PveBeginResponse(Guid RunId);
 
 /// <summary>
 /// Claims the conquest for a completed run. Carries no outcome — the server derives that from the
-/// location's type, and refuses the claim entirely if the run does not check out.
+/// site's type, and refuses the claim entirely if the run does not check out.
 /// </summary>
 public record PveClaimRequest(
     [Required] Guid RunId,
@@ -20,11 +26,11 @@ public record PveClaimRequest(
 );
 
 public record PveClaimResponse(
-    string LocationId,
+    string SiteId,
     /// <summary>"CaptureForPlayer" or "RemoveLocation", as decided by the server.</summary>
     string ConquestOutcome,
     /// <summary>
-    /// Experience earned for the clear, rolled by the server from the location's wave budget.
+    /// Experience earned for the clear, rolled by the server from the site's wave budget.
     /// The client persists this rather than a total of its own.
     /// </summary>
     long Experience,

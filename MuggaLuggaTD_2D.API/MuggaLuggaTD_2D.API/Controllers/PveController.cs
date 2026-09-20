@@ -45,11 +45,11 @@ public class PveController : ControllerBase
         var (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
         {
-            _sessionLog.Log("PVE-BEGIN-DENY", $"user={userId} loc={request.LocationId} {outcome.Error}: {outcome.Message}");
+            _sessionLog.Log("PVE-BEGIN-DENY", $"user={userId} site={request.SiteId} {outcome.Error}: {outcome.Message}");
             return ToError(outcome);
         }
 
-        _sessionLog.Log("PVE-BEGIN", $"user={userId} loc={request.LocationId} run={runId}");
+        _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}");
         return Ok(new PveBeginResponse(runId));
     }
 
@@ -79,7 +79,7 @@ public class PveController : ControllerBase
 
         await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
         _sessionLog.Log("PVE-CLAIM",
-            $"user={userId} loc={response.LocationId} outcome={response.ConquestOutcome} " +
+            $"user={userId} site={response.SiteId} outcome={response.ConquestOutcome} " +
             $"xp={response.Experience} items={response.Items.Count}");
         return Ok(response);
     }

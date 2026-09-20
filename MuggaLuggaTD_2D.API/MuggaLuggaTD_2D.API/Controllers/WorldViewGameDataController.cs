@@ -8,6 +8,7 @@ using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Hubs;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
@@ -18,11 +19,16 @@ public class WorldViewGameDataController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
+    private readonly WorldProvisioningService _provisioning;
 
-    public WorldViewGameDataController(ApplicationDbContext context, IHubContext<GameHub> hubContext)
+    public WorldViewGameDataController(
+        ApplicationDbContext context,
+        IHubContext<GameHub> hubContext,
+        WorldProvisioningService provisioning)
     {
         _context = context;
         _hubContext = hubContext;
+        _provisioning = provisioning;
     }
 
     [HttpGet]
@@ -36,7 +42,14 @@ public class WorldViewGameDataController : ControllerBase
             return Forbid();
         }
 
-        var worldData = await _context.WorldViewGameData
+        // The server owns the world's existence now: it generates one on first request, regenerates
+        // anything written before the region map, and seats a player who joined after generation.
+        // The client renders what it is handed rather than building a map the server cannot verify.
+        var worldData = await _provisioning.EnsureWorldAsync(gameInstanceId);
+        await _provisioning.EnsureSeatAsync(gameInstanceId, userId, User?.Identity?.Name);
+
+        // Re-read: seating a late joiner rewrites the blob.
+        worldData = await _context.WorldViewGameData
             .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
 
         if (worldData == null)
