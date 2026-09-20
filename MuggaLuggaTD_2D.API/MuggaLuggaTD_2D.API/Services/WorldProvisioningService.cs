@@ -29,20 +29,28 @@ public class WorldProvisioningService
     }
 
     /// <summary>
-    /// Returns the instance's world, generating it if it does not exist and regenerating it if it
-    /// predates the region map.
+    /// Returns the instance's world, generating it if it does not exist and regenerating it if its
+    /// blob is older than <see cref="WorldRegionBlob.CurrentFormatVersion"/>.
     ///
-    /// <para>Pre-release worlds are regenerated rather than migrated: a format 1 blob is a flat list
-    /// of locations with no regions to put them in, and writing a migration for test realms would be
-    /// writing code to be used once and then deleted.</para>
+    /// <para>Old worlds are regenerated rather than migrated. Format 1 is a flat list of locations
+    /// with no regions to put them in; format 2 has regions, but its site overrides are keyed by ids
+    /// the current generator assigns to different cells, so carrying them forward would mark the
+    /// wrong sites cleared. Both are pre-release, and a migration for test realms would be code
+    /// written to be used once and deleted.</para>
     /// </summary>
     public async Task<WorldViewGameData> EnsureWorldAsync(Guid gameInstanceId)
     {
         var row = await _context.WorldViewGameData
             .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
 
-        if (row != null && WorldRegionBlob.IsRegionWorld(JsonNode.Parse(row.GameData)))
-            return row;
+        int staleVersion = 0;
+        if (row != null)
+        {
+            var existing = JsonNode.Parse(row.GameData);
+            if (WorldRegionBlob.IsRegionWorld(existing)) return row;
+
+            staleVersion = WorldRegionBlob.GetFormatVersion(existing);
+        }
 
         var world = await GenerateWorldAsync(gameInstanceId);
         var json = world.ToJsonString();
@@ -64,7 +72,8 @@ public class WorldProvisioningService
             row.GameData = json;
             row.UpdatedAt = DateTime.UtcNow;
             _logger.LogWarning(
-                "Instance {Instance} had a pre-region world; it has been regenerated.", gameInstanceId);
+                "Instance {Instance} had a format {Stale} world; it has been regenerated at format {Current}.",
+                gameInstanceId, staleVersion, WorldRegionBlob.CurrentFormatVersion);
         }
 
         await _context.SaveChangesAsync();
