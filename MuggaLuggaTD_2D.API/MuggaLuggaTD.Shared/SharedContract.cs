@@ -26,6 +26,6 @@ namespace MuggaLuggaTD.Shared
         //   power, so the two sides must not be allowed to disagree about it.
         // 1.4.0 — the wrist and cape slots are saved and count toward power. A 1.3.0 client drops
         //   those items on save, so the two sides would price the same party differently.
-        public const string Version = "1.4.0";
+        public const string Version = "1.5.0";
     }
 }

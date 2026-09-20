@@ -82,19 +82,22 @@ public class WorldPveService
             return (new PveOutcome(PveError.WorldNotFound, "World view data not found."), Guid.Empty);
 
         var world = JsonNode.Parse(worldRow.GameData);
-        var location = WorldBlobEditor.FindLocation(world, request.LocationId);
-        if (location == null)
-            return (new PveOutcome(PveError.LocationNotFound, "Location not found in this world."), Guid.Empty);
 
-        var check = ValidatePveTarget(location, userId);
+        // The site is resolved by regenerating its region from the stored seed, so a client naming a
+        // site the world does not actually contain is refused here rather than at claim time.
+        var resolved = WorldRegionBlob.ResolveSite(world, request.SiteId);
+        if (resolved == null)
+            return (new PveOutcome(PveError.LocationNotFound, "Site not found in this world."), Guid.Empty);
+
+        var check = ValidatePveTarget(resolved, userId);
         if (!check.Succeeded)
             return (check, Guid.Empty);
 
-        // One open run per player per location: re-entering replaces the previous attempt rather
+        // One open run per player per site: re-entering replaces the previous attempt rather
         // than accumulating claimable runs.
         var existing = await _context.PveRuns
             .Where(r => r.GameInstanceId == gameInstanceId && r.UserId == userId
-                        && r.LocationId == request.LocationId && r.ClaimedAt == null)
+                        && r.LocationId == request.SiteId && r.ClaimedAt == null)
             .ToListAsync();
         if (existing.Count > 0)
             _context.PveRuns.RemoveRange(existing);
@@ -103,15 +106,15 @@ public class WorldPveService
         {
             GameInstanceId = gameInstanceId,
             UserId = userId,
-            LocationId = request.LocationId,
-            LocationType = (int)WorldBlobEditor.GetLocationType(location),
+            LocationId = request.SiteId,
+            LocationType = (int)resolved.Site.Type,
             StartedAt = DateTime.UtcNow
         };
 
         _context.PveRuns.Add(run);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("PvE run {RunId} opened by {User} at {Location}.", run.Id, userId, request.LocationId);
+        _logger.LogInformation("PvE run {RunId} opened by {User} at {Site}.", run.Id, userId, request.SiteId);
         return (new PveOutcome(PveError.None), run.Id);
     }
 
@@ -147,24 +150,23 @@ public class WorldPveService
             return (new PveOutcome(PveError.WorldNotFound, "World view data not found."), null, null);
 
         var world = JsonNode.Parse(worldRow.GameData);
-        var location = WorldBlobEditor.FindLocation(world, run.LocationId);
-        if (location == null)
+        var resolved = WorldRegionBlob.ResolveSite(world, run.LocationId);
+        if (resolved == null)
         {
-            // Someone else cleared it while this player was fighting. Close the run so it cannot be
-            // held open and replayed if the location ever returns.
+            // The region is gone, or the world was regenerated under this player's feet. Close the
+            // run so it cannot be held open and replayed if that site id ever comes back.
             run.ClaimedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            return (new PveOutcome(PveError.LocationNotFound, "That location no longer exists."), null, null);
+            return (new PveOutcome(PveError.LocationNotFound, "That site no longer exists."), null, null);
         }
 
         // Re-validate against the live world, not against what was true when the run started —
-        // another player may have taken the location in the meantime.
-        var check = ValidatePveTarget(location, userId);
+        // another player may have cleared the site or taken the region in the meantime.
+        var check = ValidatePveTarget(resolved, userId);
         if (!check.Succeeded)
             return (check, null, null);
 
-        var type = WorldBlobEditor.GetLocationType(location);
-        var outcome = ConquestResolver.ResolveOnPlayerVictory(type);
+        var outcome = ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type);
 
         if (outcome == ConquestOutcome.None)
             return (new PveOutcome(PveError.NoConquestEffect, "Winning here has no conquest effect."), null, null);
@@ -172,27 +174,30 @@ public class WorldPveService
         switch (outcome)
         {
             case ConquestOutcome.CaptureForPlayer:
-                WorldBlobEditor.Capture(location, userId, displayName);
+                // Taking the keep takes the region: regions are what a player owns.
+                WorldRegionBlob.CaptureRegion(resolved.RegionNode, userId, displayName);
                 break;
             case ConquestOutcome.RemoveLocation:
-                WorldBlobEditor.RemoveLocation(world, run.LocationId);
+                // A site cannot be deleted — it regenerates from the region's seed — so a cleared
+                // dungeon is recorded as spent instead.
+                WorldRegionBlob.MarkCleared(resolved.RegionNode, run.LocationId);
                 break;
         }
 
         run.ClaimedAt = DateTime.UtcNow;
 
-        // Rewards are rolled here, from the location, rather than accepted from the client. A
+        // Rewards are rolled here, from the site, rather than accepted from the client. A
         // self-reported total is unbounded, and fabricated XP/gear inflates the same persisted roster
         // that PvP power is computed from.
         var rewards = RunRewardCalculator.Calculate(
-            location["Level"]?.GetValue<int>() ?? 1,
-            location["Tier"]?.GetValue<int>() ?? 1,
+            resolved.Site.Level,
+            resolved.Site.Tier,
             _content.RunTuning,
             _content.DroppableItems,
             Random.Shared);
 
         _logger.LogInformation(
-            "PvE conquest {Outcome} at {Location} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s).",
+            "PvE conquest {Outcome} at {Site} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s).",
             outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count);
 
         var response = new PveClaimResponse(
@@ -202,25 +207,30 @@ public class WorldPveService
     }
 
     /// <summary>
-    /// A location is a legitimate PvE target when it is not held by a player. Another player's
-    /// location is a PvP target and must go through the PvP endpoint, which resolves a contested
-    /// fight rather than handing over a capture on the attacker's say-so.
+    /// A site is a legitimate PvE target when its region is not held by a player, the site itself
+    /// has combat to offer, and that combat has not already been spent.
+    ///
+    /// <para>A rival's region is a PvP target and must go through the PvP endpoint, which resolves a
+    /// contested fight rather than handing over a capture on the attacker's say-so.</para>
     /// </summary>
-    private static PveOutcome ValidatePveTarget(JsonNode location, string userId)
+    private static PveOutcome ValidatePveTarget(SiteResolution resolved, string userId)
     {
-        var ownership = WorldBlobEditor.GetOwnership(location);
-        var ownerUserId = WorldBlobEditor.GetOwnerUserId(location);
+        var region = resolved.Region;
 
-        if (ownership == LocationOwnership.Player && !string.IsNullOrEmpty(ownerUserId))
+        if (region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId))
         {
-            return string.Equals(ownerUserId, userId, StringComparison.Ordinal)
-                ? new PveOutcome(PveError.NotPveTarget, "You already own that location.")
-                : new PveOutcome(PveError.NotPveTarget, "That location belongs to another player — attack it instead.");
+            return string.Equals(region.OwnerUserId, userId, StringComparison.Ordinal)
+                ? new PveOutcome(PveError.NotPveTarget, "You already hold that region.")
+                : new PveOutcome(PveError.NotPveTarget, "That region belongs to another player — lay siege to it instead.");
         }
 
-        var type = WorldBlobEditor.GetLocationType(location);
-        if (ConquestResolver.ResolveOnPlayerVictory(type) == ConquestOutcome.None)
-            return new PveOutcome(PveError.NotPveTarget, "That location has no combat to complete.");
+        if (ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type) == ConquestOutcome.None)
+            return new PveOutcome(PveError.NotPveTarget, "That site has no combat to complete.");
+
+        // A cleared dungeon still generates from the seed, so without this a player could farm one
+        // site forever by re-entering it.
+        if (resolved.IsCleared)
+            return new PveOutcome(PveError.NotPveTarget, "That site has already been cleared.");
 
         return new PveOutcome(PveError.None);
     }
