@@ -14,7 +14,13 @@ namespace MuggaLuggaTD.Shared.World
         Portal = 1,
         Outpost = 2,
         Castle = 3,
-        NeutralHome = 4
+        NeutralHome = 4,
+
+        // Added with the region map (design 8a), which fills a region's interior with more than
+        // places to fight: a node produces resources over time, a ruin can be repaired to raise the
+        // region's entrenchment. Appended deliberately — these integers are persisted.
+        ResourceNode = 5,
+        Ruin = 6
     }
 
     /// <summary>
