@@ -16,8 +16,20 @@ namespace MuggaLuggaTD.Shared.World
     /// </summary>
     public static class RegionGenerator
     {
-        public const int Width = 24;
-        public const int Height = 24;
+        /// <summary>
+        /// A region is 32x18 cells — deliberately 16:9, and deliberately 576 cells.
+        ///
+        /// <para>It was 24x24. A square region on a widescreen display cannot both be seen whole and
+        /// fill the view: framed to fit its height it left more than half the screen empty on either
+        /// side, and the territory read as a picture of a place rather than a place. 32/18 is exactly
+        /// 16/9, so the land now reaches both edges.</para>
+        ///
+        /// <para>32 x 18 is the same 576 cells as 24 x 24, which is why this reshape carries no
+        /// balance with it: the biome profiles cover the same fraction of ground, and the site budget
+        /// has the same room to space itself in.</para>
+        /// </summary>
+        public const int Width = 32;
+        public const int Height = 18;
 
         // Sites are pushed apart so a region reads as a place rather than a pile, and so markers do
         // not overlap once the client draws them.

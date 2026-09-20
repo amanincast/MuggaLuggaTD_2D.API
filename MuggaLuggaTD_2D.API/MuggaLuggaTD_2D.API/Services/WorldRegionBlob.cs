@@ -22,15 +22,15 @@ public static class WorldRegionBlob
     public const int LegacyFormatVersion = 1;
 
     /// <summary>
-    /// Version 3 is version 2 with reshaped terrain.
+    /// Version 3 reshaped the terrain; version 4 reshaped the region itself, to 32x18.
     ///
     /// <para>Bumping this regenerates rather than migrates, which is the point. A region's sites are
     /// rebuilt from its seed, so changing <see cref="RegionGenerator"/> re-rolls where they stand —
-    /// and a version-2 blob's overrides are keyed by site id, so keeping them would attach "this
+    /// and an older blob's overrides are keyed by site id, so keeping them would attach "this
     /// dungeon is cleared" to whatever site now happens to hold that index. Regenerating loses the
     /// world's progress; carrying it forward would silently corrupt it.</para>
     /// </summary>
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
 
     public static int GetFormatVersion(JsonNode? world)
     {
