@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the server-authoritative rules.
+
+    The API decides things no client may be trusted with: whether a PvE claim is admissible, who wins
+    a PvP attack, which ability upgrades may be persisted, and what a world looks like. None of that
+    was covered, and the only way a rule was ever found to be wrong was by playing the game and
+    noticing. These tests exercise those rules through the services' public entry points.
+
+    Deliberately NOT a web-host test: the controllers do authentication, persistence and SignalR
+    broadcast, and the rules live underneath them in the services. Testing the services directly keeps
+    the tests about the rules.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- xunit's analyzers are useful; nothing here should warn. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MuggaLuggaTD_2D.API\MuggaLuggaTD_2D.API.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <!-- The services take an ApplicationDbContext. EF's in-memory provider is enough: what is under
+         test is the rules, not the storage, and no test here depends on relational behaviour. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.*" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MuggaLuggaTD_2D.API", "Mugg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MuggaLuggaTD.Shared", "MuggaLuggaTD.Shared\MuggaLuggaTD.Shared.csproj", "{F986C37B-858A-4A71-BA95-C58BA3D38D2F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MuggaLuggaTD_2D.API.Tests", "MuggaLuggaTD_2D.API.Tests\MuggaLuggaTD_2D.API.Tests.csproj", "{1195C56B-DFA1-4B91-9CB5-45294CA35F00}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,18 @@ Global
 		{F986C37B-858A-4A71-BA95-C58BA3D38D2F}.Release|x64.Build.0 = Release|Any CPU
 		{F986C37B-858A-4A71-BA95-C58BA3D38D2F}.Release|x86.ActiveCfg = Release|Any CPU
 		{F986C37B-858A-4A71-BA95-C58BA3D38D2F}.Release|x86.Build.0 = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|x64.Build.0 = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Debug|x86.Build.0 = Debug|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|x64.ActiveCfg = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|x64.Build.0 = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|x86.ActiveCfg = Release|Any CPU
+		{1195C56B-DFA1-4B91-9CB5-45294CA35F00}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
