@@ -35,5 +35,10 @@ public record PveClaimResponse(
     /// </summary>
     long Experience,
     /// <summary>Items earned for the clear, rolled by the server. Already fully specified.</summary>
-    List<StateManagement.Models.ItemSaveData> Items
+    List<StateManagement.Models.ItemSaveData> Items,
+    /// <summary>
+    /// Resolve the region regained, when the cleared site was a hostile one inside a region the
+    /// player holds. Zero otherwise — clearing unclaimed land steadies nothing you own.
+    /// </summary>
+    int ResolveRestored = 0
 );

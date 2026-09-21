@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MuggaLuggaTD.Shared.World;
+using MuggaLuggaTD.Shared.Gameplay;
 
 namespace MuggaLuggaTD_2D.API.Services;
 
@@ -12,9 +13,9 @@ namespace MuggaLuggaTD_2D.API.Services;
 /// on the server to judge a claim, and on the client to draw the place. Only what has diverged from
 /// the generated region is written back, as overrides keyed by site id.</para>
 ///
-/// <para>Edits are JsonNode surgery rather than deserialise-mutate-reserialise, for the same reason
-/// <see cref="WorldBlobEditor"/> does it: the client writes fields the server has no model for, and
-/// a round trip through a server-side type would quietly drop them.</para>
+/// <para>Edits are JsonNode surgery rather than deserialise-mutate-reserialise, and deliberately so:
+/// the client writes fields the server has no model for, and a round trip through a server-side type
+/// would quietly drop them. Only the fields the server is authoritative for are touched.</para>
 /// </summary>
 public static class WorldRegionBlob
 {
@@ -79,8 +80,54 @@ public static class WorldRegionBlob
             Faction = (FactionId)(region["Faction"]?.GetValue<int>() ?? 0),
             IsCapital = region["IsCapital"]?.GetValue<bool>() ?? false,
             Entrenchment = region["Entrenchment"]?.GetValue<int>() ?? 0,
-            Resolve = region["Resolve"]?.GetValue<int>() ?? 100
+            Resolve = region["Resolve"]?.GetValue<int>() ?? 100,
+            SiteOverrides = ReadOverrides(region)
         };
+    }
+
+    /// <summary>
+    /// The region's site overrides, as the shared model.
+    ///
+    /// <para>Read because a region's defence is the sum of what stands at its sites, and the server
+    /// has to compute that itself to judge a raid — <see cref="RegionHoldCalculator.GarrisonPowerOf"/>
+    /// reads it straight off the model. Only the fields the server acts on are parsed; the blob
+    /// itself stays the source of truth and is edited in place, so anything not read here is still
+    /// preserved on write.</para>
+    /// </summary>
+    private static Dictionary<string, SiteOverride> ReadOverrides(JsonNode region)
+    {
+        var result = new Dictionary<string, SiteOverride>(StringComparer.Ordinal);
+        if (region["SiteOverrides"] is not JsonObject overrides) return result;
+
+        foreach (var (siteId, node) in overrides)
+        {
+            if (node is not JsonObject entry) continue;
+
+            result[siteId] = new SiteOverride
+            {
+                Cleared = entry["Cleared"]?.GetValue<bool>() ?? false,
+                Repaired = entry["Repaired"]?.GetValue<bool>() ?? false,
+                GarrisonPower = entry["GarrisonPower"]?.GetValue<float>() ?? 0f,
+                GarrisonCharacterIds = ReadStrings(entry["GarrisonCharacterIds"]),
+                CapturedCharacterIds = ReadStrings(entry["CapturedCharacterIds"])
+            };
+        }
+
+        return result;
+    }
+
+    private static List<string> ReadStrings(JsonNode? node)
+    {
+        var result = new List<string>();
+        if (node is not JsonArray array) return result;
+
+        foreach (var item in array)
+        {
+            if (item is JsonValue value && value.TryGetValue<string>(out var text))
+                result.Add(text);
+        }
+
+        return result;
     }
 
     /// <summary>Every region in the blob, as the shared model. Used for supply and for the map view.</summary>
@@ -166,6 +213,58 @@ public static class WorldRegionBlob
     // -----------------------------------------------------------------
     // Regions
     // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Sets a region's resolve, keeping it inside its bounds.
+    ///
+    /// <para>Resolve is the region's morale and multiplies the whole of its hold. Raiding wears it
+    /// down; clearing the region's own fightable sites builds it back. It is the only part of a
+    /// region a rival can move without taking it.</para>
+    /// </summary>
+    public static int SetResolve(JsonNode regionNode, int resolve)
+    {
+        int clamped = RegionResolveRules.Clamp(resolve);
+        regionNode["Resolve"] = clamped;
+        return clamped;
+    }
+
+    /// <summary>
+    /// Ids the given user cannot march with: stationed at one of their own regions, or held prisoner
+    /// anywhere in the world.
+    ///
+    /// <para>Read from the world blob rather than taken from the request, so a client cannot field a
+    /// champion it has already committed elsewhere. The region equivalent of what the flat world did
+    /// per location — garrisons now live in each site's override.</para>
+    /// </summary>
+    public static HashSet<string> CollectCommittedCharacterIds(JsonNode? world, string userId)
+    {
+        var committed = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var region in ReadAllRegions(world))
+        {
+            bool mine = region.IsOwnedByPlayer(userId);
+
+            foreach (var over in region.SiteOverrides.Values)
+            {
+                if (over == null) continue;
+
+                // Only your own garrisons tie your champions up; another player's garrison is made
+                // of their characters, not yours.
+                if (mine && over.GarrisonCharacterIds != null)
+                {
+                    foreach (var id in over.GarrisonCharacterIds) committed.Add(id);
+                }
+
+                // Prisoners are held wherever they were taken, whoever owns it now.
+                if (over.CapturedCharacterIds != null)
+                {
+                    foreach (var id in over.CapturedCharacterIds) committed.Add(id);
+                }
+            }
+        }
+
+        return committed;
+    }
 
     /// <summary>
     /// Hands a region to a player. Taking the keep takes the region, which is the split the design

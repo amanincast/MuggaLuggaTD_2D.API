@@ -9,7 +9,7 @@ namespace MuggaLuggaTD_2D.API.Tests.TestSupport;
 /// upgrade validator edits.
 ///
 /// <para>Written as Newtonsoft JSON where a test needs the stored form, because that is what the
-/// client writes and what <c>WorldPvPService</c> reads back.</para>
+/// client writes and what <c>WorldRaidService</c> reads back.</para>
 /// </summary>
 public static class TestSave
 {

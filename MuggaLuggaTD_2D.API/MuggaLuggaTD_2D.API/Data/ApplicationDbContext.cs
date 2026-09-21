@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<PveRun> PveRuns => Set<PveRun>();
+    public DbSet<RegionRaid> RegionRaids => Set<RegionRaid>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -52,6 +53,27 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             // Claims look up a user's open runs for an instance, so index that path.
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.ClaimedAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure RegionRaid entity (one player's raid on one rival region)
+        builder.Entity<RegionRaid>(entity =>
+        {
+            // Every raid looks up this attacker's last raid on this region to check the cooldown,
+            // so that is the path to index — newest first, since only the last one matters.
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.RegionId, e.RaidedAt });
+
+            // And a defender reads the log for their own region.
+            entity.HasIndex(e => new { e.GameInstanceId, e.RegionId, e.RaidedAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()

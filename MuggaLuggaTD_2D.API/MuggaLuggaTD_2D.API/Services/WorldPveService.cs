@@ -184,6 +184,25 @@ public class WorldPveService
                 break;
         }
 
+        // Clearing a hostile site inside your own region steadies it. This is the defender's half of
+        // raiding: a rival wears a region's resolve down from outside, and the owner answers by going
+        // into the region and dealing with what is under it. Without this, being raided has no reply
+        // — which is why the own-region PvE fix had to land before raiding could.
+        int resolveRestored = 0;
+        if (resolved.Region.IsOwnedByPlayer(userId))
+        {
+            resolveRestored = RegionResolveRules.RestoredByClearing(resolved.Site.Type);
+            if (resolveRestored > 0)
+            {
+                int before = resolved.Region.Resolve;
+                int after = WorldRegionBlob.SetResolve(
+                    resolved.RegionNode, RegionResolveRules.Apply(before, resolveRestored));
+
+                // Report what was actually restored, which is less than the roll near full morale.
+                resolveRestored = after - before;
+            }
+        }
+
         run.ClaimedAt = DateTime.UtcNow;
 
         // Rewards are rolled here, from the site, rather than accepted from the client. A
@@ -201,7 +220,7 @@ public class WorldPveService
             outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count);
 
         var response = new PveClaimResponse(
-            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items);
+            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored);
 
         return (new PveOutcome(PveError.None), response, world);
     }
