@@ -257,9 +257,18 @@ public class WorldPveService
             return new PveOutcome(PveError.NotPveTarget, "That site has no combat to complete.");
 
         // A cleared dungeon still generates from the seed, so without this a player could farm one
-        // site forever by re-entering it.
+        // site continuously by re-entering it. It does come back — see SiteRespawnRules — so this
+        // bounds the rate rather than spending the site permanently.
         if (resolved.IsCleared)
-            return new PveOutcome(PveError.NotPveTarget, "That site has already been cleared.");
+        {
+            var recoversAt = SiteRespawnRules.RecoversAt(resolved.Region.SiteOverrides
+                .TryGetValue(resolved.Site.SiteId, out var over) ? over : null);
+
+            return new PveOutcome(PveError.NotPveTarget,
+                recoversAt == DateTime.MinValue
+                    ? "That site has already been cleared."
+                    : $"That site is still spent. It is worth fighting again at {recoversAt:HH:mm} UTC.");
+        }
 
         return new PveOutcome(PveError.None);
     }

@@ -185,9 +185,10 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ADungeonThatHasAlreadyBeenClearedIsRefused()
+    public async Task ADungeonThatWasJustClearedIsRefused()
     {
-        // A cleared site still generates from the seed, so without this it could be farmed forever.
+        // A cleared site still generates from the seed, so without this it could be farmed
+        // continuously. The refusal bounds the rate; it no longer spends the site permanently.
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
         var siteId = TestWorld.DungeonIn(region);
@@ -198,7 +199,71 @@ public class WorldPveServiceTests : IDisposable
             instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
-        Assert.Contains("cleared", outcome.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("spent", outcome.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ADungeonClearedLongEnoughAgoIsWorthFightingAgain()
+    {
+        // The fix for a defence that used to be finite: a region's own sites are what restore its
+        // resolve, so if they never came back a defender ran out of answers and a raider did not.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        var instanceId = await SeedWorldAsync(region);
+        var siteId = TestWorld.DungeonIn(region);
+
+        await EditStoredWorldAsync(instanceId, world =>
+        {
+            var regionNode = WorldRegionBlob.FindRegion(world, region.RegionId)!;
+            var entry = WorldRegionBlob.EnsureOverride(regionNode, siteId);
+            entry["Cleared"] = true;
+            entry["ClearedAtUtcTicks"] = DateTime.UtcNow
+                .Subtract(SiteRespawnRules.RespawnAfter + TimeSpan.FromMinutes(1)).Ticks;
+        });
+
+        var (outcome, _) = await Service.BeginAsync(
+            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+    }
+
+    [Fact]
+    public async Task ARecoveredDungeonSteadiesTheRegionAgainWhenCleared()
+    {
+        // The whole point: the defender's answer renews. Clearing the same site a window later
+        // returns resolve a second time, which is what a raided region needs to keep up.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        region.Resolve = 40;
+        var instanceId = await SeedWorldAsync(region);
+        var siteId = TestWorld.DungeonIn(region);
+
+        // First clear.
+        var firstRun = await OpenRunAsync(instanceId, TestIds.Player, siteId);
+        await AgeRunAsync(firstRun, TimeSpan.FromMinutes(2));
+        var (_, first, worldAfterFirst) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(firstRun, Contract));
+
+        Assert.Equal(RegionResolveRules.RestoredPerClear, first!.ResolveRestored);
+        await ReplaceStoredWorldAsync(instanceId, worldAfterFirst!);
+
+        // Wind the clear back past the recovery window, as time passing would.
+        await EditStoredWorldAsync(instanceId, world =>
+        {
+            var entry = WorldRegionBlob.EnsureOverride(
+                WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId);
+            entry["ClearedAtUtcTicks"] = DateTime.UtcNow
+                .Subtract(SiteRespawnRules.RespawnAfter + TimeSpan.FromMinutes(1)).Ticks;
+        });
+
+        // Second clear of the same site.
+        var secondRun = await OpenRunAsync(instanceId, TestIds.Player, siteId);
+        await AgeRunAsync(secondRun, TimeSpan.FromMinutes(2));
+        var (outcome, second, worldAfterSecond) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(secondRun, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(RegionResolveRules.RestoredPerClear, second!.ResolveRestored);
+        Assert.Equal(40 + (2 * RegionResolveRules.RestoredPerClear),
+            TestWorld.ReadRegion(worldAfterSecond, region.RegionId).Resolve);
     }
 
     [Fact]

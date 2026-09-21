@@ -60,7 +60,10 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 
 - Capitals cannot be raided at all: a seat cannot be besieged, so wearing it down leads nowhere.
 - The defender's answer is `RegionResolveRules`: clearing a hostile site inside a region you hold
-  restores resolve, applied in `WorldPveService.ClaimAsync`.
+  restores resolve, applied in `WorldPveService.ClaimAsync`. A cleared site **recovers after 8h**
+  (`SiteRespawnRules`), because otherwise that answer is finite while raiding is not and the attacker
+  wins by arithmetic. Ask `SiteRespawnRules.IsCleared`, never `SiteOverride.Cleared` — clearance is
+  time-dependent, and `WorldRegionBlob.MarkCleared` stamps `ClearedAtUtcTicks` for it.
 - A region's garrison sum, supply and hold come from `RegionHoldCalculator.AssessRegion` — one
   implementation, so the server judges a raid by the numbers the client's dossier showed the player.
 - **Sieges are not built.** The gate is displayed and nothing acts on it; it is blocked behind the
