@@ -37,18 +37,25 @@ public class PlayerSaveValidator
         var rejectedDetails = new List<string>();
         int accepted = 0, rejected = 0;
 
-        if (save?["Characters"] is not JsonArray characters)
+        // Indexing a JsonNode by name throws unless it is an object, and the save arrives as whatever
+        // the client sent — the endpoint binds it as `object` and the merger passes a non-object
+        // straight through. So every step down the document is matched as an object first rather
+        // than indexed on faith; a save shaped wrongly carries no upgrades to judge, not a 500.
+        if (save is not JsonObject root || root["Characters"] is not JsonArray characters)
             return new UpgradeValidationResult(0, 0, rejectedDetails);
 
         foreach (var character in characters)
         {
-            if (character?["Abilities"] is not JsonArray abilities)
+            if (character is not JsonObject characterObject
+                || characterObject["Abilities"] is not JsonArray abilities)
                 continue;
 
             foreach (var ability in abilities)
             {
-                var linkName = ability?["AbilityLinkName"]?.GetValue<string>();
-                if (ability?["AppliedUpgrades"] is not JsonArray appliedUpgrades)
+                if (ability is not JsonObject abilityObject) continue;
+
+                var linkName = ReadString(abilityObject["AbilityLinkName"]);
+                if (abilityObject["AppliedUpgrades"] is not JsonArray appliedUpgrades)
                     continue;
 
                 _content.AbilityUpgradePools.TryGetValue(linkName ?? string.Empty, out var pool);
@@ -72,6 +79,10 @@ public class PlayerSaveValidator
 
         return new UpgradeValidationResult(accepted, rejected, rejectedDetails);
     }
+
+    /// <summary>A string field, or null when it is absent or is not a string.</summary>
+    private static string? ReadString(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     private static AbilityUpgradeSaveData? Deserialize(JsonNode? node)
     {
