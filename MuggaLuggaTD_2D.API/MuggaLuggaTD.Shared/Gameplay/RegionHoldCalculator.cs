@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MuggaLuggaTD.Shared.World;
 
 namespace MuggaLuggaTD.Shared.Gameplay
@@ -15,9 +16,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// judge a siege under exactly the rules the client showed the player when they decided to
     /// declare one.</para>
     ///
-    /// <para><b>Nothing acts on these numbers yet.</b> The dossier displays them. How a siege
-    /// actually resolves — the design's declare, eight-hour muster, scheduled resolve — is still
-    /// open, and the resolution rule will live beside this once it is settled.</para>
+    /// <para><b>Raiding acts on these numbers; sieging does not yet.</b> <see cref="RaidResolver"/>
+    /// measures a raid against the raid bar — half the gate — and wears resolve down, which lowers
+    /// hold for next time. The gate itself is still only displayed: the design's declare,
+    /// eight-hour muster and scheduled assault are not built, and that resolution rule will live
+    /// beside this one once the win condition it depends on is settled.</para>
     /// </summary>
     public static class RegionHoldCalculator
     {
@@ -128,16 +131,82 @@ namespace MuggaLuggaTD.Shared.Gameplay
         {
             long hold = Hold(garrisonPower, tier, entrenchment, supply, resolve);
             long gate = SiegeGate(hold);
+            long raidBar = RaidResolver.RaidBar(hold);
 
             return new SiegeAssessment
             {
                 Hold = hold,
                 Gate = gate,
+                RaidBar = raidBar,
+                GarrisonPower = garrisonPower,
+                Supply = supply,
                 MarchingPower = marchingPower,
                 ClearsGate = marchingPower >= gate,
+                ClearsRaidBar = marchingPower >= raidBar,
                 ShortBy = marchingPower >= gate ? 0 : (long)Math.Round(gate - marchingPower, MidpointRounding.AwayFromZero),
-                Surplus = marchingPower >= gate ? (long)Math.Round(marchingPower - gate, MidpointRounding.AwayFromZero) : 0
+                Surplus = marchingPower >= gate ? (long)Math.Round(marchingPower - gate, MidpointRounding.AwayFromZero) : 0,
+                ExpectedRaidDamage = marchingPower >= raidBar
+                    ? RaidResolver.ResolveDamage(marchingPower, hold)
+                    : 0
             };
+        }
+
+        /// <summary>
+        /// Assesses a region straight from the world, which is what the server does to judge a raid
+        /// and what the client's dossier does to show one.
+        ///
+        /// <para>This exists so there is one answer to "what is this region's garrison worth, is it
+        /// supplied, and how hard is it to break". That sum used to live in the client's
+        /// <c>RegionDossier</c> alone, where the server could not reach it — and the server has to
+        /// apply exactly the numbers the player was shown when they decided to march.</para>
+        /// </summary>
+        public static SiegeAssessment AssessRegion(
+            WorldRegionData region,
+            IReadOnlyCollection<WorldRegionData> allRegions,
+            double marchingPower)
+        {
+            if (region == null) return new SiegeAssessment();
+
+            double supply = SupplyCalculator.SupplyFor(region, allRegions);
+
+            var assessment = Assess(
+                GarrisonPowerOf(region), region.Tier, region.Entrenchment, supply, region.Resolve, marchingPower);
+
+            assessment.GarrisonCount = GarrisonCountOf(region);
+            return assessment;
+        }
+
+        /// <summary>
+        /// Everything stationed in a region, added up.
+        ///
+        /// <para>A region's defenders are spread across its sites — each site's override carries its
+        /// own garrison — so the region's defence is the sum, not any one site's.</para>
+        /// </summary>
+        public static double GarrisonPowerOf(WorldRegionData region)
+        {
+            if (region?.SiteOverrides == null) return 0;
+
+            double total = 0;
+            foreach (var over in region.SiteOverrides.Values)
+            {
+                if (over != null) total += over.GarrisonPower;
+            }
+
+            return total;
+        }
+
+        /// <summary>How many characters are stationed in a region, across all its sites.</summary>
+        public static int GarrisonCountOf(WorldRegionData region)
+        {
+            if (region?.SiteOverrides == null) return 0;
+
+            int count = 0;
+            foreach (var over in region.SiteOverrides.Values)
+            {
+                if (over?.GarrisonCharacterIds != null) count += over.GarrisonCharacterIds.Count;
+            }
+
+            return count;
         }
 
         private static int Clamp(int value, int min, int max)
@@ -151,13 +220,35 @@ namespace MuggaLuggaTD.Shared.Gameplay
     {
         public long Hold;
         public long Gate;
+
+        /// <summary>The lower bar a raid is measured against — half the siege gate.</summary>
+        public long RaidBar;
+
+        /// <summary>Combined power of everything stationed in the region.</summary>
+        public double GarrisonPower;
+
+        /// <summary>How many characters are stationed there.</summary>
+        public int GarrisonCount;
+
+        /// <summary>1.00 when supplied, lower when the owner is cut off from their capital.</summary>
+        public double Supply;
+
         public double MarchingPower;
         public bool ClearsGate;
+
+        /// <summary>True when the marching party is strong enough to raid, whatever a siege would need.</summary>
+        public bool ClearsRaidBar;
+
+        /// <summary>Resolve a successful raid would cost the region. Zero when the bar is not cleared.</summary>
+        public int ExpectedRaidDamage;
 
         /// <summary>Power still needed to reach the gate. Zero when it is already cleared.</summary>
         public long ShortBy;
 
         /// <summary>Power beyond the gate. Zero when it is not cleared.</summary>
         public long Surplus;
+
+        /// <summary>True when the region's owner cannot trace a path of their own land back home.</summary>
+        public bool CutOff => Supply < SupplyCalculator.Supplied;
     }
 }

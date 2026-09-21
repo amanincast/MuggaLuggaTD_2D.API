@@ -73,8 +73,8 @@ builder.Services.AddSignalR();
 // Authoritative game content, read from GameContent/ once at startup.
 builder.Services.AddSingleton<IGameContentProvider, GameContentProvider>();
 
-// Server-side conquest resolution (see WorldPvPService / WorldPveService).
-builder.Services.AddScoped<WorldPvPService>();
+// Server-side conquest resolution (see WorldRaidService / WorldPveService).
+builder.Services.AddScoped<WorldRaidService>();
 builder.Services.AddScoped<WorldPveService>();
 
 // The server owns world generation now: a region is validated by regenerating it from its seed,

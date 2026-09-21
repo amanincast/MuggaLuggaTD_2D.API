@@ -41,11 +41,30 @@ trusted with. It runs against EF's in-memory provider and needs neither Postgres
   is consistent with the roll it reports, or rig the power gap and repeat until the wanted outcome
   comes up.
 
-**Known gap, recorded in the suite:** `WorldPvPService` still resolves its target against a flat
-top-level `Locations` array, which no current (format 4) world has — so every PvP attack on a real
-site is refused as "location not found". `WorldPvPServiceTests.AnAttackInARegionWorld_CannotFindItsTarget`
-pins that, and the skipped `ARivalsKeepInARegionWorld_CanBeBesieged` beside it states the requirement
-for whoever ports PvP to regions.
+## Contesting a rival region
+
+`WorldRaidService` + `RaidController` (`POST /api/gameinstance/{id}/raid`). It **replaced**
+`WorldPvPService`, which had been dead since the world became regions — it resolved its target
+against a flat top-level `Locations` array that format-4 worlds do not have, so every attack was
+refused as "location not found". Two-client multiplayer had never been played, so nothing caught it.
+
+The replacement is not a port, because the old rule cannot survive the move. It handed the holding to
+whoever won one d20; against regions that is one roll taking a region, which `docs/design/siege.md`
+rules out in a sentence: the server cannot referee real-time combat, so **no single fight may be
+worth a region**.
+
+So a raid **takes nothing**. It wears the region's resolve down by a bounded 5–15 (`RaidResolver`,
+shared), resolve multiplies hold, and a worn-down region is cheaper to besiege later. What guards it
+is not the dice but the **cooldown** — one raid per attacker per region per 4h, recorded in
+`RegionRaid` and charged win or lose, so a forged win buys one cooldown's worth of progress.
+
+- Capitals cannot be raided at all: a seat cannot be besieged, so wearing it down leads nowhere.
+- The defender's answer is `RegionResolveRules`: clearing a hostile site inside a region you hold
+  restores resolve, applied in `WorldPveService.ClaimAsync`.
+- A region's garrison sum, supply and hold come from `RegionHoldCalculator.AssessRegion` — one
+  implementation, so the server judges a raid by the numbers the client's dossier showed the player.
+- **Sieges are not built.** The gate is displayed and nothing acts on it; it is blocked behind the
+  win condition (design §8).
 
 ## Development URLs
 

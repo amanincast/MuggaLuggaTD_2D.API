@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MuggaLuggaTD.Shared.World;
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Services;
 using MuggaLuggaTD_2D.API.Tests.TestSupport;
 
@@ -327,5 +328,127 @@ public class WorldRegionBlobTests
         var world = TestWorld.Blob(TestWorld.Region());
 
         Assert.Equal(TestWorld.RegionSeed, world["WorldSeed"]!.GetValue<int>());
+    }
+
+    // -----------------------------------------------------------------
+    // Reading what stands in a region — what a raid is measured against
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void ARegionsGarrisonIsTheSumOfWhatStandsAtItsSites()
+    {
+        // A region's defence is spread across its sites, so the server has to add them up the same
+        // way the client's dossier does. Reading one site's snapshot would let an attacker be
+        // measured against the weakest door.
+        var region = TestWorld.Region();
+        var world = TestWorld.Blob(region);
+        var regionNode = WorldRegionBlob.FindRegion(world, region.RegionId)!;
+        var sites = TestWorld.SitesIn(region);
+
+        foreach (var (site, power) in sites.Take(3).Zip(new[] { 1000f, 250f, 75f }))
+        {
+            var entry = WorldRegionBlob.EnsureOverride(regionNode, site.SiteId);
+            entry["GarrisonPower"] = power;
+            entry["GarrisonCharacterIds"] = new JsonArray("a", "b");
+        }
+
+        var read = TestWorld.ReadRegion(TestWorld.RoundTrip(world), region.RegionId);
+
+        Assert.Equal(1325f, RegionHoldCalculator.GarrisonPowerOf(read));
+        Assert.Equal(6, RegionHoldCalculator.GarrisonCountOf(read));
+    }
+
+    [Fact]
+    public void ARegionWithNothingStationedInItReadsAsEmpty()
+    {
+        var read = TestWorld.ReadRegion(TestWorld.RoundTrip(TestWorld.Blob(TestWorld.Region())), "r0");
+
+        Assert.Empty(read.SiteOverrides);
+        Assert.Equal(0, RegionHoldCalculator.GarrisonPowerOf(read));
+        Assert.Equal(0, RegionHoldCalculator.GarrisonCountOf(read));
+    }
+
+    [Fact]
+    public void AClearedSiteSurvivesBeingReadIntoTheModel()
+    {
+        var region = TestWorld.Region();
+        var world = TestWorld.Blob(region);
+        var siteId = TestWorld.DungeonIn(region);
+        WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId);
+
+        var read = TestWorld.ReadRegion(TestWorld.RoundTrip(world), region.RegionId);
+
+        Assert.True(read.SiteOverrides[siteId].Cleared);
+    }
+
+    // -----------------------------------------------------------------
+    // Resolve
+    // -----------------------------------------------------------------
+
+    [Theory]
+    [InlineData(50, 50)]
+    [InlineData(-20, 0)]     // raided past breaking
+    [InlineData(140, 100)]   // steadied past full
+    public void ResolveIsKeptInsideItsBounds(int written, int expected)
+    {
+        var world = TestWorld.Blob(TestWorld.Region("r0"));
+        var regionNode = WorldRegionBlob.FindRegion(world, "r0")!;
+
+        Assert.Equal(expected, WorldRegionBlob.SetResolve(regionNode, written));
+        Assert.Equal(expected, TestWorld.ReadRegion(TestWorld.RoundTrip(world), "r0").Resolve);
+    }
+
+    // -----------------------------------------------------------------
+    // Champions already committed elsewhere
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void ChampionsStandingGarrisonInYourOwnRegionsAreCommitted()
+    {
+        var mine = TestWorld.OwnedBy(TestIds.Player, "r0");
+        var world = TestWorld.Blob(mine);
+        var entry = WorldRegionBlob.EnsureOverride(
+            WorldRegionBlob.FindRegion(world, "r0")!, TestWorld.KeepIn(mine));
+        entry["GarrisonCharacterIds"] = new JsonArray("hero-1", "hero-2");
+
+        var committed = WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player);
+
+        Assert.Equal(new[] { "hero-1", "hero-2" }, committed.OrderBy(id => id));
+    }
+
+    [Fact]
+    public void AnotherPlayersGarrisonDoesNotCommitYourChampions()
+    {
+        // Their keep holds their people. Otherwise a defender could freeze an attacker's roster by
+        // garrisoning characters with matching ids.
+        var theirs = TestWorld.OwnedBy(TestIds.Rival, "r1");
+        var world = TestWorld.Blob(TestWorld.OwnedBy(TestIds.Player, "r0"), theirs);
+        var entry = WorldRegionBlob.EnsureOverride(
+            WorldRegionBlob.FindRegion(world, "r1")!, TestWorld.KeepIn(theirs));
+        entry["GarrisonCharacterIds"] = new JsonArray("hero-1");
+
+        Assert.Empty(WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player));
+    }
+
+    [Fact]
+    public void PrisonersAreCommittedWhereverTheyAreHeld()
+    {
+        // A captured champion is out of the war until their owner retakes the ground — whoever
+        // happens to hold it now.
+        var theirs = TestWorld.OwnedBy(TestIds.Rival, "r1");
+        var world = TestWorld.Blob(theirs);
+        var entry = WorldRegionBlob.EnsureOverride(
+            WorldRegionBlob.FindRegion(world, "r1")!, TestWorld.KeepIn(theirs));
+        entry["CapturedCharacterIds"] = new JsonArray("hero-1");
+
+        Assert.Contains("hero-1", WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player));
+    }
+
+    [Fact]
+    public void AFreePlayerHasNobodyCommitted()
+    {
+        var world = TestWorld.Blob(TestWorld.OwnedBy(TestIds.Player, "r0"), TestWorld.Region("r1", q: 1));
+
+        Assert.Empty(WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player));
     }
 }

@@ -39,6 +39,16 @@ namespace MuggaLuggaTD.Shared
         //   screen instead of floating in it. Same 576 cells, so nothing about the land or the site
         //   budget changes — but every cell index means a different place, so a 1.7.0 client would
         //   draw the wrong ground and put sites where the server does not have them.
-        public const string Version = "1.8.0";
+        // 1.9.0 — raiding. Passive PvP resolved against a flat list of locations that region worlds
+        //   no longer have, so every attack was refused as "location not found" and PvP had in fact
+        //   been dead since format 4. It is replaced by the raid of docs/design/siege.md §3, which
+        //   is measured against a region's hold rather than one site's garrison snapshot: a raid
+        //   takes nothing and wears resolve down instead, because the server cannot referee a
+        //   real-time fight and so no single fight may be worth a region. A region's garrison sum,
+        //   supply and hold now have one implementation (RegionHoldCalculator.AssessRegion) rather
+        //   than living only in the client's dossier, and clearing a fightable site inside your own
+        //   region restores its resolve. A 1.8.0 client would show the player a raid bar and an
+        //   expected cost the server does not agree with.
+        public const string Version = "1.9.0";
     }
 }

@@ -486,6 +486,116 @@ public class WorldPveServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------
+    // Resolve — the defender's answer to being raided
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ClearingAHostileSiteInYourOwnRegionSteadiesIt()
+    {
+        // The other half of raiding. A rival wears a region's resolve down from outside; the owner
+        // answers by going in and dealing with what is under it. Without this, being raided has no
+        // reply at all.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        region.Resolve = 60;
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (outcome, response, world) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(RegionResolveRules.RestoredPerClear, response!.ResolveRestored);
+        Assert.Equal(60 + RegionResolveRules.RestoredPerClear, TestWorld.ReadRegion(world, region.RegionId).Resolve);
+    }
+
+    [Fact]
+    public async Task ResolveCannotBeRestoredPastFull()
+    {
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        region.Resolve = RegionResolveRules.Maximum - 3;
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (_, response, world) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.Equal(RegionResolveRules.Maximum, TestWorld.ReadRegion(world, region.RegionId).Resolve);
+
+        // And it reports what was actually restored, not what it was worth.
+        Assert.Equal(3, response!.ResolveRestored);
+    }
+
+    [Fact]
+    public async Task ClearingUnclaimedLandSteadiesNothing()
+    {
+        // Resolve is the morale of a region you hold. Clearing a dungeon in neutral country is a
+        // fight, not a show of force that steadies anyone's territory.
+        var region = TestWorld.Region();
+        region.Resolve = 50;
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (_, response, world) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.Equal(0, response!.ResolveRestored);
+        Assert.Equal(50, TestWorld.ReadRegion(world, region.RegionId).Resolve);
+    }
+
+    [Fact]
+    public async Task TakingAKeepDoesNotAlsoCountAsSteadyingTheRegion()
+    {
+        // A capture already sets resolve to full. Adding a restoration on top would be counting the
+        // same act twice, and the capture is the thing that decides the number.
+        var region = TestWorld.Region();
+        region.Resolve = 40;
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.KeepIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (_, response, world) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.Equal(0, response!.ResolveRestored);
+        Assert.Equal(RegionResolveRules.Maximum, TestWorld.ReadRegion(world, region.RegionId).Resolve);
+    }
+
+    [Fact]
+    public async Task AWornDownRegionCanBeBroughtBackByClearingItsSites()
+    {
+        // End to end: a region raided down to nothing is recoverable by its owner. That it is
+        // recoverable *only while its sites last* is the known tension recorded on RegionResolveRules.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        region.Resolve = 20;
+        var instanceId = await SeedWorldAsync(region);
+
+        var dungeons = TestWorld.SitesIn(region)
+            .Where(s => s.Type == LocationType.Dungeon).Take(3).ToList();
+
+        int expected = 20;
+        foreach (var dungeon in dungeons)
+        {
+            var runId = await OpenRunAsync(instanceId, TestIds.Player, dungeon.SiteId);
+            await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+            var (outcome, _, world) = await Service.ClaimAsync(
+                instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+            Assert.True(outcome.Succeeded, outcome.Message);
+
+            expected += RegionResolveRules.RestoredPerClear;
+
+            // The claim does not persist; the controller does. Write it back so the next clear sees it.
+            await ReplaceStoredWorldAsync(instanceId, world!);
+            Assert.Equal(expected, TestWorld.ReadRegion(world, region.RegionId).Resolve);
+        }
+
+        Assert.Equal(50, expected);
+    }
+
+    // -----------------------------------------------------------------
     // Setup helpers
     // -----------------------------------------------------------------
 
