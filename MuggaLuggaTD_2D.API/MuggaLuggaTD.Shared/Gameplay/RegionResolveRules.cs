@@ -11,11 +11,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// attack and the answer, and they are the reason the own-region PvE fix mattered — a player who
     /// could not fight inside their own territory had no way to respond to being raided.</para>
     ///
-    /// <para><b>Known tension, not yet resolved.</b> A region's dungeons are finite and, once
-    /// cleared, stay cleared — so restoration has a ceiling that raiding does not. Over a long enough
-    /// horizon the attacker wins by arithmetic. The design intends a neglected region to fall, but
-    /// not a tended one, so this wants either respawning sites or a slow passive regeneration before
-    /// sieges ship. Recorded here because the numbers below look balanced and are not.</para>
+    /// <para><b>The ceiling this used to have is gone.</b> Sites stayed cleared forever, so a
+    /// defender could restore only (dungeons × <see cref="RestoredPerClear"/>) resolve <i>ever</i>,
+    /// against unlimited raiding — the attacker won by arithmetic however well the defence was
+    /// played. Cleared sites now recover; see <see cref="SiteRespawnRules"/>, which carries the
+    /// rates and the reasoning.</para>
     /// </summary>
     public static class RegionResolveRules
     {

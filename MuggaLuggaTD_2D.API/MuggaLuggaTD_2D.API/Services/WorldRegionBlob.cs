@@ -106,6 +106,7 @@ public static class WorldRegionBlob
             result[siteId] = new SiteOverride
             {
                 Cleared = entry["Cleared"]?.GetValue<bool>() ?? false,
+                ClearedAtUtcTicks = entry["ClearedAtUtcTicks"]?.GetValue<long>() ?? 0,
                 Repaired = entry["Repaired"]?.GetValue<bool>() ?? false,
                 GarrisonPower = entry["GarrisonPower"]?.GetValue<float>() ?? 0f,
                 GarrisonCharacterIds = ReadStrings(entry["GarrisonCharacterIds"]),
@@ -196,9 +197,21 @@ public static class WorldRegionBlob
         return entry;
     }
 
+    /// <summary>
+    /// True when a site's fight has been spent and has not yet come back.
+    ///
+    /// <para>Time-dependent, by way of <see cref="SiteRespawnRules"/>: a cleared site recovers, so
+    /// that a region's own dungeons can keep answering raids rather than running out.</para>
+    /// </summary>
     public static bool IsCleared(JsonNode? siteOverride)
     {
-        return siteOverride?["Cleared"]?.GetValue<bool>() ?? false;
+        if (siteOverride == null) return false;
+
+        return SiteRespawnRules.IsCleared(new SiteOverride
+        {
+            Cleared = siteOverride["Cleared"]?.GetValue<bool>() ?? false,
+            ClearedAtUtcTicks = siteOverride["ClearedAtUtcTicks"]?.GetValue<long>() ?? 0
+        });
     }
 
     /// <summary>
@@ -207,7 +220,12 @@ public static class WorldRegionBlob
     /// </summary>
     public static void MarkCleared(JsonNode regionNode, string siteId)
     {
-        EnsureOverride(regionNode, siteId)["Cleared"] = true;
+        var entry = EnsureOverride(regionNode, siteId);
+        entry["Cleared"] = true;
+
+        // Stamped so the site can come back. Without the timestamp it would read as cleared before
+        // this rule existed, which is treated as recovered — so a clear with no stamp does nothing.
+        entry["ClearedAtUtcTicks"] = DateTime.UtcNow.Ticks;
     }
 
     // -----------------------------------------------------------------

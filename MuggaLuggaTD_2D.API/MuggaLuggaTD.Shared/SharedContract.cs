@@ -49,6 +49,12 @@ namespace MuggaLuggaTD.Shared
         //   than living only in the client's dossier, and clearing a fightable site inside your own
         //   region restores its resolve. A 1.8.0 client would show the player a raid bar and an
         //   expected cost the server does not agree with.
-        public const string Version = "1.9.0";
+        // 1.10.0 — a cleared site recovers after a while instead of staying spent forever. Clearing
+        //   a region's own hostile sites is the only way to restore its resolve, so a permanent
+        //   clear made a region's defence finite while raiding it was not, and an attacker won by
+        //   arithmetic however well the defence was played. Sites now carry when they were cleared
+        //   and come back; both sides must agree, because the server refuses a run against a site it
+        //   thinks is spent and the client would otherwise draw a marker the server will not admit.
+        public const string Version = "1.10.0";
     }
 }

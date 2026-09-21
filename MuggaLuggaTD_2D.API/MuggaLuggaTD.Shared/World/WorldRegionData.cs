@@ -82,6 +82,16 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>A dungeon or portal that has been cleared, and no longer offers a fight.</summary>
         public bool Cleared;
 
+        /// <summary>
+        /// When it was cleared, as UTC ticks. Zero when unknown.
+        ///
+        /// <para>A cleared site comes back — see <see cref="Gameplay.SiteRespawnRules"/>. Without
+        /// this it never did, which quietly made a region's defence finite: the only way to restore
+        /// a region's resolve is to clear its own hostile sites, so a defender had a ceiling that
+        /// raiding did not.</para>
+        /// </summary>
+        public long ClearedAtUtcTicks;
+
         /// <summary>A ruin that has been rebuilt, and is now contributing its entrenchment.</summary>
         public bool Repaired;
 
@@ -104,6 +114,7 @@ namespace MuggaLuggaTD.Shared.World
         public bool IsEmpty()
         {
             return !Cleared
+                   && ClearedAtUtcTicks == 0
                    && !Repaired
                    && GarrisonPower == 0f
                    && StoredYield == 0
