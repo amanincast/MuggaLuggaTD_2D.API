@@ -207,11 +207,16 @@ public class WorldPveService
     }
 
     /// <summary>
-    /// A site is a legitimate PvE target when its region is not held by a player, the site itself
-    /// has combat to offer, and that combat has not already been spent.
+    /// A site is a legitimate PvE target when the player is not being handed a rival's territory,
+    /// the site itself has combat to offer, and that combat has not already been spent.
     ///
-    /// <para>A rival's region is a PvP target and must go through the PvP endpoint, which resolves a
-    /// contested fight rather than handing over a capture on the attacker's say-so.</para>
+    /// <para>A <b>rival's</b> region is a PvP target and must go through the PvP endpoint, which
+    /// resolves a contested fight rather than handing over a capture on the attacker's say-so.</para>
+    ///
+    /// <para>Your <b>own</b> region is not. Holding a region does not clear the dungeons inside it,
+    /// and clearing them is a loop the design leans on — it is how resolve is restored. Rejecting
+    /// every site in an owned region shut that off entirely: a player who took a region could never
+    /// fight in it again.</para>
     /// </summary>
     private static PveOutcome ValidatePveTarget(SiteResolution resolved, string userId)
     {
@@ -219,9 +224,14 @@ public class WorldPveService
 
         if (region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId))
         {
-            return string.Equals(region.OwnerUserId, userId, StringComparison.Ordinal)
-                ? new PveOutcome(PveError.NotPveTarget, "You already hold that region.")
-                : new PveOutcome(PveError.NotPveTarget, "That region belongs to another player — lay siege to it instead.");
+            if (!string.Equals(region.OwnerUserId, userId, StringComparison.Ordinal))
+                return new PveOutcome(PveError.NotPveTarget, "That region belongs to another player — lay siege to it instead.");
+
+            // In your own region only the hostile sites are still a fight. The keep and the
+            // settlements are yours along with the ground they stand on; the dungeons and portals
+            // are not, and never become so — holding the region does not empty them.
+            if (!resolved.Site.IsFightable)
+                return new PveOutcome(PveError.NotPveTarget, "That site is already yours.");
         }
 
         if (ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type) == ConquestOutcome.None)
