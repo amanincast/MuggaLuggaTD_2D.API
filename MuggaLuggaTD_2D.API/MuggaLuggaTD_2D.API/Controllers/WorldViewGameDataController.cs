@@ -20,15 +20,18 @@ public class WorldViewGameDataController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldProvisioningService _provisioning;
+    private readonly SeasonScoreService _seasons;
 
     public WorldViewGameDataController(
         ApplicationDbContext context,
         IHubContext<GameHub> hubContext,
-        WorldProvisioningService provisioning)
+        WorldProvisioningService provisioning,
+        SeasonScoreService seasons)
     {
         _context = context;
         _hubContext = hubContext;
         _provisioning = provisioning;
+        _seasons = seasons;
     }
 
     [HttpGet]
@@ -42,11 +45,21 @@ public class WorldViewGameDataController : ControllerBase
             return Forbid();
         }
 
+        // Without a scheduler, arriving traffic is what notices that a season's time is up. Opening
+        // the map is the busiest such path, so it is the one that most often closes a finished
+        // season and starts the next - which regenerates the world read just below.
+        await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
+
         // The server owns the world's existence now: it generates one on first request, regenerates
         // anything written before the region map, and seats a player who joined after generation.
         // The client renders what it is handed rather than building a map the server cannot verify.
         var worldData = await _provisioning.EnsureWorldAsync(gameInstanceId);
         await _provisioning.EnsureSeatAsync(gameInstanceId, userId, User?.Identity?.Name);
+
+        // Settling here is what gives a player a scoreboard row from the moment they are seated,
+        // rather than from whenever they first do something that scores. A capital held from day one
+        // has to earn from day one.
+        await _seasons.SettleAllAsync(gameInstanceId);
 
         // Re-read: seating a late joiner rewrites the blob.
         worldData = await _context.WorldViewGameData

@@ -80,6 +80,7 @@ builder.Services.AddScoped<WorldPveService>();
 // The server owns world generation now: a region is validated by regenerating it from its seed,
 // which only works if the server is the one that decided the seed.
 builder.Services.AddScoped<WorldProvisioningService>();
+builder.Services.AddScoped<SeasonScoreService>();
 
 // Reviewable per-session diagnostics log (off unless Diagnostics:SessionLog is true).
 builder.Services.AddSingleton<ISessionLog, SessionLog>();

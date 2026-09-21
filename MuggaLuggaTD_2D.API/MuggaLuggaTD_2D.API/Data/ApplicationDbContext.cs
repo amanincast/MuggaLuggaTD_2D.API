@@ -21,6 +21,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<PveRun> PveRuns => Set<PveRun>();
     public DbSet<RegionRaid> RegionRaids => Set<RegionRaid>();
+    public DbSet<SeasonScore> SeasonScores => Set<SeasonScore>();
+    public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -74,6 +76,44 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // And a defender reads the log for their own region.
             entity.HasIndex(e => new { e.GameInstanceId, e.RegionId, e.RaidedAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure SeasonScore entity (one player's running score in one season)
+        builder.Entity<SeasonScore>(entity =>
+        {
+            // A player has exactly one score per season of an instance; the unique index is what
+            // makes settle-up safe to call from every path that can change a holding.
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.SeasonNumber }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure SeasonResult entity (where a player finished a closed season)
+        builder.Entity<SeasonResult>(entity =>
+        {
+            // Written once per player per season, and read back as a table.
+            entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Rank });
+
+            // And read across instances, for what a player has won anywhere — the carry-over's path.
+            entity.HasIndex(e => new { e.UserId, e.SeasonEndedAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()
