@@ -305,6 +305,48 @@ public static class WorldRegionBlob
         regionNode["ClaimedAtUtcTicks"] = (claimedAt ?? DateTime.UtcNow).Ticks;
     }
 
+    /// <summary>
+    /// Hands a region to the player who took it by siege, wrecked (siege.md §6).
+    ///
+    /// <para>Its garrison is <b>captured, not destroyed</b>: every champion stationed there becomes
+    /// a prisoner held at the site they defended, and comes home if their owner retakes it. Its
+    /// fortifications are gone and its morale is low, so the new owner inherits something that
+    /// needs tending - and, once the truce lifts, something the old owner can win back without a
+    /// week of raiding. Returns how many champions were taken.</para>
+    /// </summary>
+    public static int CaptureWrecked(JsonNode regionNode, string userId, string? displayName, DateTime claimedAt)
+    {
+        int captured = 0;
+
+        if (regionNode["SiteOverrides"] is JsonObject overrides)
+        {
+            foreach (var (_, node) in overrides)
+            {
+                if (node is not JsonObject entry) continue;
+
+                var garrison = ReadStrings(entry["GarrisonCharacterIds"]);
+                if (garrison.Count > 0)
+                {
+                    var prisoners = ReadStrings(entry["CapturedCharacterIds"]);
+                    foreach (var id in garrison)
+                        if (!prisoners.Contains(id)) prisoners.Add(id);
+
+                    entry["CapturedCharacterIds"] = new JsonArray(prisoners.Select(id => (JsonNode)id!).ToArray());
+                    captured += garrison.Count;
+                }
+
+                entry["GarrisonCharacterIds"] = new JsonArray();
+                entry["GarrisonPower"] = 0f;
+            }
+        }
+
+        CaptureRegion(regionNode, userId, displayName, claimedAt);
+        regionNode["Entrenchment"] = 0;
+        regionNode["Resolve"] = SiegeAssaultRules.WreckedResolve;
+
+        return captured;
+    }
+
     // -----------------------------------------------------------------
     // Writing a new world
     // -----------------------------------------------------------------

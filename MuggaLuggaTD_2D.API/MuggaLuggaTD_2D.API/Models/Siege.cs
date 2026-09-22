@@ -91,6 +91,20 @@ public class Siege
     /// </summary>
     public long? FrozenHold { get; set; }
 
+    /// <summary>
+    /// The one assault run this siege allows, once the attacker has begun it. Null until then.
+    /// A siege gets a single assault: a player who could start a fresh one after every loss
+    /// would just retry until the dice of the fight went their way.
+    /// </summary>
+    public Guid? AssaultRunId { get; set; }
+
+    public DateTime? AssaultStartedAt { get; set; }
+
+    /// <summary>The encounter the server handed the attacker, kept so the claim can be logged against it.</summary>
+    public int EncounterEnemyLevel { get; set; }
+
+    public int EncounterWaves { get; set; }
+
     /// <summary>When the siege reached a final state.</summary>
     public DateTime? ResolvedAt { get; set; }
 

@@ -30,7 +30,13 @@ public class WorldSiegeServiceTests : IDisposable
     private readonly FakeClock _clock = new();
 
     private WorldSiegeService Service => new(
-        _db, _content, _hub, _log, NullLogger<WorldSiegeService>.Instance, _clock);
+        _db, _content, _hub, _log, NullLogger<WorldSiegeService>.Instance, _clock,
+        new SeasonScoreService(
+            _db,
+            new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance),
+            _hub,
+            _log,
+            NullLogger<SeasonScoreService>.Instance));
 
     private WorldRaidService Raids => new(_db, _content, NullLogger<WorldRaidService>.Instance);
 
@@ -387,8 +393,234 @@ public class WorldSiegeServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------
+    // The assault
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task NoAssaultWhileTheDefenderIsStillMustering()
+    {
+        var instanceId = await SeedAsync();
+        var declared = await DeclareAsync(instanceId);
+
+        var (outcome, assault) = await Service.BeginAssaultAsync(instanceId, TestIds.Player, declared.Id, SharedContract.Version);
+
+        Assert.Equal(SiegeError.WrongState, outcome.Error);
+        Assert.Null(assault);
+    }
+
+    [Fact]
+    public async Task OnlyTheBesiegerMayAssault()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+
+        var (outcome, _) = await Service.BeginAssaultAsync(instanceId, TestIds.Rival, siegeId, SharedContract.Version);
+
+        Assert.Equal(SiegeError.NotAttacker, outcome.Error);
+    }
+
+    [Fact]
+    public async Task TheServerHandsTheAttackerTheFightFromTheFrozenHold()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+
+        var (outcome, assault) = await Service.BeginAssaultAsync(instanceId, TestIds.Player, siegeId, SharedContract.Version);
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var siege = await _db.Sieges.SingleAsync();
+        var expected = SiegeAssaultRules.EncounterFor(siege.MarchingPower, siege.FrozenHold!.Value, 1, 0);
+        Assert.Equal(expected.EnemyLevel, assault!.EnemyLevel);
+        Assert.Equal(expected.Waves, assault.Waves);
+        Assert.Equal(siege.AssaultRunId, assault.RunId);
+        Assert.Equal(new[] { "hero-1" }, assault.ArmyCharacterIds);
+    }
+
+    [Fact]
+    public async Task ASiegeGetsOneAssault()
+    {
+        // A player who could start a fresh assault after every loss would retry until the fight went their way.
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        await BeginAsync(instanceId, siegeId);
+
+        var (again, _) = await Service.BeginAssaultAsync(instanceId, TestIds.Player, siegeId, SharedContract.Version);
+
+        Assert.Equal(SiegeError.AssaultSpent, again.Error);
+    }
+
+    [Fact]
+    public async Task WinningTheAssaultTakesTheRegionWreckedAndItsGarrisonPrisoner()
+    {
+        var instanceId = await SeedAsync(garrisonIds: new[] { "rival-hero" });
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+
+        var (outcome, result) = await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, true, SharedContract.Version));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(nameof(SiegeState.Won), result!.Outcome);
+        Assert.Equal(1, result.CapturedCount);
+
+        var world = await _db.ReadWorldAsync(instanceId);
+        var region = TestWorld.ReadRegion(world, Target);
+        Assert.True(region.IsOwnedByPlayer(TestIds.Player));
+        Assert.Equal(SiegeAssaultRules.WreckedResolve, region.Resolve);
+        Assert.Equal(0, region.Entrenchment);
+        Assert.Contains(region.SiteOverrides.Values, o => o.CapturedCharacterIds.Contains("rival-hero"));
+        Assert.All(region.SiteOverrides.Values, o => Assert.Empty(o.GarrisonCharacterIds));
+
+        // Fresh ground: the old owner cannot strike straight back.
+        Assert.True(SiegeRules.IsUnderTruce(region, _clock.UtcNow));
+
+        Assert.Contains("WorldViewGameDataUpdated", _hub.MethodsSentTo(instanceId));
+        Assert.Empty(await MarchingArmy.SiegeLockedIdsAsync(_db, instanceId, TestIds.Player));
+    }
+
+    [Fact]
+    public async Task ASiegeWonPaysTheAttackerALump()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+
+        await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, true, SharedContract.Version));
+
+        var score = await _db.SeasonScores.AsNoTracking().FirstAsync(s => s.UserId == TestIds.Player);
+        Assert.True(score.SettledPoints >= SeasonScoreRules.PointsFor(SeasonDeed.SiegeWon));
+    }
+
+    [Fact]
+    public async Task LosingTheAssaultRepelsTheSiegeAndStiffensTheRegion()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+
+        var (outcome, result) = await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, false, SharedContract.Version));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(nameof(SiegeState.Repelled), result!.Outcome);
+
+        var region = TestWorld.ReadRegion(await _db.ReadWorldAsync(instanceId), Target);
+        Assert.True(region.IsOwnedByPlayer(TestIds.Rival));
+        Assert.Equal(40 + SiegeAssaultRules.RepelResolveBonus, region.Resolve);
+
+        var defender = await _db.SeasonScores.AsNoTracking().FirstAsync(s => s.UserId == TestIds.Rival);
+        Assert.True(defender.SettledPoints >= SeasonScoreRules.PointsFor(SeasonDeed.SiegeRepelled));
+    }
+
+    [Fact]
+    public async Task AWinClaimedFasterThanItCouldBeFoughtIsRefused()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+
+        var (outcome, _) = await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, true, SharedContract.Version));
+
+        Assert.Equal(SiegeError.TooFast, outcome.Error);
+        Assert.True(TestWorld.ReadRegion(await _db.ReadWorldAsync(instanceId), Target).IsOwnedByPlayer(TestIds.Rival));
+    }
+
+    [Fact]
+    public async Task AClaimMustNameThisSiegesAssault()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+
+        var (outcome, _) = await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(Guid.NewGuid(), true, SharedContract.Version));
+
+        Assert.Equal(SiegeError.RunMismatch, outcome.Error);
+    }
+
+    [Fact]
+    public async Task AnAssaultNeverReportedIsADefenceThatHeld()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        await BeginAsync(instanceId, siegeId);
+
+        _clock.Advance(SiegeRules.AssaultWindow + SiegeAssaultRules.ClaimGrace);
+        Assert.Equal(1, await Service.AdvanceAllDueAsync());
+
+        Assert.Equal(SiegeState.Repelled, (await _db.Sieges.SingleAsync()).State);
+    }
+
+    [Fact]
+    public async Task AStartedAssaultDoesNotLapseAtTheWindowsCloseButMayStillBeClaimed()
+    {
+        // A fight begun a minute before the window shut must not be forfeited by the clock.
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        _clock.Advance(SiegeRules.AssaultWindow - TimeSpan.FromMinutes(1));
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(10));
+
+        await Service.AdvanceAsync(instanceId);
+        Assert.Equal(SiegeState.Assault, (await _db.Sieges.SingleAsync()).State);
+
+        var (outcome, result) = await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, true, SharedContract.Version));
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(nameof(SiegeState.Won), result!.Outcome);
+    }
+
+    [Fact]
+    public async Task ARepelledSiegeBarsTheAttackerForADay()
+    {
+        var instanceId = await SeedAsync();
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, false, SharedContract.Version));
+
+        var tooSoon = await Service.DeclareAsync(instanceId, TestIds.Player, Request());
+
+        Assert.Equal(SiegeError.OnCooldown, tooSoon.Error);
+    }
+
+    [Fact]
+    public void AnArmyThatBarelyClearsTheGateFacesTheLongestFight()
+    {
+        var atGate = SiegeAssaultRules.EncounterFor(1000, 1667, 1, 0);
+        var overwhelming = SiegeAssaultRules.EncounterFor(1000, 400, 1, 2);
+
+        Assert.Equal(SiegeAssaultRules.MaximumWaves, atGate.Waves);
+        Assert.Equal(SiegeAssaultRules.MinimumWaves, overwhelming.Waves);
+        Assert.True(atGate.EnemyLevel > overwhelming.EnemyLevel);
+        Assert.Equal(2, overwhelming.EliteCount);
+    }
+
+    // -----------------------------------------------------------------
     // Arrangement
     // -----------------------------------------------------------------
+
+    private async Task<Guid> ReachAssaultAsync(Guid instanceId)
+    {
+        var declared = await DeclareAsync(instanceId);
+        _clock.Advance(SiegeRules.Muster);
+        await Service.AdvanceAsync(instanceId);
+        return declared.Id;
+    }
+
+    private async Task<SiegeAssaultResponse> BeginAsync(Guid instanceId, Guid siegeId)
+    {
+        var (outcome, assault) = await Service.BeginAssaultAsync(instanceId, TestIds.Player, siegeId, SharedContract.Version);
+        Assert.True(outcome.Succeeded, outcome.Message);
+        return assault!;
+    }
 
     private static SiegeDeclareRequest Request(string regionId = Target, string[]? army = null, string? version = null)
         => new(regionId, (army ?? new[] { "hero-1" }).ToList(), version ?? SharedContract.Version);
@@ -413,6 +645,7 @@ public class WorldSiegeServiceTests : IDisposable
         WorldRegionData? extra = null,
         string[]? roster = null,
         string? secondAttacker = null,
+        string[]? garrisonIds = null,
         bool clockIsReal = false)
     {
         var instance = await _db.AddInstanceAsync();
@@ -444,6 +677,11 @@ public class WorldSiegeServiceTests : IDisposable
 
         var world = TestWorld.Blob(regions.ToArray());
         if (garrisonPower > 0) Garrison(world, rival, garrisonPower);
+        if (garrisonIds != null)
+        {
+            var entry = WorldRegionBlob.EnsureOverride(WorldRegionBlob.FindRegion(world, Target)!, TestWorld.KeepIn(rival));
+            entry["GarrisonCharacterIds"] = new JsonArray(garrisonIds.Select(id => (JsonNode)id!).ToArray());
+        }
         await _db.AddWorldAsync(instance.Id, world);
 
         var heroes = (roster ?? new[] { "hero-1" }).Select(id => TestSave.Character(id, 20)).ToArray();

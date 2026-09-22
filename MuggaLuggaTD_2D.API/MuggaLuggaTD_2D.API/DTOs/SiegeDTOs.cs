@@ -37,8 +37,54 @@ public record SiegeResponse(
     /// <summary>The region's hold as frozen when muster closed. Null while still mustering.</summary>
     long? FrozenHold,
     DateTime? ResolvedAt,
-    List<string> ArmyCharacterIds
+    List<string> ArmyCharacterIds,
+    /// <summary>True once the attacker has begun the siege's one assault. Visible to both sides.</summary>
+    bool AssaultBegun = false
 );
 
 /// <summary>Every live siege in a realm.</summary>
 public record SiegeListResponse(List<SiegeResponse> Sieges);
+
+/// <summary>
+/// The assault the server has opened for the attacker: the run to claim against, and the fight
+/// they are to be handed. The client builds the combat from these numbers and may not choose its own.
+/// </summary>
+public record SiegeAssaultResponse(
+    Guid SiegeId,
+    Guid RunId,
+    string RegionId,
+    int EnemyLevel,
+    int Waves,
+    int EliteCount,
+    long FrozenHold,
+    double MarchingPower,
+    DateTime AssaultEndsAt,
+    /// <summary>The locked army. These are the champions who fight it.</summary>
+    List<string> ArmyCharacterIds
+);
+
+/// <summary>The attacker asking to begin the assault.</summary>
+public record SiegeAssaultBeginRequest([Required] string SharedContractVersion);
+
+/// <summary>How the assault went, as the attacker's client reports it.</summary>
+public record SiegeAssaultClaimRequest(
+    [Required] Guid RunId,
+    /// <summary>
+    /// False when the attacker lost. A loss is reported rather than left to expire so the defender
+    /// learns straight away; one never reported is treated as a loss when the grace period ends.
+    /// </summary>
+    bool Won,
+    [Required] string SharedContractVersion
+);
+
+/// <summary>What the assault decided.</summary>
+public record SiegeAssaultResult(
+    Guid SiegeId,
+    string RegionId,
+    /// <summary>Won or Repelled.</summary>
+    string Outcome,
+    /// <summary>Points the season paid for it - to the attacker on a win, the defender on a repel.</summary>
+    double PointsAwarded,
+    /// <summary>Champions of the defender taken prisoner. Zero on a repel.</summary>
+    int CapturedCount
+);
