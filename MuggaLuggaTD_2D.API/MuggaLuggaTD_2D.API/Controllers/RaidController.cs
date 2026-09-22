@@ -9,6 +9,7 @@ using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Hubs;
+using MuggaLuggaTD_2D.API.Models;
 using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
@@ -17,8 +18,8 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 /// Acting against a rival's region. The client names a target and a marching party; the server
 /// decides what happens, applies it to the shared world, and broadcasts the change.
 ///
-/// <para>Raiding is the only action here for now. Sieging — the part that actually moves territory —
-/// is designed but not built, and is gated behind raids having already worn the region down.</para>
+/// <para>Raiding wears a region down; it never takes it. Sieging (<see cref="SiegeController"/>) is what
+/// moves territory, and it is gated behind raids having already worn the region down.</para>
 /// </summary>
 [ApiController]
 [Route("api/gameinstance/{gameInstanceId:guid}/raid")]
@@ -30,19 +31,22 @@ public class RaidController : ControllerBase
     private readonly WorldRaidService _raids;
     private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
+    private readonly WarLogService _warLog;
 
     public RaidController(
         ApplicationDbContext context,
         IHubContext<GameHub> hubContext,
         WorldRaidService raids,
         SeasonScoreService seasons,
-        ISessionLog sessionLog)
+        ISessionLog sessionLog,
+        WarLogService warLog)
     {
         _context = context;
         _hubContext = hubContext;
         _raids = raids;
         _seasons = seasons;
         _sessionLog = sessionLog;
+        _warLog = warLog;
     }
 
     /// <summary>Raids a rival region, wearing its resolve down.</summary>
@@ -92,6 +96,11 @@ public class RaidController : ControllerBase
             await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.RaidLanded);
         else if (!string.IsNullOrEmpty(outcome.DefenderUserId))
             await _seasons.AwardAsync(gameInstanceId, outcome.DefenderUserId, SeasonDeed.RaidRepelled);
+
+        await _warLog.RecordAsync(gameInstanceId,
+            r.AttackerWins ? WarLogKind.RaidLanded : WarLogKind.RaidRepelled,
+            userId, outcome.DefenderUserId, r.RegionId,
+            r.AttackerWins ? $"resolve {r.ResolveBefore} → {r.ResolveAfter}" : null);
 
         return Ok(r);
     }
