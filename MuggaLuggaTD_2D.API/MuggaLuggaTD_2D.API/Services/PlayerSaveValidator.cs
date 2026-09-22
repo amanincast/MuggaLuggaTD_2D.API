@@ -11,6 +11,12 @@ public record UpgradeValidationResult(int Accepted, int Rejected, IReadOnlyList<
     public bool Changed => Rejected > 0;
 }
 
+/// <summary>How many client-written material stacks were dropped from a save.</summary>
+public record MaterialStripResult(int Removed, int TotalQuantity)
+{
+    public bool Changed => Removed > 0;
+}
+
 /// <summary>
 /// Validates a player save on the way in, stripping applied ability upgrades that aren't in the
 /// game's content pool. Illegal upgrades would otherwise persist and inflate ability damage, and PvP
@@ -79,6 +85,45 @@ public class PlayerSaveValidator
 
         return new UpgradeValidationResult(accepted, rejected, rejectedDetails);
     }
+
+    /// <summary>
+    /// Removes every material from the save's inventory. Materials are server-owned now: they are
+    /// granted into the wallet by a claimed run and spent through endpoints, because they buy
+    /// characters at the Tavern (design doc 05). A client that keeps writing them into its save is
+    /// either an old build or minting currency, and both are answered the same way - by dropping them.
+    ///
+    /// <para>Equipment is deliberately untouched: it is still client-written and unvalidated, which
+    /// is a known gap awaiting a grant ledger. This closes the hole the wallet would otherwise open,
+    /// it does not claim to close that one.</para>
+    /// </summary>
+    public MaterialStripResult StripMaterials(JsonNode? save)
+    {
+        int removed = 0, quantity = 0;
+
+        if (save is not JsonObject root || root["ItemInventory"] is not JsonObject inventory
+            || inventory["Items"] is not JsonArray items)
+            return new MaterialStripResult(0, 0);
+
+        // Backwards, so removing one does not shift the indices still to be checked.
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            if (items[i] is not JsonObject item) continue;
+            if (!IsMaterial(item)) continue;
+
+            removed++;
+            quantity += ReadInt(item["ItemCount"]) ?? 1;
+            items.RemoveAt(i);
+        }
+
+        return new MaterialStripResult(removed, quantity);
+    }
+
+    /// <summary>Materials are ItemTypes.Material (14), whatever else the client wrote on them.</summary>
+    private static bool IsMaterial(JsonObject item)
+        => ReadInt(item["ItemType"]) == (int)Enums.ItemTypes.Material;
+
+    private static int? ReadInt(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
 
     /// <summary>A string field, or null when it is absent or is not a string.</summary>
     private static string? ReadString(JsonNode? node)

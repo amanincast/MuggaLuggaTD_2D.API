@@ -56,12 +56,18 @@ public class WorldPveService
 
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
+    private readonly MaterialWalletService _wallet;
     private readonly ILogger<WorldPveService> _logger;
 
-    public WorldPveService(ApplicationDbContext context, IGameContentProvider content, ILogger<WorldPveService> logger)
+    public WorldPveService(
+        ApplicationDbContext context,
+        IGameContentProvider content,
+        MaterialWalletService wallet,
+        ILogger<WorldPveService> logger)
     {
         _context = context;
         _content = content;
+        _wallet = wallet;
         _logger = logger;
     }
 
@@ -215,12 +221,24 @@ public class WorldPveService
             _content.DroppableItems,
             Random.Shared);
 
+        // Materials are the Tavern's currency, so they are granted here and held server-side rather
+        // than written by the client into its own save.
+        var materials = MaterialRewardCalculator.Calculate(
+            resolved.Site.Level,
+            resolved.Site.Tier,
+            _content.RunTuning,
+            _content.Materials,
+            Random.Shared);
+
+        await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
+
         _logger.LogInformation(
-            "PvE conquest {Outcome} at {Site} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s).",
-            outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count);
+            "PvE conquest {Outcome} at {Site} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s), {Materials} material(s).",
+            outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count,
+            materials.Sum(m => m.Quantity));
 
         var response = new PveClaimResponse(
-            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored);
+            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials);
 
         return (new PveOutcome(PveError.None), response, world);
     }

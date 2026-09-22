@@ -128,6 +128,16 @@ public class PlayerGameDataController : ControllerBase
             _sessionLog.Log("SAVE", $"user={userId} upgrades ok={validation.Accepted}");
         }
 
+        // Materials are server-owned (they buy characters at the Tavern), so a save cannot carry them.
+        // Old clients still write them; dropping them costs those clients nothing, because the wallet
+        // is what the game reads.
+        var materials = _saveValidator.StripMaterials(saveNode);
+        if (materials.Changed)
+        {
+            _sessionLog.Log("SAVE-MATERIALS",
+                $"user={userId} dropped={materials.Removed} stack(s) quantity={materials.TotalQuantity}");
+        }
+
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
 
         if (existingData != null)
