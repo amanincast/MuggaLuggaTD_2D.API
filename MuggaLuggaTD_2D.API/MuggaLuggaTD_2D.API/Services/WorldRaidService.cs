@@ -19,6 +19,7 @@ public enum RaidError
     NoAttackers,
     BelowRaidBar,
     OnCooldown,
+    UnderTruce,
     ContractMismatch
 }
 
@@ -108,25 +109,19 @@ public class WorldRaidService
         }
 
         // The marching party is validated against the attacker's *persisted* roster, so a client
-        // cannot march with champions it does not own, or with ones already committed elsewhere.
-        var attackerSave = await LoadPlayerSaveAsync(gameInstanceId, attackerUserId);
-        var owned = attackerSave?.Characters?
-            .Where(c => c?.Id != null).Select(c => c.Id).ToHashSet(StringComparer.Ordinal)
-            ?? new HashSet<string>(StringComparer.Ordinal);
-
-        var committed = WorldRegionBlob.CollectCommittedCharacterIds(world, attackerUserId);
-        var marching = (request.AttackerCharacterIds ?? new List<string>())
-            .Where(id => !string.IsNullOrEmpty(id) && owned.Contains(id) && !committed.Contains(id))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
+        // cannot march with champions it does not own, or with ones already committed elsewhere —
+        // garrisoned, imprisoned, or locked into a siege.
+        var army = await MarchingArmy.MusterAsync(
+            _context, _content, _logger, gameInstanceId, attackerUserId, world, request.AttackerCharacterIds);
+        var marching = army.CharacterIds;
 
         if (marching.Count == 0)
         {
             return (Refuse(RaidError.NoAttackers,
-                "None of the marching characters are available — they may be garrisoned or captured."), null);
+                "None of the marching characters are available — they may be garrisoned, captured or besieging."), null);
         }
 
-        var marchingPower = PartyPowerCalculator.CalculatePartyPower(attackerSave, marching, _content.AbilityTemplates);
+        var marchingPower = army.Power;
 
         // Hold is recomputed from the live world under the shared rules, so it is the same number the
         // dossier showed the attacker when they decided to march.
@@ -222,29 +217,17 @@ public class WorldRaidService
         if (region.IsCapital)
             return Refuse(RaidError.NotRaidable, "A player's seat cannot be raided.");
 
+        // Land that has only just changed hands is under truce, so the same region cannot
+        // ping-pong between two players (siege.md §7a). The new owner gets time to garrison it.
+        if (SiegeRules.IsUnderTruce(region, DateTime.UtcNow))
+        {
+            var ends = SiegeRules.TruceEndsAt(region)!.Value;
+            return Refuse(RaidError.UnderTruce,
+                $"That region changed hands recently and is under truce until {ends:HH:mm} UTC.");
+        }
+
         return new RaidOutcome(RaidError.None, null);
     }
 
     private static RaidOutcome Refuse(RaidError error, string message) => new(error, null, message);
-
-    private async Task<UserSaveData?> LoadPlayerSaveAsync(Guid gameInstanceId, string userId)
-    {
-        var row = await _context.PlayerGameData
-            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
-
-        if (row == null)
-            return null;
-
-        try
-        {
-            // Parsed with Newtonsoft because the client wrote it with Newtonsoft: System.Text.Json
-            // disagrees about values this format legitimately contains (e.g. `50.0` for a long field).
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<UserSaveData>(row.GameData);
-        }
-        catch (Newtonsoft.Json.JsonException ex)
-        {
-            _logger.LogWarning(ex, "Could not read player save for {UserId} in instance {Instance}.", userId, gameInstanceId);
-            return null;
-        }
-    }
 }

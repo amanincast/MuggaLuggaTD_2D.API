@@ -336,14 +336,15 @@ public class SeasonScoreService
                 closing, instance.Id, written.Count);
         }
 
-        // The realm begins again rather than stopping: same players, same rosters, new map. Runs and
-        // raid cooldowns referred to the world that just ended, so they go with it.
+        // The realm begins again rather than stopping: same players, same rosters, new map. Runs, raid
+        // cooldowns and sieges referred to the world that just ended, so they go with it.
         instance.SeasonNumber = closing + 1;
         instance.SeasonStartedAt = DateTime.UtcNow;
         instance.UpdatedAt = DateTime.UtcNow;
 
         _context.PveRuns.RemoveRange(_context.PveRuns.Where(r => r.GameInstanceId == instance.Id));
         _context.RegionRaids.RemoveRange(_context.RegionRaids.Where(r => r.GameInstanceId == instance.Id));
+        _context.Sieges.RemoveRange(_context.Sieges.Where(s => s.GameInstanceId == instance.Id));
 
         await _context.SaveChangesAsync();
 

@@ -81,6 +81,7 @@ public static class WorldRegionBlob
             IsCapital = region["IsCapital"]?.GetValue<bool>() ?? false,
             Entrenchment = region["Entrenchment"]?.GetValue<int>() ?? 0,
             Resolve = region["Resolve"]?.GetValue<int>() ?? 100,
+            ClaimedAtUtcTicks = region["ClaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
             SiteOverrides = ReadOverrides(region)
         };
     }
@@ -288,7 +289,7 @@ public static class WorldRegionBlob
     /// Hands a region to a player. Taking the keep takes the region, which is the split the design
     /// rests on: regions are owned, sites are cleared or claimed.
     /// </summary>
-    public static void CaptureRegion(JsonNode regionNode, string userId, string? displayName)
+    public static void CaptureRegion(JsonNode regionNode, string userId, string? displayName, DateTime? claimedAt = null)
     {
         regionNode["Ownership"] = (int)LocationOwnership.Player;
         regionNode["OwnerUserId"] = userId;
@@ -297,6 +298,11 @@ public static class WorldRegionBlob
 
         // A region taken by force does not come with its previous owner's morale.
         regionNode["Resolve"] = 100;
+
+        // Stamped so the region is under truce for a while: nobody may raid or besiege land that
+        // has only just changed hands (siege.md §7a). This is what stops the same region
+        // ping-ponging between two players.
+        regionNode["ClaimedAtUtcTicks"] = (claimedAt ?? DateTime.UtcNow).Ticks;
     }
 
     // -----------------------------------------------------------------
@@ -334,6 +340,7 @@ public static class WorldRegionBlob
             ["IsCapital"] = region.IsCapital,
             ["Entrenchment"] = region.Entrenchment,
             ["Resolve"] = region.Resolve,
+            ["ClaimedAtUtcTicks"] = region.ClaimedAtUtcTicks,
             ["SiteOverrides"] = new JsonObject()
         };
     }

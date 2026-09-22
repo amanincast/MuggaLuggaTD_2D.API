@@ -14,7 +14,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         RaidLanded = 1,
 
         /// <summary>Repelled a raid on your own region.</summary>
-        RaidRepelled = 2
+        RaidRepelled = 2,
+
+        /// <summary>Took a rival region by siege.</summary>
+        SiegeWon = 3,
+
+        /// <summary>Held a region against a siege.</summary>
+        SiegeRepelled = 4
     }
 
     /// <summary>
@@ -125,6 +131,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case SeasonDeed.SiteCleared: return 40.0;
                 case SeasonDeed.RaidLanded: return 60.0;
                 case SeasonDeed.RaidRepelled: return 60.0;
+
+                // A siege is days of raiding and a locked army. Paying for it on top of the region's
+                // income is what makes contesting worth more than sitting still (siege.md §7a).
+                // Roughly thirty hours of an ordinary region, and a repel is worth half.
+                case SeasonDeed.SiegeWon: return 300.0;
+                case SeasonDeed.SiegeRepelled: return 150.0;
                 default: return 0;
             }
         }

@@ -60,6 +60,11 @@ namespace MuggaLuggaTD.Shared
         //   heartland) and in lumps for clearing sites, landing raids and repelling them. The client
         //   shows a player what their holdings earn and where they stand, so both sides must price a
         //   region the same way; the server alone decides what is banked.
-        public const string Version = "1.11.0";
+        // 1.12.0 - sieges, first half. A region that has just changed hands is under truce and can
+        //   be neither raided nor besieged; a siege may be declared once raids have worn resolve to
+        //   50, with an army reaching the gate, and never in the last day of a season. The dossier
+        //   tells the player whether they may declare and why not, so it must apply the same rules
+        //   the server will - and a 1.11.0 client would offer a raid the truce now refuses.
+        public const string Version = "1.12.0";
     }
 }
