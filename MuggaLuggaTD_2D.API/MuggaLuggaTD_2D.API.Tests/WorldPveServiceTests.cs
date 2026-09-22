@@ -30,7 +30,10 @@ public class WorldPveServiceTests : IDisposable
     private readonly ApplicationDbContext _db = TestDb.Create();
     private readonly FakeGameContent _content = new();
 
-    private WorldPveService Service => new(_db, _content, NullLogger<WorldPveService>.Instance);
+    private MaterialWalletService Wallet =>
+        new(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
+
+    private WorldPveService Service => new(_db, _content, Wallet, NullLogger<WorldPveService>.Instance);
 
     private static string Contract => SharedContract.Version;
 

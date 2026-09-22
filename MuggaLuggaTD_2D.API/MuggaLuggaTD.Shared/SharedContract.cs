@@ -69,6 +69,11 @@ namespace MuggaLuggaTD.Shared
         //   set by how far their army clears the frozen hold; winning takes the region wrecked, losing
         //   repels it. The client builds the fight from those numbers, so both sides must compute them
         //   the same way.
-        public const string Version = "1.13.0";
+        // 1.14.0 - materials became server-owned. A cleared run pays them into a wallet the server
+        //   holds (MaterialRewardCalculator prices it), saves no longer carry them, and spending goes
+        //   through an endpoint. They are the Tavern's currency, so a client-written balance would be
+        //   a client-minted one. A 1.13.0 client keeps writing materials into its save and would
+        //   believe it holds what the server has dropped.
+        public const string Version = "1.14.0";
     }
 }

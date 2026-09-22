@@ -29,6 +29,9 @@ public class FakeGameContent : IGameContentProvider
     public IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools { get; set; }
         = new Dictionary<string, List<AbilityUpgrade>>();
 
+    /// <summary>Empty by default: a run then pays no materials, which most tests do not care about.</summary>
+    public IReadOnlyList<MaterialTemplate> Materials { get; set; } = Array.Empty<MaterialTemplate>();
+
     /// <summary>Content offering <paramref name="upgrades"/> for the named ability and nothing else.</summary>
     public static FakeGameContent WithUpgradePool(string abilityLinkName, params AbilityUpgrade[] upgrades)
     {

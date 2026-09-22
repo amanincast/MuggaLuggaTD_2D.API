@@ -260,6 +260,62 @@ public class PlayerSaveValidatorTests
     }
 
     // -----------------------------------------------------------------
+    // Materials, which a save may no longer carry at all
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void MaterialsInASaveAreDropped_BecauseTheServerHoldsThoseNow()
+    {
+        var save = SaveHoldingItems(
+            (name: "Lesser Essence", type: (int)ItemTypes.Material, count: 40),
+            (name: "Supreme Essence", type: (int)ItemTypes.Material, count: 3));
+
+        var result = ValidatorOfferingTheUsualPool().StripMaterials(save);
+
+        Assert.Equal(2, result.Removed);
+        Assert.Equal(43, result.TotalQuantity);
+        Assert.Empty((JsonArray)save["ItemInventory"]!["Items"]!);
+    }
+
+    [Fact]
+    public void EquipmentIsLeftAlone_ItIsNotWhatThisStripIsFor()
+    {
+        var save = SaveHoldingItems(
+            (name: "Lesser Essence", type: (int)ItemTypes.Material, count: 5),
+            (name: "Iron Helm", type: (int)ItemTypes.Helmet, count: 1));
+
+        var result = ValidatorOfferingTheUsualPool().StripMaterials(save);
+
+        Assert.Equal(1, result.Removed);
+        var remaining = (JsonArray)save["ItemInventory"]!["Items"]!;
+        Assert.Equal("Iron Helm", (string)remaining.Single()!["ItemName"]!);
+    }
+
+    [Fact]
+    public void ASaveWithNoInventoryIsNotATragedy()
+    {
+        var result = ValidatorOfferingTheUsualPool().StripMaterials(JsonNode.Parse("{}"));
+
+        Assert.False(result.Changed);
+    }
+
+    private static JsonNode SaveHoldingItems(params (string name, int type, int count)[] items)
+    {
+        var array = new JsonArray();
+        foreach (var item in items)
+        {
+            array.Add(new JsonObject
+            {
+                ["ItemName"] = item.name,
+                ["ItemType"] = item.type,
+                ["ItemCount"] = item.count
+            });
+        }
+
+        return new JsonObject { ["ItemInventory"] = new JsonObject { ["Items"] = array } };
+    }
+
+    // -----------------------------------------------------------------
 
     private static JsonArray AppliedUpgrades(JsonNode? save)
         => (JsonArray)save!["Characters"]![0]!["Abilities"]![0]!["AppliedUpgrades"]!;

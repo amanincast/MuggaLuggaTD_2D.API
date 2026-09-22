@@ -25,6 +25,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
+    public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -126,6 +127,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure PlayerMaterial (one row per player per material per realm; the wallet reads and
+        // writes by that key, so it is unique)
+        builder.Entity<PlayerMaterial>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.MaterialName }).IsUnique();
         });
 
         // Configure WarLogEntry entity (a realm's war log, read newest first per season)

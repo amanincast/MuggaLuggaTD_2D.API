@@ -37,6 +37,12 @@ public interface IGameContentProvider
     IReadOnlyList<ItemTemplate> DroppableItems { get; }
 
     /// <summary>
+    /// Materials, from MaterialData. A cleared run pays these into the player's wallet, so the
+    /// server has to know which ones exist rather than taking the client's word for it.
+    /// </summary>
+    IReadOnlyList<MaterialTemplate> Materials { get; }
+
+    /// <summary>
     /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
     /// validated against these so an upgrade outside the pool can't be persisted.
     /// </summary>
@@ -95,6 +101,8 @@ public class GameContentProvider : IGameContentProvider
     public RunTuning RunTuning => _snapshot.RunTuning;
 
     public IReadOnlyList<ItemTemplate> DroppableItems => _snapshot.DroppableItems;
+
+    public IReadOnlyList<MaterialTemplate> Materials => _snapshot.Materials;
 
     public IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools => _snapshot.AbilityUpgradePools;
 
@@ -193,6 +201,51 @@ public class GameContentProvider : IGameContentProvider
         }
     }
 
+    /// <summary>
+    /// Reads the materials a run can pay out. Only droppable ones: a material that exists solely as
+    /// a shop or quest reward should not fall out of a dungeon.
+    /// </summary>
+    private IReadOnlyList<MaterialTemplate> ParseMaterials(string rawMaterialData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<MaterialContentDocument>(rawMaterialData);
+            if (document?.Materials == null) return Array.Empty<MaterialTemplate>();
+
+            var templates = document.Materials
+                .Where(m => m != null && m.IsDroppable && !string.IsNullOrEmpty(m.ItemName))
+                .Select(m => new MaterialTemplate
+                {
+                    MaterialName = m.ItemName,
+                    Category = m.Category,
+                    Tier = m.Tier,
+                    AffinityType = m.AffinityType
+                })
+                .ToList();
+
+            _logger.LogInformation("Parsed {Count} droppable materials for PvE rewards.", templates.Count);
+            return templates;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("MaterialData.json could not be parsed into materials.", ex);
+        }
+    }
+
+    private sealed class MaterialContentDocument
+    {
+        public List<MaterialEntry> Materials { get; set; } = new();
+    }
+
+    private sealed class MaterialEntry
+    {
+        public string ItemName { get; set; } = string.Empty;
+        public bool IsDroppable { get; set; }
+        public Enums.MaterialCategory Category { get; set; }
+        public Enums.MaterialTier Tier { get; set; }
+        public Enums.AffinityTypes? AffinityType { get; set; }
+    }
+
     /// <summary>Mirrors the client's GameApplication.Models.ItemDefaultData category layout.</summary>
     private sealed class ItemContentDocument
     {
@@ -252,6 +305,7 @@ public class GameContentProvider : IGameContentProvider
         string rawSurvivalData = null!;
         string rawItemData = null!;
         string rawUpgradeData = null!;
+        string rawMaterialData = null!;
 
         // Hash the raw file bytes rather than the re-serialized nodes: the version must change when
         // a file changes, and must not change just because System.Text.Json reformats it.
@@ -285,6 +339,7 @@ public class GameContentProvider : IGameContentProvider
             if (name == "SurvivalData") rawSurvivalData = raw;
             if (name == "ItemData") rawItemData = raw;
             if (name == "AbilityUpgradeData") rawUpgradeData = raw;
+            if (name == "MaterialData") rawMaterialData = raw;
 
             var segment = Encoding.UTF8.GetBytes($"{name}:{raw}\n");
             hash.TransformBlock(segment, 0, segment.Length, null, 0);
@@ -296,7 +351,7 @@ public class GameContentProvider : IGameContentProvider
         _logger.LogInformation("Loaded {Count} game content documents (version {Version}).", documents.Count, version);
         return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
             ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData),
-            ParseUpgradePools(rawUpgradeData));
+            ParseUpgradePools(rawUpgradeData), ParseMaterials(rawMaterialData));
     }
 
     private sealed record Snapshot(
@@ -305,5 +360,6 @@ public class GameContentProvider : IGameContentProvider
         IReadOnlyCollection<GameAbility> AbilityTemplates,
         RunTuning RunTuning,
         IReadOnlyList<ItemTemplate> DroppableItems,
-        IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools);
+        IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools,
+        IReadOnlyList<MaterialTemplate> Materials);
 }

@@ -40,5 +40,10 @@ public record PveClaimResponse(
     /// Resolve the region regained, when the cleared site was a hostile one inside a region the
     /// player holds. Zero otherwise — clearing unclaimed land steadies nothing you own.
     /// </summary>
-    int ResolveRestored = 0
+    int ResolveRestored = 0,
+    /// <summary>
+    /// Materials paid into the player's wallet for the clear, rolled by the server. The client shows
+    /// these and re-reads its balances; it does not add them itself.
+    /// </summary>
+    List<MuggaLuggaTD.Shared.Gameplay.MaterialGrant>? Materials = null
 );
