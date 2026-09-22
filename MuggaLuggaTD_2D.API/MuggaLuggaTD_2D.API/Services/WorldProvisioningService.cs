@@ -81,6 +81,44 @@ public class WorldProvisioningService
     }
 
     /// <summary>
+    /// Throws the current world away and generates the next season's, keeping the same instance and
+    /// the same players. Used only by a season reset.
+    ///
+    /// <para>Everyone who belongs to the instance is seated afresh, because the map is new — which
+    /// is the point of a reset. Rosters, inventories and progression are untouched; they live in
+    /// player data, not in the world.</para>
+    /// </summary>
+    public async Task<WorldViewGameData> RegenerateWorldAsync(Guid gameInstanceId)
+    {
+        var world = await GenerateWorldAsync(gameInstanceId);
+        var json = world.ToJsonString();
+
+        var row = await _context.WorldViewGameData
+            .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+
+        if (row == null)
+        {
+            row = new WorldViewGameData
+            {
+                GameInstanceId = gameInstanceId,
+                GameData = json,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.WorldViewGameData.Add(row);
+        }
+        else
+        {
+            row.GameData = json;
+            row.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Regenerated the world for instance {Instance} for a new season.", gameInstanceId);
+        return row;
+    }
+
+    /// <summary>
     /// Gives a player a capital if they do not have one, for someone who joins a world that was
     /// generated before they arrived. Without this a late joiner would open the map with nowhere to
     /// stand and no supply line to anywhere.
@@ -184,7 +222,9 @@ public class WorldProvisioningService
             }
         }
 
-        int seed = SeedFor(gameInstanceId);
+        // The season is folded into the seed so a realm that resets gets a genuinely new map
+        // rather than the same one it just finished, which would make a reset a memory wipe.
+        int seed = SeedFor(gameInstanceId, instance?.SeasonNumber ?? 1);
         var regions = WorldMapGenerator.Generate(seed, seats);
         return WorldRegionBlob.BuildWorld(seed, regions);
     }
@@ -193,12 +233,22 @@ public class WorldProvisioningService
     /// A stable seed for an instance. Derived from the id rather than stored so the same world can
     /// always be rebuilt from nothing but the instance itself.
     /// </summary>
-    public static int SeedFor(Guid gameInstanceId)
+    public static int SeedFor(Guid gameInstanceId) => SeedFor(gameInstanceId, 1);
+
+    /// <summary>
+    /// The seed for one season of an instance. Season 1 is the instance seed unchanged, so a realm
+    /// that has never reset keeps the world it already has.
+    /// </summary>
+    public static int SeedFor(Guid gameInstanceId, int seasonNumber)
     {
         var bytes = gameInstanceId.ToByteArray();
         ulong folded = 0;
         for (int i = 0; i < bytes.Length; i++)
             folded = (folded * 31) + bytes[i];
+
+        // Season 1 folds nothing in, so a realm that has never reset keeps the world it has.
+        if (seasonNumber > 1)
+            folded = (folded * 31) + (ulong)seasonNumber;
 
         return (int)(uint)new DeterministicRandom(folded).NextUInt64();
     }

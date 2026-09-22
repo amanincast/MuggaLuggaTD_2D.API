@@ -22,7 +22,13 @@ public enum RaidError
     ContractMismatch
 }
 
-public record RaidOutcome(RaidError Error, RegionRaidResponse? Response, string? Message = null)
+/// <summary>
+/// The resolved raid, plus who was defending it. The defender is carried here rather than in
+/// the response because the client does not need it and the scoreboard does: a repelled raid
+/// pays the holder, who is very likely not the person who made this request.
+/// </summary>
+public record RaidOutcome(
+    RaidError Error, RegionRaidResponse? Response, string? Message = null, string? DefenderUserId = null)
 {
     public bool Succeeded => Error == RaidError.None;
 }
@@ -174,7 +180,7 @@ public class WorldRaidService
             result.ResolveAfter,
             raid.RaidedAt + RaidResolver.Cooldown);
 
-        return (new RaidOutcome(RaidError.None, response), world);
+        return (new RaidOutcome(RaidError.None, response, null, region.OwnerUserId), world);
     }
 
     /// <summary>

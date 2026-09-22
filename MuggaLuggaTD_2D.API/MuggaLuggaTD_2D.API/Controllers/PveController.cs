@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Hubs;
@@ -24,13 +25,20 @@ public class PveController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldPveService _pve;
+    private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
 
-    public PveController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldPveService pve, ISessionLog sessionLog)
+    public PveController(
+        ApplicationDbContext context,
+        IHubContext<GameHub> hubContext,
+        WorldPveService pve,
+        SeasonScoreService seasons,
+        ISessionLog sessionLog)
     {
         _context = context;
         _hubContext = hubContext;
         _pve = pve;
+        _seasons = seasons;
         _sessionLog = sessionLog;
     }
 
@@ -41,6 +49,10 @@ public class PveController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null) return Unauthorized();
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        // A run opened after the bell would be claimed into a season that no longer exists,
+        // so the closing happens here too rather than only when the map is opened.
+        await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
 
         var (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
@@ -78,6 +90,16 @@ public class PveController : ControllerBase
         }
 
         await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
+
+        // Scored after the world is written, so the settle is rated against what the claim changed.
+        // Clearing a site pays a lump - it is the bounce-back lever, available to a player with no
+        // territory at all. Taking a keep pays nothing directly; it pays by earning from then on,
+        // which is why a capture only re-rates.
+        if (string.Equals(response.ConquestOutcome, nameof(ConquestOutcome.RemoveLocation), StringComparison.Ordinal))
+            await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.SiteCleared);
+        else
+            await _seasons.SettleAllAsync(gameInstanceId);
+
         _sessionLog.Log("PVE-CLAIM",
             $"user={userId} site={response.SiteId} outcome={response.ConquestOutcome} " +
             $"xp={response.Experience} items={response.Items.Count}");

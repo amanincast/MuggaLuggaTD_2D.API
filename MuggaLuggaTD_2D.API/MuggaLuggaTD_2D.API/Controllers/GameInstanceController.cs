@@ -30,7 +30,8 @@ public class GameInstanceController : ControllerBase
         var gameInstances = await _context.GameInstances
             .Where(g => g.OwnerId == userId || g.PlayerGameData.Any(p => p.UserId == userId))
             .OrderByDescending(g => g.UpdatedAt)
-            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt))
+            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt,
+                g.SeasonLengthDays, g.SeasonNumber, g.SeasonStartedAt.AddDays(g.SeasonLengthDays)))
             .ToListAsync();
 
         return Ok(new GameInstanceListResponse(gameInstances));
@@ -55,7 +56,8 @@ public class GameInstanceController : ControllerBase
                             && ((f.RequesterId == userId && f.AddresseeId == g.OwnerId)
                                 || (f.RequesterId == g.OwnerId && f.AddresseeId == userId))))))
             .OrderByDescending(g => g.UpdatedAt)
-            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt))
+            .Select(g => new GameInstanceSummary(g.Id, g.Name, g.OwnerId, g.AccessType, g.Capacity, g.CreatedAt, g.UpdatedAt,
+                g.SeasonLengthDays, g.SeasonNumber, g.SeasonStartedAt.AddDays(g.SeasonLengthDays)))
             .ToListAsync();
 
         return Ok(new GameInstanceListResponse(gameInstances));
@@ -87,7 +89,10 @@ public class GameInstanceController : ControllerBase
             gameInstance.AccessType,
             gameInstance.Capacity,
             gameInstance.CreatedAt,
-            gameInstance.UpdatedAt));
+            gameInstance.UpdatedAt,
+            gameInstance.SeasonLengthDays,
+            gameInstance.SeasonNumber,
+            gameInstance.SeasonEndsAt));
     }
 
     [HttpPost]
@@ -102,6 +107,8 @@ public class GameInstanceController : ControllerBase
             OwnerId = userId,
             AccessType = request.AccessType,
             Capacity = request.Capacity,
+            SeasonLengthDays = request.SeasonLengthDays,
+            SeasonStartedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -119,7 +126,10 @@ public class GameInstanceController : ControllerBase
                 gameInstance.AccessType,
                 gameInstance.Capacity,
                 gameInstance.CreatedAt,
-                gameInstance.UpdatedAt));
+                gameInstance.UpdatedAt,
+                gameInstance.SeasonLengthDays,
+                gameInstance.SeasonNumber,
+                gameInstance.SeasonEndsAt));
     }
 
     [HttpPut("{id:guid}")]
@@ -156,7 +166,10 @@ public class GameInstanceController : ControllerBase
             gameInstance.AccessType,
             gameInstance.Capacity,
             gameInstance.CreatedAt,
-            gameInstance.UpdatedAt));
+            gameInstance.UpdatedAt,
+            gameInstance.SeasonLengthDays,
+            gameInstance.SeasonNumber,
+            gameInstance.SeasonEndsAt));
     }
 
     [HttpDelete("{id:guid}")]

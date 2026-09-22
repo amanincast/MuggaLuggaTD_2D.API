@@ -55,6 +55,11 @@ namespace MuggaLuggaTD.Shared
         //   arithmetic however well the defence was played. Sites now carry when they were cleared
         //   and come back; both sides must agree, because the server refuses a run against a site it
         //   thinks is spent and the client would otherwise draw a marker the server will not admit.
-        public const string Version = "1.10.0";
+        // 1.11.0 — seasons. A realm now runs for a length its creator sets and is won on points, which
+        //   accrue per hour for ground held (weighted by tier, entrenchment and whether it is the
+        //   heartland) and in lumps for clearing sites, landing raids and repelling them. The client
+        //   shows a player what their holdings earn and where they stand, so both sides must price a
+        //   region the same way; the server alone decides what is banked.
+        public const string Version = "1.11.0";
     }
 }

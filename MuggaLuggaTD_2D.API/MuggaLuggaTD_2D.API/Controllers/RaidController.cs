@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Hubs;
@@ -27,13 +28,20 @@ public class RaidController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldRaidService _raids;
+    private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
 
-    public RaidController(ApplicationDbContext context, IHubContext<GameHub> hubContext, WorldRaidService raids, ISessionLog sessionLog)
+    public RaidController(
+        ApplicationDbContext context,
+        IHubContext<GameHub> hubContext,
+        WorldRaidService raids,
+        SeasonScoreService seasons,
+        ISessionLog sessionLog)
     {
         _context = context;
         _hubContext = hubContext;
         _raids = raids;
+        _seasons = seasons;
         _sessionLog = sessionLog;
     }
 
@@ -47,6 +55,9 @@ public class RaidController : ControllerBase
         // Raiding requires membership of the instance, not ownership of it.
         if (!await HasAccessToGameInstance(gameInstanceId, userId))
             return Forbid();
+
+        // Marching after the bell would score into a season that has already been settled.
+        await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
 
         var (outcome, updatedWorld) = await _raids.RaidAsync(gameInstanceId, userId, request);
 
@@ -72,6 +83,15 @@ public class RaidController : ControllerBase
             $"march={r.MarchingPower:F0} hold={r.Hold} bar={r.RaidBar} " +
             $"roll={r.D20Roll}{(r.Modifier >= 0 ? "+" : "")}{r.Modifier}={r.Total} " +
             $"resolve={r.ResolveBefore}->{r.ResolveAfter}");
+
+        // Both sides of a raid can score, and which one does is the whole point of the fight:
+        // contesting has to beat sitting still, and a defence that holds has to be worth something
+        // to a defender who was not even online for it. Neither moves a rate - a raid takes no
+        // ground, it only wears it down.
+        if (r.AttackerWins)
+            await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.RaidLanded);
+        else if (!string.IsNullOrEmpty(outcome.DefenderUserId))
+            await _seasons.AwardAsync(gameInstanceId, outcome.DefenderUserId, SeasonDeed.RaidRepelled);
 
         return Ok(r);
     }
