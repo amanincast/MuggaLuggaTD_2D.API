@@ -24,6 +24,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SeasonScore> SeasonScores => Set<SeasonScore>();
     public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
     public DbSet<Siege> Sieges => Set<Siege>();
+    public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -125,6 +126,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure WarLogEntry entity (a realm's war log, read newest first per season)
+        builder.Entity<WarLogEntry>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.OccurredAt });
         });
 
         // Configure Siege entity (one player's siege of one rival region)

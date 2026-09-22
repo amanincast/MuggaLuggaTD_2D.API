@@ -87,6 +87,7 @@ public class WorldSiegeService
     private readonly ILogger<WorldSiegeService> _logger;
     private readonly TimeProvider _clock;
     private readonly SeasonScoreService _seasons;
+    private readonly WarLogService _warLog;
 
     public WorldSiegeService(
         ApplicationDbContext context,
@@ -95,7 +96,8 @@ public class WorldSiegeService
         ISessionLog sessionLog,
         ILogger<WorldSiegeService> logger,
         TimeProvider clock,
-        SeasonScoreService seasons)
+        SeasonScoreService seasons,
+        WarLogService warLog)
     {
         _context = context;
         _content = content;
@@ -104,6 +106,7 @@ public class WorldSiegeService
         _logger = logger;
         _clock = clock;
         _seasons = seasons;
+        _warLog = warLog;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
@@ -210,6 +213,8 @@ public class WorldSiegeService
 
         var response = await ToResponseAsync(siege, attackerUserId);
         await BroadcastAsync(siege);
+        await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeDeclared, attackerUserId, siege.DefenderUserId,
+            siege.RegionId, $"an army of {army.Power:N0}", now);
         return new SiegeOutcome(SiegeError.None, response);
     }
 
@@ -239,6 +244,7 @@ public class WorldSiegeService
         await _context.SaveChangesAsync();
 
         _sessionLog.Log("SIEGE-READY", $"instance={gameInstanceId} siege={siege.Id} defender={userId}");
+        await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeReady, userId, siege.AttackerUserId, siege.RegionId, at: now);
 
         // Close the muster now rather than waiting for the sweep: the defender asked for it now.
         await AdvanceAsync(gameInstanceId);
@@ -341,6 +347,8 @@ public class WorldSiegeService
             $"enemyLevel={encounter.EnemyLevel} waves={encounter.Waves} elites={encounter.EliteCount}");
 
         await BroadcastAsync(siege);
+        await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeAssaultBegun, userId, siege.DefenderUserId,
+            siege.RegionId, $"{encounter.Waves} waves against the walls", now);
 
         var response = new SiegeAssaultResponse(
             siege.Id,
@@ -412,6 +420,8 @@ public class WorldSiegeService
             _sessionLog.Log("SIEGE-ADVANCE",
                 $"instance={gameInstanceId} siege={siege.Id} region={siege.RegionId} state={siege.State} reason=region-changed-hands");
             await BroadcastAsync(siege);
+            await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeCancelled, siege.AttackerUserId,
+                siege.DefenderUserId, siege.RegionId, "the region changed hands", now);
             return (new SiegeOutcome(SiegeError.WrongState, Message: "The region changed hands before the assault landed."), null);
         }
 
@@ -440,6 +450,8 @@ public class WorldSiegeService
             $"region={siege.RegionId} captured={captured} elapsed={(now - (siege.AssaultStartedAt ?? now)).TotalSeconds:F0}s");
 
         await BroadcastAsync(siege);
+        await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeWon, userId, siege.DefenderUserId, siege.RegionId,
+            captured > 0 ? $"{captured} champion{(captured == 1 ? "" : "s")} taken prisoner" : null, now);
 
         // After the world is written, so the settle this triggers re-rates both lords against the new map.
         await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.SiegeWon);
@@ -464,6 +476,8 @@ public class WorldSiegeService
             $"defender={siege.DefenderUserId} region={siege.RegionId} resolve={resolve}");
 
         await BroadcastAsync(siege);
+        await _warLog.RecordAsync(siege.GameInstanceId, WarLogKind.SiegeRepelled, siege.AttackerUserId,
+            siege.DefenderUserId, siege.RegionId, $"resolve {region.Resolve} → {resolve}", at);
         await _seasons.AwardAsync(siege.GameInstanceId, siege.DefenderUserId, SeasonDeed.SiegeRepelled);
     }
 
@@ -572,6 +586,22 @@ public class WorldSiegeService
                 $"instance={gameInstanceId} siege={siege.Id} region={siege.RegionId} state={siege.State} " +
                 $"frozenHold={siege.FrozenHold?.ToString() ?? "-"}");
             await BroadcastAsync(siege);
+
+            switch (siege.State)
+            {
+                case SiegeState.Assault:
+                    await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeMusterClosed, siege.AttackerUserId,
+                        siege.DefenderUserId, siege.RegionId, $"hold frozen at {siege.FrozenHold:N0}", siege.MusterEndsAt);
+                    break;
+                case SiegeState.Lapsed:
+                    await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeLapsed, siege.AttackerUserId,
+                        siege.DefenderUserId, siege.RegionId, at: siege.AssaultEndsAt);
+                    break;
+                case SiegeState.Cancelled:
+                    await _warLog.RecordAsync(gameInstanceId, WarLogKind.SiegeCancelled, siege.AttackerUserId,
+                        siege.DefenderUserId, siege.RegionId, "the region changed hands", now);
+                    break;
+            }
         }
 
         foreach (var siege in repelled)

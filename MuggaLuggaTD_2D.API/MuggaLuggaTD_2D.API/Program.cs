@@ -81,6 +81,7 @@ builder.Services.AddScoped<WorldPveService>();
 // which only works if the server is the one that decided the seed.
 builder.Services.AddScoped<WorldProvisioningService>();
 builder.Services.AddScoped<SeasonScoreService>();
+builder.Services.AddScoped<WarLogService>();
 builder.Services.AddScoped<WorldSiegeService>();
 builder.Services.AddSingleton(TimeProvider.System);
 // The one thing in the game that runs on a clock: freezing a besieged region's hold when muster closes.

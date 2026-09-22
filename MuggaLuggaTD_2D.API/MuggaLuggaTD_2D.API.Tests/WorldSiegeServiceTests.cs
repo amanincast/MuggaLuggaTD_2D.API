@@ -36,7 +36,10 @@ public class WorldSiegeServiceTests : IDisposable
             new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance),
             _hub,
             _log,
-            NullLogger<SeasonScoreService>.Instance));
+            NullLogger<SeasonScoreService>.Instance),
+        WarLog);
+
+    private WarLogService WarLog => new(_db, _hub, NullLogger<WarLogService>.Instance, _clock);
 
     private WorldRaidService Raids => new(_db, _content, NullLogger<WorldRaidService>.Instance);
 
@@ -601,6 +604,67 @@ public class WorldSiegeServiceTests : IDisposable
         Assert.Equal(SiegeAssaultRules.MinimumWaves, overwhelming.Waves);
         Assert.True(atGate.EnemyLevel > overwhelming.EnemyLevel);
         Assert.Equal(2, overwhelming.EliteCount);
+    }
+
+    // -----------------------------------------------------------------
+    // The war log
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ASiegeWritesItsWholeStoryToTheWarLog()
+    {
+        // A defender who slept through it should be told, in order, what happened.
+        var instanceId = await SeedAsync(garrisonIds: new[] { "rival-hero" });
+        var siegeId = await ReachAssaultAsync(instanceId);
+        var assault = await BeginAsync(instanceId, siegeId);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        await Service.ClaimAssaultAsync(instanceId, TestIds.Player, siegeId,
+            new SiegeAssaultClaimRequest(assault.RunId, true, SharedContract.Version));
+
+        var log = await WarLog.ReadAsync(instanceId);
+
+        Assert.Equal(
+            new[]
+            {
+                nameof(WarLogKind.SiegeWon), nameof(WarLogKind.SiegeAssaultBegun),
+                nameof(WarLogKind.SiegeMusterClosed), nameof(WarLogKind.SiegeDeclared)
+            },
+            log.Select(e => e.Kind));
+
+        var won = log.First();
+        Assert.Equal(TestIds.Player, won.ActorUserId);
+        Assert.Equal(TestIds.Rival, won.SubjectUserId);
+        Assert.Equal(Target, won.RegionId);
+        Assert.Contains("1 champion taken prisoner", won.Detail);
+        Assert.Contains("WarLogEntryAdded", _hub.MethodsSentTo(instanceId));
+    }
+
+    [Fact]
+    public async Task ALapsedSiegeIsLoggedAtTheMomentItLapsed()
+    {
+        var instanceId = await SeedAsync();
+        var declared = await DeclareAsync(instanceId);
+        var siege = await _db.Sieges.SingleAsync(s => s.Id == declared.Id);
+
+        // Nobody looks until long after: the log still says when it happened, not when it was noticed.
+        _clock.Advance(SiegeRules.Muster + SiegeRules.AssaultWindow + TimeSpan.FromHours(3));
+        await Service.AdvanceAsync(instanceId);
+
+        var lapsed = (await WarLog.ReadAsync(instanceId)).First(e => e.Kind == nameof(WarLogKind.SiegeLapsed));
+        Assert.Equal(siege.AssaultEndsAt, lapsed.OccurredAt);
+    }
+
+    [Fact]
+    public async Task TheWarLogReadsOnlyTheCurrentSeason()
+    {
+        var instanceId = await SeedAsync();
+        await DeclareAsync(instanceId);
+
+        var instance = await _db.GameInstances.FirstAsync(g => g.Id == instanceId);
+        instance.SeasonNumber++;
+        await _db.SaveChangesAsync();
+
+        Assert.Empty(await WarLog.ReadAsync(instanceId));
     }
 
     // -----------------------------------------------------------------
