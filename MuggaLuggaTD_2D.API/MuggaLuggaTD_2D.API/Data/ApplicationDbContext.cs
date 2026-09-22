@@ -23,6 +23,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RegionRaid> RegionRaids => Set<RegionRaid>();
     public DbSet<SeasonScore> SeasonScores => Set<SeasonScore>();
     public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
+    public DbSet<Siege> Sieges => Set<Siege>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -123,6 +124,28 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure Siege entity (one player's siege of one rival region)
+        builder.Entity<Siege>(entity =>
+        {
+            // The scheduler looks for live sieges whose windows have closed, across every realm.
+            entity.HasIndex(e => new { e.State, e.MusterEndsAt });
+            entity.HasIndex(e => new { e.State, e.AssaultEndsAt });
+
+            // Declaring checks this region for a live siege, and this attacker for one anywhere.
+            entity.HasIndex(e => new { e.GameInstanceId, e.RegionId, e.State });
+            entity.HasIndex(e => new { e.GameInstanceId, e.AttackerUserId, e.State });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Attacker)
+                .WithMany()
+                .HasForeignKey(e => e.AttackerUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

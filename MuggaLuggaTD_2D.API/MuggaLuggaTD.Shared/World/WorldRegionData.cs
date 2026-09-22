@@ -58,6 +58,13 @@ namespace MuggaLuggaTD.Shared.World
         public int Resolve = 100;
 
         /// <summary>
+        /// When the region last changed hands, as UTC ticks. Zero when it never has. Drives the truce
+        /// that stops a region ping-ponging between players - ask <see cref="Gameplay.SiegeRules.IsUnderTruce"/>
+        /// rather than reading this directly.
+        /// </summary>
+        public long ClaimedAtUtcTicks;
+
+        /// <summary>
         /// Ids of the sites in this region whose state has diverged from what the seed generates —
         /// a dungeon cleared, a node claimed, a keep garrisoned. Sites absent from this map are
         /// exactly as generated.
