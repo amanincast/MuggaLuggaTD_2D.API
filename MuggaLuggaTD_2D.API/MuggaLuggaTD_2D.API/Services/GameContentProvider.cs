@@ -59,7 +59,8 @@ public class GameContentProvider : IGameContentProvider
         "VisualEffectData",
         "WorldLocationData",
         "DialogueData",
-        "SurvivalData"
+        "SurvivalData",
+        "StatusEffectData"
     };
 
     /// <summary>
