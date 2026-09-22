@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -37,7 +38,19 @@ public enum SiegeError
     NotDefender,
 
     /// <summary>The siege is past the point where that action means anything.</summary>
-    WrongState
+    WrongState,
+
+    /// <summary>Only the besieger may assault.</summary>
+    NotAttacker,
+
+    /// <summary>The siege's one assault has already been fought.</summary>
+    AssaultSpent,
+
+    /// <summary>The claim does not name this siege's assault.</summary>
+    RunMismatch,
+
+    /// <summary>The assault was claimed faster than it could have been fought.</summary>
+    TooFast
 }
 
 public record SiegeOutcome(
@@ -55,10 +68,10 @@ public record SiegeOutcome(
 ///             may declare ready
 /// </code>
 ///
-/// <para><b>This is the first half.</b> A siege can be declared, mustered against, and closed early
-/// by the defender; its army is locked; and one the attacker never comes back for lapses. The
-/// assault itself - the fight, and what winning or losing it does - is not built yet, so for now
-/// every siege that reaches the assault window runs out of it.</para>
+/// <para>A siege is declared and its army locked; the defender musters, and may close the muster
+/// early; the hold freezes. Then the attacker gets <b>one</b> assault: a fight the server specifies
+/// from the frozen hold. Winning it takes the region wrecked, with its garrison captured; losing it,
+/// or never reporting a win, repels the siege. An attacker who never comes lets it lapse.</para>
 ///
 /// <para>Transitions are driven two ways, deliberately. Every read advances whatever is due, so a
 /// player never sees a stale state; and <see cref="SiegeScheduler"/> sweeps once a minute, so a
@@ -73,6 +86,7 @@ public class WorldSiegeService
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<WorldSiegeService> _logger;
     private readonly TimeProvider _clock;
+    private readonly SeasonScoreService _seasons;
 
     public WorldSiegeService(
         ApplicationDbContext context,
@@ -80,7 +94,8 @@ public class WorldSiegeService
         IHubContext<GameHub> hubContext,
         ISessionLog sessionLog,
         ILogger<WorldSiegeService> logger,
-        TimeProvider clock)
+        TimeProvider clock,
+        SeasonScoreService seasons)
     {
         _context = context;
         _content = content;
@@ -88,6 +103,7 @@ public class WorldSiegeService
         _sessionLog = sessionLog;
         _logger = logger;
         _clock = clock;
+        _seasons = seasons;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
@@ -268,6 +284,221 @@ public class WorldSiegeService
     }
 
     // -----------------------------------------------------------------
+    // The assault
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// The attacker marches on the region: the server opens the siege's one assault and hands back
+    /// the fight, specified from the hold frozen at muster close (siege.md §5).
+    /// </summary>
+    public async Task<(SiegeOutcome Outcome, SiegeAssaultResponse? Assault)> BeginAssaultAsync(
+        Guid gameInstanceId, string userId, Guid siegeId, string? sharedContractVersion)
+    {
+        if (!ContractMatches(sharedContractVersion))
+            return (ContractMismatch(sharedContractVersion), null);
+
+        await AdvanceAsync(gameInstanceId);
+
+        var siege = await _context.Sieges.FirstOrDefaultAsync(s => s.Id == siegeId && s.GameInstanceId == gameInstanceId);
+        if (siege == null)
+            return (new SiegeOutcome(SiegeError.SiegeNotFound, Message: "No such siege in this realm."), null);
+
+        if (!string.Equals(siege.AttackerUserId, userId, StringComparison.Ordinal))
+            return (new SiegeOutcome(SiegeError.NotAttacker, Message: "Only the besieger may assault."), null);
+
+        if (siege.State == SiegeState.Mustering)
+            return (new SiegeOutcome(SiegeError.WrongState, Message: "The defender is still mustering. Wait for the gates."), null);
+
+        if (siege.State != SiegeState.Assault)
+            return (new SiegeOutcome(SiegeError.WrongState, Message: "This siege is over."), null);
+
+        if (siege.AssaultRunId != null)
+        {
+            return (new SiegeOutcome(SiegeError.AssaultSpent, Message:
+                "This siege's assault has already been fought. A siege gets one."), null);
+        }
+
+        var world = await LoadWorldAsync(gameInstanceId, tracked: false);
+        var regionNode = WorldRegionBlob.FindRegion(world, siege.RegionId);
+        if (regionNode == null)
+            return (new SiegeOutcome(SiegeError.RegionNotFound, Message: "Region not found in this world."), null);
+
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        var army = MarchingArmy.ReadIds(siege.ArmyCharacterIdsJson);
+        var encounter = SiegeAssaultRules.EncounterFor(
+            siege.MarchingPower, siege.FrozenHold ?? 0, army.Count, GarrisonCountOf(region));
+
+        var now = Now;
+        siege.AssaultRunId = Guid.NewGuid();
+        siege.AssaultStartedAt = now;
+        siege.EncounterEnemyLevel = encounter.EnemyLevel;
+        siege.EncounterWaves = encounter.Waves;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("SIEGE-ASSAULT",
+            $"instance={gameInstanceId} siege={siege.Id} attacker={userId} region={siege.RegionId} " +
+            $"run={siege.AssaultRunId} power={siege.MarchingPower:F0} frozenHold={siege.FrozenHold} " +
+            $"enemyLevel={encounter.EnemyLevel} waves={encounter.Waves} elites={encounter.EliteCount}");
+
+        await BroadcastAsync(siege);
+
+        var response = new SiegeAssaultResponse(
+            siege.Id,
+            siege.AssaultRunId.Value,
+            siege.RegionId,
+            encounter.EnemyLevel,
+            encounter.Waves,
+            encounter.EliteCount,
+            siege.FrozenHold ?? 0,
+            Math.Round(siege.MarchingPower),
+            siege.AssaultEndsAt + SiegeAssaultRules.ClaimGrace,
+            army);
+
+        return (new SiegeOutcome(SiegeError.None, await ToResponseAsync(siege, userId)), response);
+    }
+
+    /// <summary>
+    /// The attacker reports how the assault went. A win takes the region wrecked, its garrison
+    /// captured; a loss repels the siege and pays the defender for holding.
+    ///
+    /// <para>The server cannot referee the fight, so a win is accepted only for the run it opened,
+    /// inside the window, and not implausibly fast - the same proof-of-attempt a dungeon claim needs.
+    /// What stops a forged win being worth a region is everything before it.</para>
+    /// </summary>
+    public async Task<(SiegeOutcome Outcome, SiegeAssaultResult? Result)> ClaimAssaultAsync(
+        Guid gameInstanceId, string userId, Guid siegeId, SiegeAssaultClaimRequest request)
+    {
+        if (!ContractMatches(request.SharedContractVersion))
+            return (ContractMismatch(request.SharedContractVersion), null);
+
+        var siege = await _context.Sieges.FirstOrDefaultAsync(s => s.Id == siegeId && s.GameInstanceId == gameInstanceId);
+        if (siege == null)
+            return (new SiegeOutcome(SiegeError.SiegeNotFound, Message: "No such siege in this realm."), null);
+
+        if (!string.Equals(siege.AttackerUserId, userId, StringComparison.Ordinal))
+            return (new SiegeOutcome(SiegeError.NotAttacker, Message: "Only the besieger may report the assault."), null);
+
+        if (siege.AssaultRunId == null || siege.AssaultRunId != request.RunId)
+            return (new SiegeOutcome(SiegeError.RunMismatch, Message: "That is not this siege's assault."), null);
+
+        if (siege.State != SiegeState.Assault)
+            return (new SiegeOutcome(SiegeError.WrongState, Message: "This siege is already over."), null);
+
+        var now = Now;
+        if (now > siege.AssaultEndsAt + SiegeAssaultRules.ClaimGrace)
+        {
+            // Too late to count as a win. Let the sweep's rule apply: a fight never reported won held.
+            await AdvanceAsync(gameInstanceId);
+            return (new SiegeOutcome(SiegeError.WrongState, Message: "The assault window has closed."), null);
+        }
+
+        if (request.Won && siege.AssaultStartedAt != null
+            && now - siege.AssaultStartedAt.Value < WorldPveService.MinimumRunDuration)
+        {
+            return (new SiegeOutcome(SiegeError.TooFast, Message: "That assault ended faster than it could be fought."), null);
+        }
+
+        var row = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        var world = row == null ? null : JsonNode.Parse(row.GameData);
+        var regionNode = WorldRegionBlob.FindRegion(world, siege.RegionId);
+
+        // Re-validated against the live world: the region must still be the defender's to take.
+        if (row == null || regionNode == null
+            || !WorldRegionBlob.ReadRegion(regionNode).IsOwnedByPlayer(siege.DefenderUserId))
+        {
+            siege.State = SiegeState.Cancelled;
+            siege.ResolvedAt = now;
+            await _context.SaveChangesAsync();
+            _sessionLog.Log("SIEGE-ADVANCE",
+                $"instance={gameInstanceId} siege={siege.Id} region={siege.RegionId} state={siege.State} reason=region-changed-hands");
+            await BroadcastAsync(siege);
+            return (new SiegeOutcome(SiegeError.WrongState, Message: "The region changed hands before the assault landed."), null);
+        }
+
+        if (!request.Won)
+        {
+            await RepelAsync(siege, row, world!, regionNode, now);
+            return (new SiegeOutcome(SiegeError.None, await ToResponseAsync(siege, userId)),
+                new SiegeAssaultResult(siege.Id, siege.RegionId, siege.State.ToString(),
+                    SeasonScoreRules.PointsFor(SeasonDeed.SiegeRepelled), 0));
+        }
+
+        var attacker = await _context.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.DisplayName, u.UserName })
+            .FirstOrDefaultAsync();
+
+        int captured = WorldRegionBlob.CaptureWrecked(
+            regionNode, userId, attacker?.DisplayName ?? attacker?.UserName, now);
+
+        siege.State = SiegeState.Won;
+        siege.ResolvedAt = now;
+        await PersistWorldAsync(row, world!);
+
+        _sessionLog.Log("SIEGE-WON",
+            $"instance={gameInstanceId} siege={siege.Id} attacker={userId} defender={siege.DefenderUserId} " +
+            $"region={siege.RegionId} captured={captured} elapsed={(now - (siege.AssaultStartedAt ?? now)).TotalSeconds:F0}s");
+
+        await BroadcastAsync(siege);
+
+        // After the world is written, so the settle this triggers re-rates both lords against the new map.
+        await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.SiegeWon);
+
+        return (new SiegeOutcome(SiegeError.None, await ToResponseAsync(siege, userId)),
+            new SiegeAssaultResult(siege.Id, siege.RegionId, siege.State.ToString(),
+                SeasonScoreRules.PointsFor(SeasonDeed.SiegeWon), captured));
+    }
+
+    /// <summary>The defence held: the region's resolve rises and the defender is paid for it.</summary>
+    private async Task RepelAsync(Siege siege, WorldViewGameData row, JsonNode world, JsonNode regionNode, DateTime at)
+    {
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        int resolve = WorldRegionBlob.SetResolve(regionNode, region.Resolve + SiegeAssaultRules.RepelResolveBonus);
+
+        siege.State = SiegeState.Repelled;
+        siege.ResolvedAt = at;
+        await PersistWorldAsync(row, world);
+
+        _sessionLog.Log("SIEGE-REPELLED",
+            $"instance={siege.GameInstanceId} siege={siege.Id} attacker={siege.AttackerUserId} " +
+            $"defender={siege.DefenderUserId} region={siege.RegionId} resolve={resolve}");
+
+        await BroadcastAsync(siege);
+        await _seasons.AwardAsync(siege.GameInstanceId, siege.DefenderUserId, SeasonDeed.SiegeRepelled);
+    }
+
+    /// <summary>Writes the world back and tells the realm, the same way every server-applied change does.</summary>
+    private async Task PersistWorldAsync(WorldViewGameData row, JsonNode world)
+    {
+        row.GameData = world.ToJsonString();
+        row.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var payload = JsonSerializer.Deserialize<object>(row.GameData) ?? new { };
+        await _hubContext.Clients.Group(row.GameInstanceId.ToString())
+            .SendAsync("WorldViewGameDataUpdated", new WorldViewGameDataUpdated(row.GameInstanceId, payload, row.UpdatedAt));
+    }
+
+    private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId, bool tracked)
+    {
+        var query = tracked ? _context.WorldViewGameData : _context.WorldViewGameData.AsNoTracking();
+        var row = await query.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        return row == null ? null : JsonNode.Parse(row.GameData);
+    }
+
+    /// <summary>Champions stationed anywhere in the region. They stand with the defence as elites.</summary>
+    private static int GarrisonCountOf(WorldRegionData region)
+        => region.SiteOverrides?.Values.Sum(o => o?.GarrisonCharacterIds?.Count ?? 0) ?? 0;
+
+    private static bool ContractMatches(string? version)
+        => string.Equals(version, MuggaLuggaTD.Shared.SharedContract.Version, StringComparison.Ordinal);
+
+    private static SiegeOutcome ContractMismatch(string? version)
+        => new(SiegeError.ContractMismatch, Message:
+            $"Client gameplay rules v{version} do not match the server's " +
+            $"v{MuggaLuggaTD.Shared.SharedContract.Version}. Update the game to fight a siege.");
+
+    // -----------------------------------------------------------------
     // Moving through the windows
     // -----------------------------------------------------------------
 
@@ -291,6 +522,7 @@ public class WorldSiegeService
         var now = Now;
 
         var changed = new List<Siege>();
+        var repelled = new List<Siege>();
 
         foreach (var siege in live)
         {
@@ -315,16 +547,22 @@ public class WorldSiegeService
                 changed.Add(siege);
             }
 
-            if (siege.State == SiegeState.Assault && now >= siege.AssaultEndsAt)
+            if (siege.State == SiegeState.Assault && siege.AssaultRunId == null && now >= siege.AssaultEndsAt)
             {
                 // The attacker never came. The defender holds; the attacker's army unlocks.
                 siege.State = SiegeState.Lapsed;
                 siege.ResolvedAt = siege.AssaultEndsAt;
                 if (!changed.Contains(siege)) changed.Add(siege);
             }
+            else if (siege.State == SiegeState.Assault && siege.AssaultRunId != null
+                     && now >= siege.AssaultEndsAt + SiegeAssaultRules.ClaimGrace)
+            {
+                // The attacker came and fought, and never reported a win. That is a defence that held.
+                repelled.Add(siege);
+            }
         }
 
-        if (changed.Count == 0) return 0;
+        if (changed.Count == 0 && repelled.Count == 0) return 0;
 
         await _context.SaveChangesAsync();
 
@@ -336,17 +574,30 @@ public class WorldSiegeService
             await BroadcastAsync(siege);
         }
 
-        return changed.Count;
+        foreach (var siege in repelled)
+        {
+            // Read tracked: a repel writes the region's resolve back to the world.
+            var row = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+            var liveWorld = row == null ? null : JsonNode.Parse(row.GameData);
+            var node = WorldRegionBlob.FindRegion(liveWorld, siege.RegionId);
+            if (row == null || node == null) continue;
+
+            await RepelAsync(siege, row, liveWorld!, node, siege.AssaultEndsAt + SiegeAssaultRules.ClaimGrace);
+        }
+
+        return changed.Count + repelled.Count;
     }
 
     /// <summary>The scheduler's sweep: advance every realm with a siege whose window has closed.</summary>
     public async Task<int> AdvanceAllDueAsync()
     {
         var now = Now;
+        var graceCutoff = now - SiegeAssaultRules.ClaimGrace;
 
         var instances = await _context.Sieges
             .Where(s => (s.State == SiegeState.Mustering && s.MusterEndsAt <= now)
-                        || (s.State == SiegeState.Assault && s.AssaultEndsAt <= now))
+                        || (s.State == SiegeState.Assault && s.AssaultRunId == null && s.AssaultEndsAt <= now)
+                        || (s.State == SiegeState.Assault && s.AssaultRunId != null && s.AssaultEndsAt <= graceCutoff))
             .Select(s => s.GameInstanceId)
             .Distinct()
             .ToListAsync();
@@ -385,7 +636,8 @@ public class WorldSiegeService
             siege.FrozenHold,
             siege.ResolvedAt,
             // The roster is the attacker's business; the defender is told what the army is worth.
-            isAttacker ? MarchingArmy.ReadIds(siege.ArmyCharacterIdsJson) : new List<string>());
+            isAttacker ? MarchingArmy.ReadIds(siege.ArmyCharacterIdsJson) : new List<string>(),
+            siege.AssaultRunId != null);
     }
 
     /// <summary>

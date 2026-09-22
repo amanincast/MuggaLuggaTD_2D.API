@@ -65,6 +65,10 @@ namespace MuggaLuggaTD.Shared
         //   50, with an army reaching the gate, and never in the last day of a season. The dossier
         //   tells the player whether they may declare and why not, so it must apply the same rules
         //   the server will - and a 1.11.0 client would offer a raid the truce now refuses.
-        public const string Version = "1.12.0";
+        // 1.13.0 - the siege assault. The server hands the attacker an encounter (enemy level, waves)
+        //   set by how far their army clears the frozen hold; winning takes the region wrecked, losing
+        //   repels it. The client builds the fight from those numbers, so both sides must compute them
+        //   the same way.
+        public const string Version = "1.13.0";
     }
 }

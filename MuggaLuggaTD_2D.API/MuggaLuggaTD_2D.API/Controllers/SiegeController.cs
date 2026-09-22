@@ -12,9 +12,8 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 /// Laying siege to a rival's region. The client names a region and an army; the server decides
 /// whether the siege may be declared, locks the army, and moves the siege through its windows.
 ///
-/// <para>The assault - the part that actually moves the region - is not built yet. For now a siege
-/// can be declared, mustered against, closed early by the defender, and lapses if its assault window
-/// runs out.</para>
+/// <para>Once muster closes the attacker gets one assault: <c>assault/begin</c> hands them the fight
+/// the server specified from the frozen hold, and <c>assault/claim</c> reports how it went.</para>
 /// </summary>
 [ApiController]
 [Route("api/gameinstance/{gameInstanceId:guid}/siege")]
@@ -82,14 +81,55 @@ public class SiegeController : ControllerBase
         return Ok(outcome.Siege);
     }
 
+    /// <summary>The attacker marches: opens the siege's one assault and returns the fight to fight.</summary>
+    [HttpPost("{siegeId:guid}/assault/begin")]
+    public async Task<ActionResult<SiegeAssaultResponse>> BeginAssault(
+        Guid gameInstanceId, Guid siegeId, [FromBody] SiegeAssaultBeginRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
+
+        var (outcome, assault) = await _sieges.BeginAssaultAsync(
+            gameInstanceId, userId, siegeId, request.SharedContractVersion);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("SIEGE-DENY", $"user={userId} siege={siegeId} assault-begin {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
+
+        return Ok(assault);
+    }
+
+    /// <summary>The attacker reports the assault: a win takes the region, a loss repels the siege.</summary>
+    [HttpPost("{siegeId:guid}/assault/claim")]
+    public async Task<ActionResult<SiegeAssaultResult>> ClaimAssault(
+        Guid gameInstanceId, Guid siegeId, [FromBody] SiegeAssaultClaimRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, result) = await _sieges.ClaimAssaultAsync(gameInstanceId, userId, siegeId, request);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("SIEGE-DENY", $"user={userId} siege={siegeId} assault-claim {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
+
+        return Ok(result);
+    }
+
     private ActionResult ToError(SiegeOutcome outcome) => outcome.Error switch
     {
         SiegeError.WorldNotFound or SiegeError.RegionNotFound or SiegeError.SiegeNotFound
             => NotFound(new { message = outcome.Message }),
         SiegeError.ContractMismatch or SiegeError.RegionAlreadyBesieged or SiegeError.AlreadyBesieging
-            or SiegeError.WrongState
+            or SiegeError.WrongState or SiegeError.AssaultSpent
             => Conflict(new { message = outcome.Message }),
-        SiegeError.NotDefender
+        SiegeError.NotDefender or SiegeError.NotAttacker
             => StatusCode(StatusCodes.Status403Forbidden, new { message = outcome.Message }),
         // Like a raid cooldown, this is "not yet" rather than "no".
         SiegeError.OnCooldown
