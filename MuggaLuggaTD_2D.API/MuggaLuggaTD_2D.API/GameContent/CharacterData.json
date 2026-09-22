@@ -58,6 +58,294 @@
           "ValidTargetTags": [ "Player", "Ally" ]
         }
       ]
+    },
+    {
+      "TypeName": "Grasslands Drakan Warrior",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_3",
+      "LinkName": "Enemy_Grassland_Drakan_3",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 60.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Drakan Archer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_4",
+      "LinkName": "Enemy_Grassland_Drakan_4",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 45.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Bow_Attack_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Mage",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_2",
+      "LinkName": "Enemy_Grassland_Lizard_2",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Missile_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Warrior",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_3",
+      "LinkName": "Enemy_Grassland_Lizard_3",
+      "MovementSpeed": {
+        "BaseValue": 3.2
+      },
+      "MaxHealth": {
+        "BaseValue": 60.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Stab_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Archer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Archer_1",
+      "LinkName": "Enemy_Grassland_Lizard_Archer_1",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 45.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Bow_Attack_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Hexer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_2",
+      "LinkName": "Enemy_Grassland_Lizard_Mage_2",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Burst_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Pyromancer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_3",
+      "LinkName": "Enemy_Grassland_Lizard_Mage_3",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Inferno_Blast_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Grasslands Lizard Firebrand",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_4",
+      "LinkName": "Enemy_Grassland_Lizard_Mage_4",
+      "MovementSpeed": {
+        "BaseValue": 3.0
+      },
+      "MaxHealth": {
+        "BaseValue": 40.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Volatile_Eruption_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Brute",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_1",
+      "LinkName": "Enemy_Mountain_Worotour_1",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Gorer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Warrior_2",
+      "LinkName": "Enemy_Mountain_Worotour_Warrior_2",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Stab_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Brute",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Warrior_3",
+      "LinkName": "Enemy_Mountain_Worotour_Warrior_3",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Gorer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Warrior_4",
+      "LinkName": "Enemy_Mountain_Worotour_Warrior_4",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Stab_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Brute",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Warrior_5",
+      "LinkName": "Enemy_Mountain_Worotour_Warrior_5",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Seer",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Mage_1",
+      "LinkName": "Enemy_Mountain_Worotour_Mage_1",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 45.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Magic_Missile_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Arcanist",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Mage_2",
+      "LinkName": "Enemy_Mountain_Worotour_Mage_2",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 45.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Arcane_Detonation_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Mountain Worotour Shadowcaller",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Mountain/Enemy_Mountain_Worotour_Mage_3",
+      "LinkName": "Enemy_Mountain_Worotour_Mage_3",
+      "MovementSpeed": {
+        "BaseValue": 2.8
+      },
+      "MaxHealth": {
+        "BaseValue": 45.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Shadow_Explosion_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
     }
   ],
   "Allies": [
@@ -176,6 +464,42 @@
         },
         {
           "AbilityLinkName": "Arcane_Detonation_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Warrior",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Warrior/Ally_Warrior_1",
+      "LinkName": "Ally_Warrior_1",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Enemy" ]
+        }
+      ]
+    },
+    {
+      "TypeName": "Warrior",
+      "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Warrior/Ally_Warrior_2",
+      "LinkName": "Ally_Warrior_2",
+      "MovementSpeed": {
+        "BaseValue": 3.5
+      },
+      "MaxHealth": {
+        "BaseValue": 70.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Stab_1",
           "ValidTargetTags": [ "Enemy" ]
         }
       ]
