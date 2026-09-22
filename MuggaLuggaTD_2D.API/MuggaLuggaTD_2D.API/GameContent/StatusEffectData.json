@@ -1,0 +1,86 @@
+{
+  // What each affinity does to what it hits, beyond its damage (design doc 01).
+  //
+  // Magnitude is read per status:
+  //   Burn/Bleed  - share of the hit dealt as damage (Burn over the whole duration, Bleed per second)
+  //   Chill       - share of movement speed lost
+  //   Stagger     - stun in seconds (DurationSeconds is how long the effect is tracked for)
+  //   Wither      - extra damage taken; SecondaryMagnitude is the healing lost
+  //   Radiance    - share of max health healed, to the target's allies within Radius
+  //   Unravel     - seconds added to the target's ability cooldowns when it has no buff to strip
+  //   Shock       - no magnitude; the next hit on the target chains one extra time
+  "Effects": [
+    {
+      "AffinityType": "Fire",
+      "Status": "Burn",
+      "DisplayName": "Burn",
+      "Description": "Burning: takes a share of the hit as damage over time.",
+      "DurationSeconds": 3.0,
+      "Magnitude": 0.20,
+      "TickIntervalSeconds": 0.5,
+      "MaxStacks": 1
+    },
+    {
+      "AffinityType": "Water",
+      "Status": "Chill",
+      "DisplayName": "Chill",
+      "Description": "Chilled: slowed.",
+      "DurationSeconds": 2.0,
+      "Magnitude": 0.30,
+      "MaxStacks": 1
+    },
+    {
+      "AffinityType": "Air",
+      "Status": "Shock",
+      "DisplayName": "Shock",
+      "Description": "Shocked: the next hit chains to one more enemy.",
+      "DurationSeconds": 4.0,
+      "MaxStacks": 1
+    },
+    {
+      "AffinityType": "Earth",
+      "Status": "Stagger",
+      "DisplayName": "Stagger",
+      "Description": "Staggered: briefly unable to move or act, then immune to being staggered again.",
+      "DurationSeconds": 0.5,
+      "Magnitude": 0.5,
+      "ImmunitySeconds": 8.0,
+      "MaxStacks": 1
+    },
+    {
+      "AffinityType": "Dark",
+      "Status": "Wither",
+      "DisplayName": "Wither",
+      "Description": "Withered: takes more damage and is healed for less.",
+      "DurationSeconds": 4.0,
+      "Magnitude": 0.10,
+      "SecondaryMagnitude": 0.25,
+      "MaxStacks": 1
+    },
+    {
+      "AffinityType": "Light",
+      "Status": "Radiance",
+      "DisplayName": "Radiance",
+      "Description": "Radiance: the target's allies nearby are healed.",
+      "Magnitude": 0.05,
+      "Radius": 3.0
+    },
+    {
+      "AffinityType": "Arcane",
+      "Status": "Unravel",
+      "DisplayName": "Unravel",
+      "Description": "Unravelled: a buff is stripped, or the target's abilities are delayed.",
+      "Magnitude": 1.0
+    },
+    {
+      "AffinityType": "Physical",
+      "Status": "Bleed",
+      "DisplayName": "Bleed",
+      "Description": "Bleeding: stacking damage over time.",
+      "DurationSeconds": 5.0,
+      "Magnitude": 0.05,
+      "TickIntervalSeconds": 1.0,
+      "MaxStacks": 5
+    }
+  ]
+}
