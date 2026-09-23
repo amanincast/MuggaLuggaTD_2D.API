@@ -17,7 +17,9 @@ public enum TavernError
     CannotAfford,
     ContentMismatch,
     LureAlreadyStanding,
-    NoSuchCrystal
+    NoSuchCrystal,
+    BoardIsFull,
+    NoContent
 }
 
 public record TavernOutcome(TavernError Error, string? Message = null)
@@ -44,6 +46,7 @@ public class TavernService
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
     private readonly MaterialWalletService _wallet;
+    private readonly GoldService _gold;
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<TavernService> _logger;
 
@@ -51,12 +54,14 @@ public class TavernService
         ApplicationDbContext context,
         IGameContentProvider content,
         MaterialWalletService wallet,
+        GoldService gold,
         ISessionLog sessionLog,
         ILogger<TavernService> logger)
     {
         _context = context;
         _content = content;
         _wallet = wallet;
+        _gold = gold;
         _sessionLog = sessionLog;
         _logger = logger;
     }
@@ -74,7 +79,7 @@ public class TavernService
         if (board.Count > 0)
             return board;
 
-        await RestockAsync(gameInstanceId, userId, locationTier: 1, biome: null, reason: "first-visit");
+        await FillBoardAsync(gameInstanceId, userId, locationTier: 1, biome: null, reason: "first-visit");
         return await LoadBoardAsync(gameInstanceId, userId);
     }
 
@@ -85,20 +90,98 @@ public class TavernService
             .ToListAsync();
 
     /// <summary>
-    /// Replaces this player's board. Called on a claimed dungeon clear, and once on a first visit.
+    /// Word reaches the Tavern and somebody new sits down — one recruit, into a free seat.
     ///
-    /// <para>Everything goes, hired slots included: the board is what walked in tonight, not a
-    /// running tally. A hire is already recorded elsewhere, so nothing is lost with it.</para>
+    /// <para><b>This is the change that makes saving up possible.</b> A clear used to roll six new
+    /// faces and throw the old six away, which meant that farming the materials to afford a recruit
+    /// was the very thing that took that recruit away. Now a clear only ever <i>adds</i>, so nothing
+    /// a player is holding out for can vanish without their say-so.</para>
+    ///
+    /// <para>A full board takes nobody, and that is the point rather than a limitation: it is the
+    /// situation the paid refresh exists for. The lure is <b>not</b> spent when there is no room —
+    /// a crystal that bought nothing would be a crystal quietly lost.</para>
     /// </summary>
-    public async Task RestockAsync(
+    public async Task<TavernOutcome> BringARecruitAsync(
         Guid gameInstanceId, string userId, int locationTier, BiomeType? biome, string reason)
     {
-        // A crystal offered before the run is spent by the board that comes back from it.
-        var lure = await StandingLureAsync(gameInstanceId, userId);
+        var board = await LoadBoardAsync(gameInstanceId, userId);
 
-        double target = lure == null
-            ? 0
-            : TavernRules.EffectiveLureTarget(lure.PendingStrength, lure.MissedRestocks);
+        int seat = FreeSeat(board);
+        if (seat < 0)
+        {
+            _sessionLog.Log("TAVERN-ARRIVAL",
+                $"user={userId} instance={gameInstanceId} reason={reason} FULL — nobody could sit down");
+
+            return new TavernOutcome(TavernError.BoardIsFull,
+                "The Tavern is full. Hire somebody, or pay for a fresh room.");
+        }
+
+        var lure = await StandingLureAsync(gameInstanceId, userId);
+        double target = TargetFor(lure);
+
+        var roll = RecruitRoller.Roll(
+            _content.RecruitSheets, _content.Signatures, locationTier, biome, Random.Shared,
+            lure?.Affinity, target);
+
+        if (roll == null)
+        {
+            _logger.LogWarning("Tavern arrival produced nobody — content has no class with both a sheet and a signature.");
+            return new TavernOutcome(TavernError.NoContent, "Nobody came.");
+        }
+
+        _context.TavernRecruits.Add(Seat(gameInstanceId, userId, seat, roll, DateTime.UtcNow));
+
+        string lureNote = SettleLure(lure, new[] { roll }, target);
+
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("TAVERN-ARRIVAL",
+            $"user={userId} instance={gameInstanceId} reason={reason} tier={locationTier} " +
+            $"biome={biome?.ToString() ?? "none"} lure={lureNote} seat={seat} " +
+            $"recruit={roll.Class}/{roll.SignatureId}/{roll.Affinity}/{roll.Rarity}");
+
+        return new TavernOutcome(TavernError.None);
+    }
+
+    /// <summary>
+    /// Clears the room and rolls a full board, for gold.
+    ///
+    /// <para>The escape hatch from a board full of people you do not want. It is deliberately the
+    /// <i>only</i> thing that removes a recruit you did not hire, so the player is always the one who
+    /// decides that a face on the board is no longer worth waiting for.</para>
+    /// </summary>
+    public async Task<TavernOutcome> RefreshAsync(Guid gameInstanceId, string userId)
+    {
+        var payment = await _gold.SpendAsync(
+            gameInstanceId, userId, TavernRules.RefreshCostGold, "tavern-refresh");
+
+        if (!payment.Succeeded)
+            return new TavernOutcome(TavernError.CannotAfford, payment.Message);
+
+        // Tier 1 and no biome: a refresh is bought rather than earned, so it buys the Tavern's
+        // ordinary odds. Where you fought is what improves them, and that is still a clear's job.
+        var outcome = await FillBoardAsync(gameInstanceId, userId, 1, null, "paid-refresh");
+
+        if (!outcome.Succeeded)
+        {
+            // Nobody came, so the gold goes back. A refresh that charged for an empty room would be
+            // a bug the player pays for.
+            await _gold.GrantAsync(
+                gameInstanceId, userId, TavernRules.RefreshCostGold, "tavern-refresh-refund");
+        }
+
+        return outcome;
+    }
+
+    /// <summary>
+    /// Wipes whatever is there and rolls a full board. Used by a first visit and a paid refresh —
+    /// the two moments a whole room is replaced at once.
+    /// </summary>
+    private async Task<TavernOutcome> FillBoardAsync(
+        Guid gameInstanceId, string userId, int locationTier, BiomeType? biome, string reason)
+    {
+        var lure = await StandingLureAsync(gameInstanceId, userId);
+        double target = TargetFor(lure);
 
         var rolls = RecruitRoller.RollBoard(
             _content.RecruitSheets, _content.Signatures, locationTier, biome, Random.Shared,
@@ -107,8 +190,8 @@ public class TavernService
         if (rolls.Count == 0)
         {
             // Content cannot make a recruit. Leave the old board rather than wiping it for nothing.
-            _logger.LogWarning("Tavern restock produced no recruits — content has no class with both a sheet and a signature.");
-            return;
+            _logger.LogWarning("Tavern board produced no recruits — content has no class with both a sheet and a signature.");
+            return new TavernOutcome(TavernError.NoContent, "Nobody came.");
         }
 
         var existing = await LoadBoardAsync(gameInstanceId, userId);
@@ -117,45 +200,72 @@ public class TavernService
 
         var rolledAt = DateTime.UtcNow;
         for (int slot = 0; slot < rolls.Count; slot++)
-        {
-            var roll = rolls[slot];
-            _context.TavernRecruits.Add(new TavernRecruit
-            {
-                GameInstanceId = gameInstanceId,
-                UserId = userId,
-                Slot = slot,
-                Name = roll.Name,
-                Sheet = roll.Sheet,
-                CharacterClass = roll.Class,
-                SignatureId = roll.SignatureId,
-                Affinity = roll.Affinity,
-                Rarity = roll.Rarity,
-                RolledAt = rolledAt
-            });
-        }
+            _context.TavernRecruits.Add(Seat(gameInstanceId, userId, slot, rolls[slot], rolledAt));
 
-        // The lure is spent whether or not it worked, and the pity it leaves behind is the whole
-        // reason a miss is not simply a wasted crystal.
-        string lureNote = "none";
-        if (lure != null)
-        {
-            bool appeared = rolls.Any(r => r.Affinity == lure.Affinity);
-
-            lureNote = $"{lure.PendingStrength}/{lure.Affinity}@{target:P0}" +
-                       (appeared ? " HIT" : $" MISS pity={lure.MissedRestocks + 1}");
-
-            lure.MissedRestocks = appeared ? 0 : lure.MissedRestocks + 1;
-            lure.PendingStrength = TavernRules.LureStrength.None;
-            lure.PlacedAt = null;
-            lure.UpdatedAt = DateTime.UtcNow;
-        }
+        string lureNote = SettleLure(lure, rolls, target);
 
         await _context.SaveChangesAsync();
 
-        _sessionLog.Log("TAVERN-RESTOCK",
+        _sessionLog.Log("TAVERN-BOARD",
             $"user={userId} instance={gameInstanceId} reason={reason} tier={locationTier} " +
             $"biome={biome?.ToString() ?? "none"} lure={lureNote} " +
             $"board={string.Join(",", rolls.Select(r => $"{r.Class}/{r.SignatureId}/{r.Affinity}/{r.Rarity}"))}");
+
+        return new TavernOutcome(TavernError.None);
+    }
+
+    /// <summary>The lowest seat nobody is sitting in, or -1 when the room is full.</summary>
+    private static int FreeSeat(List<TavernRecruit> board)
+    {
+        for (int slot = 0; slot < TavernRules.BoardSize; slot++)
+        {
+            if (!board.Any(r => r.Slot == slot))
+                return slot;
+        }
+
+        return -1;
+    }
+
+    private static TavernRecruit Seat(
+        Guid gameInstanceId, string userId, int slot, RecruitRoll roll, DateTime rolledAt)
+        => new()
+        {
+            GameInstanceId = gameInstanceId,
+            UserId = userId,
+            Slot = slot,
+            Name = roll.Name,
+            Sheet = roll.Sheet,
+            CharacterClass = roll.Class,
+            SignatureId = roll.SignatureId,
+            Affinity = roll.Affinity,
+            Rarity = roll.Rarity,
+            RolledAt = rolledAt
+        };
+
+    private static double TargetFor(TavernLure? lure)
+        => lure == null ? 0 : TavernRules.EffectiveLureTarget(lure.PendingStrength, lure.MissedRestocks);
+
+    /// <summary>
+    /// Spends the standing lure against whoever just arrived, and records the pity if they were not
+    /// what it asked for. The lure is spent whether or not it worked — that is what makes a miss
+    /// worth something rather than a wasted crystal.
+    /// </summary>
+    private static string SettleLure(TavernLure? lure, IReadOnlyList<RecruitRoll> arrivals, double target)
+    {
+        if (lure == null)
+            return "none";
+
+        bool appeared = arrivals.Any(r => r.Affinity == lure.Affinity);
+
+        string note = $"{lure.PendingStrength}/{lure.Affinity}@{target:P0}" +
+                      (appeared ? " HIT" : $" MISS pity={lure.MissedRestocks + 1}");
+
+        lure.MissedRestocks = appeared ? 0 : lure.MissedRestocks + 1;
+        lure.PendingStrength = TavernRules.LureStrength.None;
+        lure.PlacedAt = null;
+        lure.UpdatedAt = DateTime.UtcNow;
+
+        return note;
     }
 
     /// <summary>
@@ -217,7 +327,10 @@ public class TavernService
             Rarity = recruit.Rarity
         };
 
-        recruit.HiredAt = hired.HiredAt;
+        // The recruit leaves the board rather than sitting there marked hired. The board is a set of
+        // seats now, not a batch that gets wiped, so a hired card left in place would block its seat
+        // for good — and hiring is the main way a seat comes free for the next arrival.
+        _context.TavernRecruits.Remove(recruit);
         _context.HiredCharacters.Add(hired);
         await _context.SaveChangesAsync();
 

@@ -34,7 +34,13 @@ public record TavernBoardResponse(
     /// one", so the room can show a player what their misses have already bought them on affinities
     /// they are not currently luring.
     /// </summary>
-    List<TavernLureState>? Lures = null);
+    List<TavernLureState>? Lures = null,
+    /// <summary>
+    /// What a paid refresh costs right now, and what the player holds. Both travel with the board so
+    /// the room shows the price it will actually be charged.
+    /// </summary>
+    long RefreshCostGold = 0,
+    long Gold = 0);
 
 /// <summary>
 /// What a player stands to get on one affinity: the crystal currently offered against it, the run of
@@ -53,6 +59,9 @@ public record TavernLureState(
 /// Offers a crystal against the next restock. Names the affinity and the strength rather than the
 /// material, so the server decides which crystal that costs.
 /// </summary>
+/// <summary>Buys a fresh room. Carries nothing but the contract - the price is the server's.</summary>
+public record TavernRefreshRequest(string SharedContractVersion);
+
 public record TavernLureRequest(
     AffinityTypes Affinity,
     TavernRules.LureStrength Strength,
