@@ -48,7 +48,7 @@ public static class MarchingArmy
 
         double power = marching.Count == 0
             ? 0
-            : PartyPowerCalculator.CalculatePartyPower(save, marching, content.AbilityTemplates);
+            : PartyPowerCalculator.CalculatePartyPower(save, marching, content.AbilityTemplates, content.Signatures);
 
         return new Muster(marching, power, save);
     }

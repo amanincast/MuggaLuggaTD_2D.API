@@ -39,7 +39,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static float CalculatePartyPower(
             UserSaveData save,
             IEnumerable<string> characterIds,
-            IReadOnlyCollection<GameAbility> abilityTemplates)
+            IReadOnlyCollection<GameAbility> abilityTemplates,
+            IReadOnlyCollection<SignatureDefinition> signatures = null)
         {
             if (save?.Characters == null || characterIds == null)
                 return 0f;
@@ -50,7 +51,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             return save.Characters
                 .Where(c => c != null && ids.Contains(c.Id))
-                .Sum(c => CalculateCharacterPower(c, save.InventoryItems, abilityTemplates));
+                .Sum(c => CalculateCharacterPower(c, save.InventoryItems, abilityTemplates, signatures));
         }
 
         /// <summary>
@@ -59,7 +60,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static float CalculateCharacterPower(
             CharacterSaveData character,
             IReadOnlyCollection<ItemSaveData> inventory,
-            IReadOnlyCollection<GameAbility> abilityTemplates)
+            IReadOnlyCollection<GameAbility> abilityTemplates,
+            IReadOnlyCollection<SignatureDefinition> signatures = null)
         {
             if (character == null)
                 return 0f;
@@ -70,7 +72,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var health = character.MaxHealth?.AdjustedBaseValue ?? character.MaxHealth?.BaseValue ?? 0L;
             power += health * POWER_PER_HP;
 
-            power += CalculateAbilityPower(character, abilityTemplates);
+            power += CalculateAbilityPower(character, abilityTemplates, signatures);
             power += CalculateEquipmentPower(character, inventory);
 
             return power;
@@ -81,21 +83,43 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// the same modifier pipeline the client uses, and sums the resulting affinity damage. Saved
         /// abilities store only their link name and upgrades, so the damage has to be re-derived —
         /// which is exactly why this pipeline is shared rather than reimplemented server-side.
+        ///
+        /// <para><b>Awakening has to be re-derived here too.</b> It raises a signature's damage and is
+        /// never stored, so a caller that does not pass <paramref name="signatures"/> prices a
+        /// level-30 Legendary as though it were level 1 — its garrison, its raid and its siege would
+        /// all be understated. Retuning was safe to omit before this because
+        /// <see cref="SignatureRules.Retune"/> preserves total damage; awakening is not.</para>
         /// </summary>
         private static float CalculateAbilityPower(
             CharacterSaveData character,
-            IReadOnlyCollection<GameAbility> abilityTemplates)
+            IReadOnlyCollection<GameAbility> abilityTemplates,
+            IReadOnlyCollection<SignatureDefinition> signatures)
         {
             if (character.Abilities == null || abilityTemplates == null)
                 return 0f;
 
             float power = 0f;
 
+            // The character's roll, which decides both what its signature is made of and how far that
+            // signature has woken up. Null for anything with no signature - an old save, an ally from
+            // before the Tavern - and then nothing below changes.
+            var awakening = AwakeningContext.For(
+                signatures, character.SignatureId, character.SignatureAffinity,
+                character.Rarity, character.Level);
+
             foreach (var savedAbility in character.Abilities)
             {
                 if (savedAbility == null) continue;
 
-                var resolved = AbilityResolver.Resolve(savedAbility, abilityTemplates);
+                // Only the signature ability is retuned and awakened; the class basics are not the
+                // roll and do not grow with it.
+                bool isSignature = awakening != null && SignatureRules.IsSignatureAbility(
+                    awakening.Signature, awakening.Affinity, savedAbility.AbilityLinkName);
+
+                var resolved = isSignature
+                    ? AbilityResolver.Resolve(savedAbility, abilityTemplates, awakening.Affinity, awakening)
+                    : AbilityResolver.Resolve(savedAbility, abilityTemplates);
+
                 if (resolved?.AffinityStats == null) continue;
 
                 foreach (var stat in resolved.AffinityStats)

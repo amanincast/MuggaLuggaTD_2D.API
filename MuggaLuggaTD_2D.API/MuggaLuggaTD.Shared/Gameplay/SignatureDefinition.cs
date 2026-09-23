@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using Abilities.Models;
 using Enums;
 
 namespace MuggaLuggaTD.Shared.Gameplay
@@ -52,6 +54,59 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public List<SignatureAffinityAbility> AffinityAbilities { get; set; }
             = new List<SignatureAffinityAbility>();
+
+        /// <summary>
+        /// What this signature grows into as the character levels. Sparse: a stage with no entry
+        /// simply grants nothing, and stage I never has one because stage I <i>is</i> the signature.
+        /// See <see cref="AwakeningRules"/>.
+        /// </summary>
+        public List<AwakeningStageDefinition> Awakening { get; set; }
+            = new List<AwakeningStageDefinition>();
+    }
+
+    /// <summary>
+    /// One rung of a signature's awakening ladder: the modifiers it adds, and the name it is shown
+    /// under. Design doc 05 section 2.
+    /// </summary>
+    public class AwakeningStageDefinition
+    {
+        public AwakeningStage Stage { get; set; }
+
+        /// <summary>
+        /// What the player sees. Apex is named per signature ("Winter's Mark"); the earlier stages
+        /// usually leave this empty and fall back to "Awakening II".
+        /// </summary>
+        public string Name { get; set; }
+
+        public string Description { get; set; }
+
+        /// <summary>The modifiers this stage adds, applied to the character's signature ability.</summary>
+        public List<AbilityModifier> Modifiers { get; set; } = new List<AbilityModifier>();
+
+        /// <summary>
+        /// Per-affinity replacements for <see cref="Modifiers"/>, for a stage that should do something
+        /// different depending on what the signature is made of. Sparse.
+        /// </summary>
+        public List<AwakeningAffinityModifiers> AffinityModifiers { get; set; }
+            = new List<AwakeningAffinityModifiers>();
+
+        /// <summary>This stage's modifiers for an affinity: its override if it has one, else the default set.</summary>
+        public List<AbilityModifier> ModifiersFor(AffinityTypes affinity)
+        {
+            var over = AffinityModifiers?.FirstOrDefault(a => a != null && a.AffinityType == affinity);
+            return over?.Modifiers != null && over.Modifiers.Count > 0 ? over.Modifiers : Modifiers;
+        }
+
+        /// <summary>Its given name, or "Awakening &lt;stage&gt;" when it has none.</summary>
+        public string DisplayName(AwakeningStage stage)
+            => string.IsNullOrWhiteSpace(Name) ? "Awakening " + stage : Name;
+    }
+
+    /// <summary>One affinity's override of an awakening stage's modifiers.</summary>
+    public class AwakeningAffinityModifiers
+    {
+        public AffinityTypes AffinityType { get; set; }
+        public List<AbilityModifier> Modifiers { get; set; } = new List<AbilityModifier>();
     }
 
     /// <summary>One affinity's replacement ability for a signature.</summary>

@@ -82,6 +82,25 @@ namespace MuggaLuggaTD.Shared.Gameplay
         }
 
         /// <summary>
+        /// Whether <paramref name="abilityLinkName"/> is this signature's own ability for this
+        /// affinity - as opposed to one of the class basics sitting beside it in the kit.
+        ///
+        /// <para>Only the signature is retuned and awakened, so every caller that rebuilds a kit or
+        /// prices one has to make this distinction the same way. Making it a rule here rather than a
+        /// comparison at each call site is what keeps the client's kit and the server's power from
+        /// disagreeing about which ability grows.</para>
+        /// </summary>
+        public static bool IsSignatureAbility(
+            SignatureDefinition signature, AffinityTypes affinity, string abilityLinkName)
+        {
+            if (signature == null || string.IsNullOrEmpty(abilityLinkName))
+                return false;
+
+            return string.Equals(
+                AbilityLinkFor(signature, affinity), abilityLinkName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// Retunes <paramref name="ability"/> to <paramref name="affinity"/> in place: one affinity
         /// stat, carrying the damage the template's stats carried between them.
         ///
