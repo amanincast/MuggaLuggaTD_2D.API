@@ -147,6 +147,16 @@ public class PlayerGameDataController : ControllerBase
                 $"max={MuggaLuggaTD.Shared.Gameplay.CharacterProgression.MaxLevel}");
         }
 
+        // The identity roll drives the kit, so a save naming a signature content does not have would
+        // leave the character with its class basic alone - and rarity is not granted by anything yet.
+        var signatures = _saveValidator.ValidateSignatures(saveNode);
+        if (signatures.Changed)
+        {
+            _sessionLog.Log("SAVE-SIGNATURE",
+                $"user={userId} cleared={signatures.Cleared} rarityReset={signatures.RarityReset} " +
+                $"[{string.Join(", ", signatures.Details)}]");
+        }
+
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
 
         if (existingData != null)

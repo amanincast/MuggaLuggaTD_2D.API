@@ -1,10 +1,14 @@
 {
   // Characters, by what they are.
   //
-  // Allies carry a Class. The class provides the basic ability every character of it has; the
-  // character's own UnlockableAbilities are its SIGNATURE - what makes this Warrior different
-  // from that one. A Mage's basic is its element, so the Mage kit has none and the character
-  // brings both.
+  // Allies carry a Class, a SignatureId and a SignatureAffinity. The class provides the basic
+  // ability every character of it has; the signature is what makes this Warrior different from
+  // that one, and the affinity is what the signature is made of - its damage type and therefore
+  // its status effect. The kit is derived from the three, so an ally lists no abilities of its
+  // own. Signatures live in SignatureData.json. Design doc 05 §1.
+  //
+  // Enemies and bosses still list their own abilities: nothing rolls them, so they need no
+  // signature.
   //
   // Health is the class's, and grows by HealthGrowthPerLevel a level (design doc 03 §2b).
   "Enemies": [
@@ -399,14 +403,8 @@
       "MaxHealth": {
         "BaseValue": 125
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Impact_Strike_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "archer_snipe",
+      "SignatureAffinity": 2
     },
     {
       "TypeName": "Lightning Mage",
@@ -420,20 +418,8 @@
       "MaxHealth": {
         "BaseValue": 100
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Lightning_Strike_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        },
-        {
-          "AbilityLinkName": "Plasma_Burst_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "mage_bolt",
+      "SignatureAffinity": 4
     },
     {
       "TypeName": "Lightning Mage",
@@ -447,20 +433,8 @@
       "MaxHealth": {
         "BaseValue": 100
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Lightning_Strike_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        },
-        {
-          "AbilityLinkName": "Plasma_Burst_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "mage_blast",
+      "SignatureAffinity": 4
     },
     {
       "TypeName": "Water Mage",
@@ -474,20 +448,8 @@
       "MaxHealth": {
         "BaseValue": 100
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        },
-        {
-          "AbilityLinkName": "Arcane_Detonation_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "mage_blast",
+      "SignatureAffinity": 2
     },
     {
       "TypeName": "Water Mage",
@@ -501,20 +463,8 @@
       "MaxHealth": {
         "BaseValue": 100
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        },
-        {
-          "AbilityLinkName": "Arcane_Detonation_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "mage_bolt",
+      "SignatureAffinity": 2
     },
     {
       "TypeName": "Warrior",
@@ -528,7 +478,8 @@
       "MaxHealth": {
         "BaseValue": 175
       },
-      "UnlockableAbilities": []
+      "SignatureId": "warrior_slam",
+      "SignatureAffinity": 3
     },
     {
       "TypeName": "Warrior",
@@ -542,14 +493,8 @@
       "MaxHealth": {
         "BaseValue": 175
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [
-            "Enemy"
-          ]
-        }
-      ]
+      "SignatureId": "warrior_cleave",
+      "SignatureAffinity": 0
     }
   ],
   "Bosses": [
@@ -618,9 +563,16 @@
     },
     {
       "ClassName": "Mage",
-      "Description": "The elementalist. Its basic is its element, so it comes from the character.",
+      "Description": "The elementalist. Fragile, and answered for by what its signature is made of.",
       "HealthGrowthPerLevel": 0.04,
-      "BasicAbilities": []
+      "BasicAbilities": [
+        {
+          "AbilityLinkName": "Magic_Missile_1",
+          "ValidTargetTags": [
+            "Enemy"
+          ]
+        }
+      ]
     }
   ]
 }

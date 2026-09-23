@@ -43,6 +43,12 @@ public interface IGameContentProvider
     IReadOnlyList<MaterialTemplate> Materials { get; }
 
     /// <summary>
+    /// Signature definitions, from SignatureData. A character is a class, a signature and an
+    /// affinity; the server needs the same definitions the client builds its kit from.
+    /// </summary>
+    IReadOnlyList<SignatureDefinition> Signatures { get; }
+
+    /// <summary>
     /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
     /// validated against these so an upgrade outside the pool can't be persisted.
     /// </summary>
@@ -66,7 +72,8 @@ public class GameContentProvider : IGameContentProvider
         "WorldLocationData",
         "DialogueData",
         "SurvivalData",
-        "StatusEffectData"
+        "StatusEffectData",
+        "SignatureData"
     };
 
     /// <summary>
@@ -105,6 +112,8 @@ public class GameContentProvider : IGameContentProvider
     public IReadOnlyList<MaterialTemplate> Materials => _snapshot.Materials;
 
     public IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools => _snapshot.AbilityUpgradePools;
+
+    public IReadOnlyList<SignatureDefinition> Signatures => _snapshot.Signatures;
 
     /// <summary>
     /// Reads AbilityUpgradeData into the per-ability legal upgrade pools used to validate saves.
@@ -298,6 +307,25 @@ public class GameContentProvider : IGameContentProvider
         }
     }
 
+    /// <summary>
+    /// Reads the signature definitions. Fatal if unreadable: a character without its signature has
+    /// no kit, so booting with none would price every party at its class basic alone.
+    /// </summary>
+    private IReadOnlyList<SignatureDefinition> ParseSignatures(string rawSignatureData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<SignatureContentDocument>(rawSignatureData);
+            var signatures = document?.Signatures ?? new List<SignatureDefinition>();
+            _logger.LogInformation("Parsed {Count} signature definitions.", signatures.Count);
+            return signatures;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("SignatureData.json could not be parsed into signatures.", ex);
+        }
+    }
+
     private Snapshot Load()
     {
         var documents = new Dictionary<string, JsonNode>(DocumentNames.Length, StringComparer.OrdinalIgnoreCase);
@@ -306,6 +334,7 @@ public class GameContentProvider : IGameContentProvider
         string rawItemData = null!;
         string rawUpgradeData = null!;
         string rawMaterialData = null!;
+        string rawSignatureData = null!;
 
         // Hash the raw file bytes rather than the re-serialized nodes: the version must change when
         // a file changes, and must not change just because System.Text.Json reformats it.
@@ -340,6 +369,7 @@ public class GameContentProvider : IGameContentProvider
             if (name == "ItemData") rawItemData = raw;
             if (name == "AbilityUpgradeData") rawUpgradeData = raw;
             if (name == "MaterialData") rawMaterialData = raw;
+            if (name == "SignatureData") rawSignatureData = raw;
 
             var segment = Encoding.UTF8.GetBytes($"{name}:{raw}\n");
             hash.TransformBlock(segment, 0, segment.Length, null, 0);
@@ -351,7 +381,8 @@ public class GameContentProvider : IGameContentProvider
         _logger.LogInformation("Loaded {Count} game content documents (version {Version}).", documents.Count, version);
         return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
             ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData),
-            ParseUpgradePools(rawUpgradeData), ParseMaterials(rawMaterialData));
+            ParseUpgradePools(rawUpgradeData), ParseMaterials(rawMaterialData),
+            ParseSignatures(rawSignatureData));
     }
 
     private sealed record Snapshot(
@@ -361,5 +392,6 @@ public class GameContentProvider : IGameContentProvider
         RunTuning RunTuning,
         IReadOnlyList<ItemTemplate> DroppableItems,
         IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools,
-        IReadOnlyList<MaterialTemplate> Materials);
+        IReadOnlyList<MaterialTemplate> Materials,
+        IReadOnlyList<SignatureDefinition> Signatures);
 }

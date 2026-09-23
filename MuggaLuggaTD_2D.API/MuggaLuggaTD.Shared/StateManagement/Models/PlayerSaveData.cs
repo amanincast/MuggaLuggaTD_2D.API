@@ -38,6 +38,13 @@ namespace StateManagement.Models
         public string PrefabAssetLocation { get; set; }
         public string SpriteLibraryAssetLocation { get; set; }
 
+        // Identity roll (design doc 05): what this character IS, as opposed to what it has grown
+        // into. The kit is derived from these rather than stored, so a save cannot claim abilities
+        // its class and signature do not give it.
+        public string SignatureId { get; set; }
+        public AffinityTypes? SignatureAffinity { get; set; }
+        public CharacterRarity Rarity { get; set; } = CharacterRarity.Common;
+
         // Progression
         public long Level { get; set; }
         public long CurrentExperience { get; set; }

@@ -26,8 +26,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>
         /// Returns the ability with its upgrades applied, or null when no template matches the saved
         /// link name (content the player's save references but the current content set no longer has).
+        ///
+        /// <para><paramref name="retuneTo"/> is the character's signature affinity, for the one ability
+        /// that is its signature. It is applied <b>before</b> the upgrades rather than after: upgrades
+        /// are replayed from the base every time one is picked, so retuning afterwards would fold the
+        /// upgraded total into the base and compound it on the next pick.</para>
         /// </summary>
-        public static GameAbility Resolve(AbilitySaveData saveData, IReadOnlyCollection<GameAbility> templates)
+        public static GameAbility Resolve(AbilitySaveData saveData, IReadOnlyCollection<GameAbility> templates,
+            Enums.AffinityTypes? retuneTo = null)
         {
             if (saveData == null || templates == null)
                 return null;
@@ -38,6 +44,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             var ability = CloneTemplate(template);
             ability.Level = saveData.Level;
+
+            if (retuneTo.HasValue)
+                SignatureRules.Retune(ability, retuneTo.Value);
 
             if (saveData.AppliedUpgrades != null)
             {
