@@ -74,6 +74,9 @@ namespace MuggaLuggaTD.Shared
         //   through an endpoint. They are the Tavern's currency, so a client-written balance would be
         //   a client-minted one. A 1.13.0 client keeps writing materials into its save and would
         //   believe it holds what the server has dropped.
+        // 1.17.0 - elites. Some of each wave from the third on is an elite (x2 health, x1.25 damage,
+        //   x1.5 experience), and RunRewardCalculator prices them, so the payout matches the fight.
+        //   A 1.16.0 client fights waves with no elites in them and would be paid for elites.
         // 1.16.0 - an upgrade whose Property is "Damage" now increases damage. It was mapped onto
         //   "Range" instead, so most of the upgrade content in the game silently buffed range and
         //   left damage untouched; affinity damage is also reset before upgrades are re-applied, so
@@ -84,6 +87,6 @@ namespace MuggaLuggaTD.Shared
         //   compounding at 10%, and levels cost 4000 x 1.2^(L-1) to a cap of 30 instead of
         //   100 x 1.5^(L-1) uncapped. A 1.14.0 client fights different enemies and levels at a
         //   different rate than the server prices.
-        public const string Version = "1.16.0";
+        public const string Version = "1.17.0";
     }
 }

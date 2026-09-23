@@ -21,6 +21,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Enemy level goes up by one every this many waves.</summary>
         public int EnemyLevelIncreaseInterval { get; set; } = 3;
 
+        /// <summary>The wave elites start appearing in. Before it, a run is just enemies.</summary>
+        public int ElitesFromWave { get; set; } = 3;
+
+        /// <summary>One more elite per wave every this many waves after the first elite wave.</summary>
+        public int EliteIntervalWaves { get; set; } = 2;
+
         /// <summary>Health of a representative enemy at level 1, used to value a kill.</summary>
         public long BaseEnemyHealth { get; set; } = 50;
 
