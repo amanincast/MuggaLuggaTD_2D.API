@@ -1,4 +1,12 @@
 {
+  // Characters, by what they are.
+  //
+  // Allies carry a Class. The class provides the basic ability every character of it has; the
+  // character's own UnlockableAbilities are its SIGNATURE - what makes this Warrior different
+  // from that one. A Mage's basic is its element, so the Mage kit has none and the character
+  // brings both.
+  //
+  // Health is the class's, and grows by HealthGrowthPerLevel a level (design doc 03 §2b).
   "Enemies": [
     {
       "TypeName": "Grasslands Drakan Mage",
@@ -6,56 +14,38 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_1",
       "LinkName": "Enemy_Grassland_Drakan_1",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 50.0
+        "BaseValue": 50
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [ "Player"]
+          "ValidTargetTags": [
+            "Player"
+          ]
         }
-        //{
-        //  "AbilityLinkName": "Magic_Missile_1",
-        //  "ValidTargetTags": [ "Player", "Ally" ]
-        //},
-        //{
-        //  "AbilityLinkName": "Arcane_Shield_1"
-        //}
       ]
     },
-    //{
-    //    "TypeName": "Arcane Mage",
-    //    "PrefabAssetLocation": "Prefabs/Characters/Enemies/Enemy_Mage_1",
-    //    "PrefabName": "Enemy_Mage_1",
-    //    "BaseMovementSpeed": 5.0,
-    //    "BaseHealth": 100,
-    //    "UnlockableAbilities": [
-    //        {
-    //            "AbilityLinkName": "Magic_Missile_1",
-    //            "ValidTargetTags": [ "Player", "Ally" ]
-    //        },
-    //        {
-    //            "AbilityLinkName": "Arcane_Shield_1"
-    //        }
-    //    ]
-    //},
     {
       "TypeName": "Grasslands Drakan Pikeman",
       "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_2",
       "LinkName": "Enemy_Grassland_Drakan_2",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 50.0
+        "BaseValue": 50
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -65,15 +55,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_3",
       "LinkName": "Enemy_Grassland_Drakan_3",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 60.0
+        "BaseValue": 60
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -83,15 +76,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Drakan_4",
       "LinkName": "Enemy_Grassland_Drakan_4",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 45.0
+        "BaseValue": 45
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Bow_Attack_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -101,15 +97,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_2",
       "LinkName": "Enemy_Grassland_Lizard_2",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 40
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Missile_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -122,12 +121,15 @@
         "BaseValue": 3.2
       },
       "MaxHealth": {
-        "BaseValue": 60.0
+        "BaseValue": 60
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -137,15 +139,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Archer_1",
       "LinkName": "Enemy_Grassland_Lizard_Archer_1",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 45.0
+        "BaseValue": 45
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Bow_Attack_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -155,15 +160,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_2",
       "LinkName": "Enemy_Grassland_Lizard_Mage_2",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 40
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -173,15 +181,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_3",
       "LinkName": "Enemy_Grassland_Lizard_Mage_3",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 40
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Inferno_Blast_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -191,15 +202,18 @@
       "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Mage_4",
       "LinkName": "Enemy_Grassland_Lizard_Mage_4",
       "MovementSpeed": {
-        "BaseValue": 3.0
+        "BaseValue": 3
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 40
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Volatile_Eruption_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -212,12 +226,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 70
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -230,12 +247,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 70
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -248,12 +268,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 70
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -266,12 +289,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 70
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -284,12 +310,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 70
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -302,12 +331,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 45.0
+        "BaseValue": 45
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Missile_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -320,12 +352,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 45.0
+        "BaseValue": 45
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Arcane_Detonation_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     },
@@ -338,12 +373,15 @@
         "BaseValue": 2.8
       },
       "MaxHealth": {
-        "BaseValue": 45.0
+        "BaseValue": 45
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Shadow_Explosion_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
     }
@@ -351,37 +389,28 @@
   "Allies": [
     {
       "TypeName": "Archer",
+      "Class": "Archer",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Archer/Ally_Archer_2",
       "LinkName": "Ally_Archer_2",
       "MovementSpeed": {
-        "BaseValue": 4.0
+        "BaseValue": 4
       },
       "MaxHealth": {
-        "BaseValue": 50.0
+        "BaseValue": 125
       },
       "UnlockableAbilities": [
         {
-          "AbilityLinkName": "Bow_Attack_1",
-          "ValidTargetTags": [ "Enemy" ]
-        },
-        {
           "AbilityLinkName": "Impact_Strike_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
-        //{
-        //  "AbilityLinkName": "Lightning_Strike_1",
-        //  "ValidTargetTags": [ "Enemy" ]
-        //}
-        //,
-        //{
-        //  "AbilityLinkName": "Magic_Burst_1",
-        //  "ValidTargetTags": [ "Enemy" ]
-        //}
       ]
     },
     {
       "TypeName": "Lightning Mage",
+      "Class": "Mage",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_1",
       "LinkName": "Ally_Mage_1",
@@ -389,21 +418,26 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 100
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Lightning_Strike_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         },
         {
           "AbilityLinkName": "Plasma_Burst_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
       ]
     },
     {
       "TypeName": "Lightning Mage",
+      "Class": "Mage",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_2",
       "LinkName": "Ally_Mage_2",
@@ -411,21 +445,26 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 100
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Lightning_Strike_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         },
         {
           "AbilityLinkName": "Plasma_Burst_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
       ]
     },
     {
       "TypeName": "Water Mage",
+      "Class": "Mage",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_3",
       "LinkName": "Ally_Mage_3",
@@ -433,21 +472,26 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 100
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         },
         {
           "AbilityLinkName": "Arcane_Detonation_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
       ]
     },
     {
       "TypeName": "Water Mage",
+      "Class": "Mage",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Mage/Ally_Mage_4",
       "LinkName": "Ally_Mage_4",
@@ -455,21 +499,26 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 40.0
+        "BaseValue": 100
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         },
         {
           "AbilityLinkName": "Arcane_Detonation_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
       ]
     },
     {
       "TypeName": "Warrior",
+      "Class": "Warrior",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Warrior/Ally_Warrior_1",
       "LinkName": "Ally_Warrior_1",
@@ -477,17 +526,13 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 175
       },
-      "UnlockableAbilities": [
-        {
-          "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Enemy" ]
-        }
-      ]
+      "UnlockableAbilities": []
     },
     {
       "TypeName": "Warrior",
+      "Class": "Warrior",
       "PrefabAssetLocation": "Prefabs/Characters/Allies/AllyCharacter",
       "SpriteLibraryAssetLocation": "Animation/Characters/Allies/Warrior/Ally_Warrior_2",
       "LinkName": "Ally_Warrior_2",
@@ -495,20 +540,18 @@
         "BaseValue": 3.5
       },
       "MaxHealth": {
-        "BaseValue": 70.0
+        "BaseValue": 175
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Stab_1",
-          "ValidTargetTags": [ "Enemy" ]
+          "ValidTargetTags": [
+            "Enemy"
+          ]
         }
       ]
     }
   ],
-
-  // Bosses. One of these closes a run from tier 3 up, and the last wave does not end until it is
-  // dead. The abilities are read in order, one per phase: the boss opens with the first and gains
-  // the next at 66% and 33% health, so the same enemy asks a different question as it goes down.
   "Bosses": [
     {
       "TypeName": "Lizard Warlord",
@@ -519,22 +562,65 @@
         "BaseValue": 2.5
       },
       "MaxHealth": {
-        "BaseValue": 60.0
+        "BaseValue": 60
       },
       "UnlockableAbilities": [
         {
           "AbilityLinkName": "Melee_Slash_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         },
         {
           "AbilityLinkName": "Magic_Burst_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         },
         {
           "AbilityLinkName": "Shadow_Explosion_1",
-          "ValidTargetTags": [ "Player", "Ally" ]
+          "ValidTargetTags": [
+            "Player",
+            "Ally"
+          ]
         }
       ]
+    }
+  ],
+  "Classes": [
+    {
+      "ClassName": "Warrior",
+      "Description": "The line holder. Slowest to die, and wants to be surrounded.",
+      "HealthGrowthPerLevel": 0.08,
+      "BasicAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [
+            "Enemy"
+          ]
+        }
+      ]
+    },
+    {
+      "ClassName": "Archer",
+      "Description": "Long range and high single-target damage, punished if caught.",
+      "HealthGrowthPerLevel": 0.05,
+      "BasicAbilities": [
+        {
+          "AbilityLinkName": "Bow_Attack_1",
+          "ValidTargetTags": [
+            "Enemy"
+          ]
+        }
+      ]
+    },
+    {
+      "ClassName": "Mage",
+      "Description": "The elementalist. Its basic is its element, so it comes from the character.",
+      "HealthGrowthPerLevel": 0.04,
+      "BasicAbilities": []
     }
   ]
 }
