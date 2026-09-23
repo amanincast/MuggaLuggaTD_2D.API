@@ -112,6 +112,15 @@ namespace MuggaLuggaTD.Shared
         //   both derive it. Retuning was safe to leave out of power before this because it preserves
         //   total damage; awakening is not. A 1.21.0 client would fight with an unawakened signature
         //   while the server priced an awakened one. Design doc 05 §2.
-        public const string Version = "1.22.0";
+        // 1.23.0 - resonance. A party that shares a signature affinity deals more of it (+10/20/30%
+        //   for 2/3/4), holds its status longer from three, and spreads it at four. ResonanceRules is
+        //   shared because it is a pure function of the party's rolls and the Guild Hall shows the
+        //   same answer the fight uses - but it is deliberately NOT wired into PartyPowerCalculator,
+        //   because whether a garrison's composition counts for hold is left open by the design
+        //   (doc 05 §3). So this version changes no server-computed result: it is bumped to keep the
+        //   client and the DLL it ships with honest about each other, not because the two sides could
+        //   disagree. Reactions are the other half and are client-only, keyed on a combat status the
+        //   server never sees.
+        public const string Version = "1.23.0";
     }
 }
