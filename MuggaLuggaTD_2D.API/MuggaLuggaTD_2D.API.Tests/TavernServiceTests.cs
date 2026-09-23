@@ -29,7 +29,14 @@ public class TavernServiceTests : IDisposable
         },
         Signatures = new List<SignatureDefinition>
         {
-            new() { SignatureId = "warrior_cleave", Class = "Warrior", BaseAbilityLinkName = "Cleaving_Blow_1" }
+            new()
+            {
+                SignatureId = "warrior_cleave", Class = "Warrior", BaseAbilityLinkName = "Cleaving_Blow_1",
+                AllowedAffinities = new List<AffinityTypes>
+                {
+                    AffinityTypes.Physical, AffinityTypes.Fire, AffinityTypes.Water, AffinityTypes.Earth
+                }
+            }
         }
     };
 
@@ -235,5 +242,156 @@ public class TavernServiceTests : IDisposable
         }
 
         Assert.Equal(3, ids.Distinct().Count());
+    }
+    // -----------------------------------------------------------------
+    // Lures and pity
+    // -----------------------------------------------------------------
+
+    private async Task GiveCrystalsAsync(int howMany = 9)
+    {
+        await Wallet.GrantAsync(Realm, Player, new List<MaterialGrant>
+        {
+            new() { MaterialName = "Perfect Fire Crystal", Quantity = howMany },
+            new() { MaterialName = "Minor Fire Crystal", Quantity = howMany }
+        }, "test");
+    }
+
+    [Fact]
+    public async Task PlacingALureSpendsTheCrystalNow()
+    {
+        // Paid on placement rather than at the restock: the restock happens inside a PvE claim, and
+        // a payment that could fail there would be a claim that half-succeeded.
+        await GiveCrystalsAsync(2);
+
+        var (outcome, lure) = await Service.PlaceLureAsync(
+            Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(TavernRules.LureStrength.Perfect, lure!.PendingStrength);
+
+        var held = await Wallet.ReadAsync(Realm, Player);
+        Assert.Equal(1, held.Single(m => m.MaterialName == "Perfect Fire Crystal").Quantity);
+    }
+
+    [Fact]
+    public async Task ALureCannotBePlacedWithoutTheCrystal()
+    {
+        var (outcome, lure) = await Service.PlaceLureAsync(
+            Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        Assert.Equal(TavernError.CannotAfford, outcome.Error);
+        Assert.Null(lure);
+        Assert.Null(await Service.StandingLureAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task OnlyOneOfferMayStand()
+    {
+        // A second would be silently unspent by the restock that takes the first, and quietly losing
+        // a crystal is worse than being told no.
+        await GiveCrystalsAsync();
+
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        var (outcome, _) = await Service.PlaceLureAsync(
+            Realm, Player, AffinityTypes.Water, TavernRules.LureStrength.Minor);
+
+        Assert.Equal(TavernError.LureAlreadyStanding, outcome.Error);
+
+        // And the refused offer cost nothing.
+        var held = await Wallet.ReadAsync(Realm, Player);
+        Assert.Equal(9, held.Single(m => m.MaterialName == "Minor Fire Crystal").Quantity);
+    }
+
+    [Fact]
+    public async Task ARestockSpendsTheStandingLure()
+    {
+        await GiveCrystalsAsync();
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        Assert.Null(await Service.StandingLureAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task ARestockThatMissesLeavesPityBehind()
+    {
+        // The whole reason a miss is not simply a wasted crystal. Arcane is not an affinity this
+        // fixture's signature can roll, so the board is guaranteed to miss it.
+        await Wallet.GrantAsync(Realm, Player, new List<MaterialGrant>
+        {
+            new() { MaterialName = "Perfect Arcane Crystal", Quantity = 3 }
+        }, "test");
+
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        var lures = await Service.ReadLuresAsync(Realm, Player);
+        var arcane = lures.Single(l => l.Affinity == AffinityTypes.Arcane);
+
+        Assert.Equal(1, arcane.MissedRestocks);
+        Assert.Equal(TavernRules.LureStrength.None, arcane.PendingStrength);
+
+        // And it accumulates.
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        arcane = (await Service.ReadLuresAsync(Realm, Player)).Single(l => l.Affinity == AffinityTypes.Arcane);
+        Assert.Equal(2, arcane.MissedRestocks);
+    }
+
+    [Fact]
+    public async Task AnUnluredRestockBuildsNoPity()
+    {
+        // Pity is what a lure buys when it does not pay off, not a reward for playing.
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        Assert.Empty(await Service.ReadLuresAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task PityResetsOnceTheAffinityAppears()
+    {
+        await Wallet.GrantAsync(Realm, Player, new List<MaterialGrant>
+        {
+            new() { MaterialName = "Perfect Arcane Crystal", Quantity = 3 },
+            new() { MaterialName = "Perfect Fire Crystal", Quantity = 3 }
+        }, "test");
+
+        // Build a drought on Arcane, which this signature cannot roll.
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        var arcane = (await Service.ReadLuresAsync(Realm, Player))
+            .Single(l => l.Affinity == AffinityTypes.Arcane);
+        Assert.Equal(1, arcane.MissedRestocks);
+
+        // Fire, which it can roll, at a ceiling-high target over six slots: it will appear.
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        var fire = (await Service.ReadLuresAsync(Realm, Player)).Single(l => l.Affinity == AffinityTypes.Fire);
+        Assert.Equal(0, fire.MissedRestocks);
+
+        // The Arcane debt is untouched by a Fire board - pity is per affinity.
+        arcane = (await Service.ReadLuresAsync(Realm, Player)).Single(l => l.Affinity == AffinityTypes.Arcane);
+        Assert.Equal(1, arcane.MissedRestocks);
+    }
+
+    [Fact]
+    public async Task ALuredBoardLeansTheWayItWasPaidTo()
+    {
+        await GiveCrystalsAsync();
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        await Service.RestockAsync(Realm, Player, 1, null, "test");
+
+        var board = await Service.ReadBoardAsync(Realm, Player);
+        int fire = board.Count(r => r.Affinity == AffinityTypes.Fire);
+
+        // Six slots at 60% each; two or more is a very safe floor and this is not a statistics test.
+        Assert.True(fire >= 2, $"expected a Fire-leaning board, got {fire} of {board.Count}");
     }
 }

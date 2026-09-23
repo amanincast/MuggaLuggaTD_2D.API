@@ -76,7 +76,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             int locationTier,
             BiomeType? biome,
             Random random,
-            int count = TavernRules.BoardSize)
+            int count = TavernRules.BoardSize,
+            AffinityTypes? luredAffinity = null,
+            double luredTarget = 0)
         {
             var board = new List<RecruitRoll>();
             if (random == null)
@@ -84,7 +86,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             for (int i = 0; i < count; i++)
             {
-                var roll = Roll(sheets, signatures, locationTier, biome, random);
+                var roll = Roll(sheets, signatures, locationTier, biome, random, luredAffinity, luredTarget);
                 if (roll != null)
                     board.Add(roll);
             }
@@ -102,7 +104,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             IReadOnlyList<SignatureDefinition> signatures,
             int locationTier,
             BiomeType? biome,
-            Random random)
+            Random random,
+            AffinityTypes? luredAffinity = null,
+            double luredTarget = 0)
         {
             if (sheets == null || signatures == null || random == null)
                 return null;
@@ -134,7 +138,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 Sheet = classSheets[random.Next(classSheets.Count)].Sheet,
                 Class = className,
                 SignatureId = signature.SignatureId,
-                Affinity = RollAffinity(signature, biome, random),
+                Affinity = RollAffinity(signature, biome, random, luredAffinity, luredTarget),
                 Rarity = RollRarity(locationTier, random)
             };
         }
@@ -144,11 +148,40 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// over the <i>allowed</i> affinities, so favouring Fire on a signature that cannot be Fire
         /// simply does nothing rather than skewing the rest.
         /// </summary>
-        public static AffinityTypes RollAffinity(SignatureDefinition signature, BiomeType? biome, Random random)
+        public static AffinityTypes RollAffinity(
+            SignatureDefinition signature, BiomeType? biome, Random random,
+            AffinityTypes? luredAffinity = null, double luredTarget = 0)
         {
             var allowed = SignatureRules.AffinitiesFor(signature);
             if (allowed.Count == 0)
                 return AffinityTypes.Physical;
+
+            // A lure aims for a share of the slots rather than multiplying a weight, so the number
+            // the player was quoted is the number they get. It applies only where the signature can
+            // actually roll that affinity - favouring Fire on a signature that cannot be Fire does
+            // nothing, exactly as the biome favour does nothing.
+            //
+            // Deliberately a separate path: the unlured roll below is left byte-for-byte as it was,
+            // so an existing seeded board rolls exactly as it always did.
+            if (luredAffinity.HasValue && luredTarget > 0 && allowed.Count > 1
+                && allowed.Contains(luredAffinity.Value))
+            {
+                double share = luredTarget > TavernRules.LureCeiling ? TavernRules.LureCeiling : luredTarget;
+
+                if (random.NextDouble() < share)
+                    return luredAffinity.Value;
+
+                // The rest of the board is rolled normally among the others, so a lure concentrates
+                // the odds without flattening what else can turn up.
+                var others = new List<AffinityTypes>();
+                for (int i = 0; i < allowed.Count; i++)
+                {
+                    if (allowed[i] != luredAffinity.Value)
+                        others.Add(allowed[i]);
+                }
+
+                return others[random.Next(others.Count)];
+            }
 
             var favoured = biome.HasValue ? TavernRules.FavouredAffinity(biome.Value) : null;
 

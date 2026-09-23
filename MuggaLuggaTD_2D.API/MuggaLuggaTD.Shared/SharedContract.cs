@@ -128,6 +128,12 @@ namespace MuggaLuggaTD.Shared
         //   condition and gold is the economy, and retuning one must not silently retune the other.
         //   This DOES change a server-computed result: RunRewards now carries Gold, so a client on an
         //   older DLL would be claiming against a payout it cannot describe.
-        public const string Version = "1.24.0";
+        // 1.25.0 - Tavern lures and pity. A crystal offered before a run pulls the board that comes
+        //   back from it toward one affinity (25/40/60% of slots for Minor/Major/Perfect), and every
+        //   lured board that misses adds 10% to the next. Expressed as a TARGET SHARE rather than a
+        //   weight multiplier, because the affinity roll is weighted over the affinities a signature
+        //   is allowed - rarely all eight - so only a share means the same thing for every signature.
+        //   The unlured roll path is untouched, so an existing seeded board rolls exactly as before.
+        public const string Version = "1.25.0";
     }
 }

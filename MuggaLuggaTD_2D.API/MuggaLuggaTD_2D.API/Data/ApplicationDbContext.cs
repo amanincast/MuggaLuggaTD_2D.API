@@ -28,6 +28,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
     public DbSet<PlayerGold> PlayerGold => Set<PlayerGold>();
     public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
+    public DbSet<TavernLure> TavernLures => Set<TavernLure>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -144,6 +145,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerGold>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // Configure TavernLure (one row per player per affinity: the offer standing on it, and the
+        // pity owed on it. A second row for the same affinity would be a second, divergent debt)
+        builder.Entity<TavernLure>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.Affinity }).IsUnique();
         });
 
         // Configure TavernRecruit (one player's board in one realm; read and replaced by that key)

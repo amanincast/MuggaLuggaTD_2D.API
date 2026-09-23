@@ -124,6 +124,85 @@ namespace MuggaLuggaTD.Shared.Gameplay
             }
         }
 
+        // -----------------------------------------------------------------
+        // Lures and pity (design doc 05 section 4)
+        // -----------------------------------------------------------------
+
+        /// <summary>How strongly a crystal pulls the board toward its affinity.</summary>
+        public enum LureStrength
+        {
+            None = 0,
+            Minor = 1,
+            Major = 2,
+            Perfect = 3
+        }
+
+        /// <summary>
+        /// The share of slots a lure aims to give its affinity.
+        ///
+        /// <para>A <b>target share</b>, not a multiplier, because that is what the design states and
+        /// because a multiplier would mean something different for every signature: the affinity roll
+        /// is weighted over the affinities a signature is <i>allowed</i>, which is rarely all eight.
+        /// Expressed as a share, "a Perfect crystal makes it 60%" is true of every signature that can
+        /// roll that affinity at all.</para>
+        /// </summary>
+        public static double LureTarget(LureStrength strength)
+        {
+            switch (strength)
+            {
+                case LureStrength.Perfect: return 0.60;
+                case LureStrength.Major: return 0.40;
+                case LureStrength.Minor: return 0.25;
+                default: return 0;
+            }
+        }
+
+        /// <summary>
+        /// What each lured restock that showed none of the lured affinity adds to the next one.
+        ///
+        /// <para><b>Pity is not for rarity.</b> Six slots already give an 11% chance of a Legendary
+        /// and 54% of Epic or better, so rarity needs no floor. The chase is the <i>combination</i>,
+        /// so this is where the floor goes.</para>
+        /// </summary>
+        public const double PityStep = 0.10;
+
+        /// <summary>
+        /// However long the drought, a lure never quite guarantees the board. Leaving a little room
+        /// keeps a lured board a board rather than an order form.
+        /// </summary>
+        public const double LureCeiling = 0.95;
+
+        /// <summary>The share a lure actually aims for, once a run of misses is counted in.</summary>
+        public static double EffectiveLureTarget(LureStrength strength, int missedRestocks)
+        {
+            double target = LureTarget(strength);
+            if (target <= 0) return 0;
+
+            if (missedRestocks > 0)
+                target += missedRestocks * PityStep;
+
+            return target > LureCeiling ? LureCeiling : target;
+        }
+
+        /// <summary>
+        /// The crystal a lure of this strength is paid with, for this affinity. One crystal buys one
+        /// restock: the lure is placed before going out and spent by the clear that comes back.
+        /// </summary>
+        public static IReadOnlyList<MaterialGrant> LureCost(AffinityTypes affinity, LureStrength strength)
+        {
+            if (strength == LureStrength.None)
+                return new MaterialGrant[0];
+
+            return new[]
+            {
+                new MaterialGrant { MaterialName = CrystalName(affinity, strength), Quantity = 1 }
+            };
+        }
+
+        /// <summary>The content name of the crystal, e.g. "Perfect Fire Crystal".</summary>
+        public static string CrystalName(AffinityTypes affinity, LureStrength strength)
+            => strength == LureStrength.None ? null : $"{strength} {affinity} Crystal";
+
         /// <summary>
         /// Whether clearing this kind of site restocks the board. Only the fightable, spendable ones:
         /// the restock is paid for with a dungeon, so taking a keep must not also buy a board.
