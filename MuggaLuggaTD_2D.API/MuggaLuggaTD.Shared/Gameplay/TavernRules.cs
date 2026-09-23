@@ -14,7 +14,17 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// </summary>
     public static class TavernRules
     {
-        /// <summary>Recruits on the board. Six is design 6d's screen.</summary>
+        /// <summary>
+        /// Seats in the Tavern. Six is design 6d's screen, and now also a <b>cap</b> rather than a
+        /// batch: a clear fills an empty seat, a hire empties one, and a paid refresh clears the lot.
+        ///
+        /// <para><b>A clear no longer wipes the board.</b> It used to roll six new faces and throw the
+        /// old six away, which meant that farming the materials to afford a recruit was the very thing
+        /// that took that recruit away. Saving up was self-defeating. Now a clear <i>adds</i> one to a
+        /// free seat and never removes one, so nothing a player is saving for can disappear without
+        /// their say-so — and a full board of people they do not want is what the paid refresh is
+        /// for.</para>
+        /// </summary>
         public const int BoardSize = 6;
 
         /// <summary>
@@ -207,7 +217,22 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Whether clearing this kind of site restocks the board. Only the fightable, spendable ones:
         /// the restock is paid for with a dungeon, so taking a keep must not also buy a board.
         /// </summary>
-        public static bool RestocksTheBoard(LocationType siteType)
+        public static bool BringsARecruit(LocationType siteType)
             => siteType == LocationType.Dungeon || siteType == LocationType.Portal;
+
+        /// <summary>
+        /// What a paid refresh costs, in gold.
+        ///
+        /// <para><b>The price is the gate, not a daily cap.</b> Design doc 05 §4 proposed one refresh
+        /// a day once gold existed, but a cap and a price together gate the same thing twice, and the
+        /// cap would need a table to remember. The price alone is enough because the alternative is
+        /// strictly better: clearing a dungeon pays gold <i>and</i> brings somebody in for free, so
+        /// paying to wipe the board is only ever worth it when the board is full of people you do not
+        /// want. That is exactly the situation a refresh is for.</para>
+        ///
+        /// <para>Priced at roughly two and a half tier-1 clears, so it is a decision rather than a
+        /// reflex.</para>
+        /// </summary>
+        public const long RefreshCostGold = 600;
     }
 }

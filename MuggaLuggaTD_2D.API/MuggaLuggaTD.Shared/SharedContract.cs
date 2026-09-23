@@ -134,6 +134,12 @@ namespace MuggaLuggaTD.Shared
         //   weight multiplier, because the affinity roll is weighted over the affinities a signature
         //   is allowed - rarely all eight - so only a share means the same thing for every signature.
         //   The unlured roll path is untouched, so an existing seeded board rolls exactly as before.
-        public const string Version = "1.25.0";
+        // 1.26.0 - the Tavern board became seats rather than a batch. A cleared dungeon now ADDS one
+        //   recruit to a free seat instead of rolling six new faces over the old six, because farming
+        //   the materials to afford a recruit used to be the very thing that took that recruit away -
+        //   saving up was self-defeating. Hiring frees a seat, a full board takes nobody, and a paid
+        //   refresh (RefreshCostGold) is the only thing that removes a recruit the player did not
+        //   hire. RestocksTheBoard is renamed BringsARecruit to say what it now means.
+        public const string Version = "1.26.0";
     }
 }

@@ -244,13 +244,14 @@ public class WorldPveService
         long goldBalance = await _gold.GrantAsync(
             gameInstanceId, userId, rewards.Gold, $"pve-claim run={run.Id}");
 
-        // Clearing a dungeon is what restocks the Tavern - there is no timer and no refresh button,
-        // so the board is attached to playing the game rather than to polling a menu. The tier raises
-        // the rarity odds and the region's biome nudges the affinities, so where you cleared shows up
-        // on the board. Design doc 05 §4.
-        if (TavernRules.RestocksTheBoard(resolved.Site.Type))
+        // Clearing a dungeon brings somebody new to the Tavern - one recruit, into a free seat. It
+        // does NOT replace the board: farming the materials to afford a recruit used to be the very
+        // thing that took that recruit away, which made saving up self-defeating. The tier still
+        // raises the rarity odds and the region's biome still nudges the affinity, so where you
+        // cleared shows up in who walks in. Design doc 05 §4.
+        if (TavernRules.BringsARecruit(resolved.Site.Type))
         {
-            await _tavern.RestockAsync(
+            await _tavern.BringARecruitAsync(
                 gameInstanceId, userId, resolved.Site.Tier, resolved.Region.Biome,
                 $"pve-claim run={run.Id} site={run.LocationId}");
         }

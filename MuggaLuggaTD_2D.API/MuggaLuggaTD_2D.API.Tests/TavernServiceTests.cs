@@ -43,8 +43,25 @@ public class TavernServiceTests : IDisposable
     private MaterialWalletService Wallet =>
         new(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
 
+    private GoldService Gold =>
+        new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
+
     private TavernService Service =>
-        new(_db, _content, Wallet, new FakeSessionLog(), NullLogger<TavernService>.Instance);
+        new(_db, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
+
+    /// <summary>Enough gold for several paid refreshes.</summary>
+    private async Task FillPurseAsync(long gold = 10_000)
+        => await Gold.GrantAsync(Realm, Player, gold, "test");
+
+    /// <summary>Empties seats by hiring, so an arrival has somewhere to sit.</summary>
+    private async Task FreeSeatsAsync(int howMany)
+    {
+        await FillWalletAsync();
+
+        var board = await Service.ReadBoardAsync(Realm, Player);
+        foreach (var recruit in board.Take(howMany))
+            await Service.HireAsync(Realm, Player, recruit.Slot);
+    }
 
     public void Dispose() => _db.Dispose();
 
@@ -85,15 +102,130 @@ public class TavernServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ARestockReplacesTheWholeBoard()
+    public async Task AClearTakesNobodyAway()
+    {
+        // The whole reason the board became seats. Farming the materials to afford a recruit used to
+        // be the very thing that took that recruit away, so saving up was self-defeating.
+        await FreeSeatsAsync(1);
+        var before = await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.BringARecruitAsync(Realm, Player, 3, BiomeType.Volcanic, "test");
+        var after = await Service.ReadBoardAsync(Realm, Player);
+
+        foreach (var recruit in before)
+            Assert.Contains(recruit.Id, after.Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task AClearSeatsExactlyOneNewRecruit()
+    {
+        await FreeSeatsAsync(2);
+        var before = await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.BringARecruitAsync(Realm, Player, 3, BiomeType.Volcanic, "test");
+        var after = await Service.ReadBoardAsync(Realm, Player);
+
+        Assert.Equal(before.Count + 1, after.Count);
+    }
+
+    [Fact]
+    public async Task AFullBoardTakesNobody()
+    {
+        // Not a limitation - it is the situation the paid refresh exists for.
+        var before = await Service.ReadBoardAsync(Realm, Player);
+        Assert.Equal(TavernRules.BoardSize, before.Count);
+
+        var outcome = await Service.BringARecruitAsync(Realm, Player, 3, BiomeType.Volcanic, "test");
+
+        Assert.Equal(TavernError.BoardIsFull, outcome.Error);
+        Assert.Equal(before.Select(r => r.Id), (await Service.ReadBoardAsync(Realm, Player)).Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task AFullBoardDoesNotEatTheStandingLure()
+    {
+        // A crystal that bought nothing would be a crystal quietly lost.
+        await Wallet.GrantAsync(Realm, Player, new List<MaterialGrant>
+        {
+            new() { MaterialName = "Perfect Fire Crystal", Quantity = 1 }
+        }, "test");
+
+        await Service.ReadBoardAsync(Realm, Player);   // fills all six seats
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
+
+        Assert.NotNull(await Service.StandingLureAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task HiringFreesTheSeat()
+    {
+        // Hiring is the main way a seat comes free, so a hired card must leave the board rather than
+        // sitting there marked hired and blocking its seat for good.
+        await FillWalletAsync();
+        var board = await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.HireAsync(Realm, Player, board[0].Slot);
+
+        var after = await Service.ReadBoardAsync(Realm, Player);
+        Assert.Equal(TavernRules.BoardSize - 1, after.Count);
+        Assert.DoesNotContain(board[0].Id, after.Select(r => r.Id));
+    }
+
+    // -----------------------------------------------------------------
+    // The paid refresh
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task APaidRefreshReplacesTheWholeBoard()
+    {
+        await FillPurseAsync();
+        var before = await Service.ReadBoardAsync(Realm, Player);
+
+        var outcome = await Service.RefreshAsync(Realm, Player);
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+
+        var after = await Service.ReadBoardAsync(Realm, Player);
+        Assert.Equal(TavernRules.BoardSize, after.Count);
+        Assert.Empty(after.Select(r => r.Id).Intersect(before.Select(r => r.Id)));
+    }
+
+    [Fact]
+    public async Task APaidRefreshCostsGold()
+    {
+        await FillPurseAsync(5_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.RefreshAsync(Realm, Player);
+
+        Assert.Equal(5_000 - TavernRules.RefreshCostGold, await Gold.BalanceAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task ARefreshNobodyCanAffordChangesNothing()
     {
         var before = await Service.ReadBoardAsync(Realm, Player);
 
-        await Service.RestockAsync(Realm, Player, locationTier: 3, biome: BiomeType.Volcanic, reason: "test");
-        var after = await Service.ReadBoardAsync(Realm, Player);
+        var outcome = await Service.RefreshAsync(Realm, Player);
 
-        Assert.Equal(TavernRules.BoardSize, after.Count);
-        Assert.Empty(after.Select(r => r.Id).Intersect(before.Select(r => r.Id)));
+        Assert.Equal(TavernError.CannotAfford, outcome.Error);
+        Assert.Equal(before.Select(r => r.Id), (await Service.ReadBoardAsync(Realm, Player)).Select(r => r.Id));
+    }
+
+    [Fact]
+    public async Task ARefreshThatCanFindNobodyGivesTheGoldBack()
+    {
+        // A refresh that charged for an empty room would be a bug the player pays for.
+        await FillPurseAsync(5_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        _content.Signatures = new List<SignatureDefinition>();
+        var outcome = await Service.RefreshAsync(Realm, Player);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(5_000, await Gold.BalanceAsync(Realm, Player));
     }
 
     [Fact]
@@ -117,10 +249,11 @@ public class TavernServiceTests : IDisposable
     [Fact]
     public async Task ContentWithNothingRollable_LeavesTheOldBoardAlone()
     {
+        await FreeSeatsAsync(1);
         var before = await Service.ReadBoardAsync(Realm, Player);
 
         _content.Signatures = new List<SignatureDefinition>();
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         var after = await Service.ReadBoardAsync(Realm, Player);
         Assert.Equal(before.Select(r => r.Id), after.Select(r => r.Id));
@@ -164,7 +297,9 @@ public class TavernServiceTests : IDisposable
 
         var (outcome, hired) = await Service.HireAsync(Realm, Player, 0);
 
-        Assert.Equal(TavernError.AlreadyHired, outcome.Error);
+        // The recruit left the board when they were hired, so the seat is empty rather than "already
+        // hired". Either way the second attempt takes nothing and charges nothing.
+        Assert.Equal(TavernError.NoSuchSlot, outcome.Error);
         Assert.Null(hired);
         Assert.Single(await Service.ReadHiredAsync(Realm, Player));
     }
@@ -217,12 +352,13 @@ public class TavernServiceTests : IDisposable
 
         for (int i = 0; i < TavernRules.RosterCap; i++)
         {
-            await Service.RestockAsync(Realm, Player, 1, null, "test");
-            Assert.True((await Service.HireAsync(Realm, Player, 0)).Outcome.Succeeded, $"hire {i} should succeed");
+            var board = await Service.ReadBoardAsync(Realm, Player);
+            Assert.True((await Service.HireAsync(Realm, Player, board[0].Slot)).Outcome.Succeeded,
+                $"hire {i} should succeed");
         }
 
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
-        var (outcome, _) = await Service.HireAsync(Realm, Player, 0);
+        var last = await Service.ReadBoardAsync(Realm, Player);
+        var (outcome, _) = await Service.HireAsync(Realm, Player, last[0].Slot);
 
         Assert.Equal(TavernError.RosterFull, outcome.Error);
         Assert.Equal(TavernRules.RosterCap, (await Service.ReadHiredAsync(Realm, Player)).Count);
@@ -236,7 +372,8 @@ public class TavernServiceTests : IDisposable
         var ids = new List<string>();
         for (int i = 0; i < 3; i++)
         {
-            await Service.RestockAsync(Realm, Player, 1, null, "test");
+            await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
             var (_, hired) = await Service.HireAsync(Realm, Player, 0);
             ids.Add(hired!.CharacterId);
         }
@@ -309,7 +446,8 @@ public class TavernServiceTests : IDisposable
         await GiveCrystalsAsync();
         await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
 
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         Assert.Null(await Service.StandingLureAsync(Realm, Player));
     }
@@ -325,7 +463,8 @@ public class TavernServiceTests : IDisposable
         }, "test");
 
         await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         var lures = await Service.ReadLuresAsync(Realm, Player);
         var arcane = lures.Single(l => l.Affinity == AffinityTypes.Arcane);
@@ -335,7 +474,8 @@ public class TavernServiceTests : IDisposable
 
         // And it accumulates.
         await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         arcane = (await Service.ReadLuresAsync(Realm, Player)).Single(l => l.Affinity == AffinityTypes.Arcane);
         Assert.Equal(2, arcane.MissedRestocks);
@@ -345,8 +485,10 @@ public class TavernServiceTests : IDisposable
     public async Task AnUnluredRestockBuildsNoPity()
     {
         // Pity is what a lure buys when it does not pay off, not a reward for playing.
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         Assert.Empty(await Service.ReadLuresAsync(Realm, Player));
     }
@@ -362,15 +504,27 @@ public class TavernServiceTests : IDisposable
 
         // Build a drought on Arcane, which this signature cannot roll.
         await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Arcane, TavernRules.LureStrength.Perfect);
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         var arcane = (await Service.ReadLuresAsync(Realm, Player))
             .Single(l => l.Affinity == AffinityTypes.Arcane);
         Assert.Equal(1, arcane.MissedRestocks);
 
-        // Fire, which it can roll, at a ceiling-high target over six slots: it will appear.
+        // Now a hit, forced rather than hoped for: one arrival against a 60% target is a coin flip,
+        // so content is narrowed to a signature that can only roll Fire.
+        _content.Signatures = new List<SignatureDefinition>
+        {
+            new()
+            {
+                SignatureId = "warrior_cleave", Class = "Warrior", BaseAbilityLinkName = "Cleaving_Blow_1",
+                AllowedAffinities = new List<AffinityTypes> { AffinityTypes.Fire }
+            }
+        };
+
         await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
 
         var fire = (await Service.ReadLuresAsync(Realm, Player)).Single(l => l.Affinity == AffinityTypes.Fire);
         Assert.Equal(0, fire.MissedRestocks);
@@ -381,17 +535,33 @@ public class TavernServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ALuredBoardLeansTheWayItWasPaidTo()
+    public async Task APaidRefreshSpendsTheStandingLureOnTheBoardItRolls()
     {
+        // A refresh still rolls a whole board, so this is where a lure's share is visible. An
+        // arrival is a single roll and would be a coin flip to assert on.
         await GiveCrystalsAsync();
-        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+        await FillPurseAsync();
+        await Service.ReadBoardAsync(Realm, Player);
 
-        await Service.RestockAsync(Realm, Player, 1, null, "test");
+        // Narrowed to a signature that can only roll Fire, so this asserts the lure is carried into
+        // the roll rather than gambling on a share. The share itself is pinned deterministically over
+        // thousands of seeded rolls in TavernLureTests - an unseeded six-slot sample is not evidence.
+        _content.Signatures = new List<SignatureDefinition>
+        {
+            new()
+            {
+                SignatureId = "warrior_cleave", Class = "Warrior", BaseAbilityLinkName = "Cleaving_Blow_1",
+                AllowedAffinities = new List<AffinityTypes> { AffinityTypes.Fire }
+            }
+        };
+
+        await Service.PlaceLureAsync(Realm, Player, AffinityTypes.Fire, TavernRules.LureStrength.Perfect);
+        await Service.RefreshAsync(Realm, Player);
+
+        // The lure must have been spent by the board it paid for.
+        Assert.Null(await Service.StandingLureAsync(Realm, Player));
 
         var board = await Service.ReadBoardAsync(Realm, Player);
-        int fire = board.Count(r => r.Affinity == AffinityTypes.Fire);
-
-        // Six slots at 60% each; two or more is a very safe floor and this is not a statistics test.
-        Assert.True(fire >= 2, $"expected a Fire-leaning board, got {fire} of {board.Count}");
+        Assert.All(board, r => Assert.Equal(AffinityTypes.Fire, r.Affinity));
     }
 }

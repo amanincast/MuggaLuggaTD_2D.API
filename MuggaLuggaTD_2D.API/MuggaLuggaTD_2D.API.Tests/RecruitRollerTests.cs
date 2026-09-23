@@ -204,14 +204,14 @@ public class RecruitRollerTests
     }
 
     [Fact]
-    public void OnlyAFightableSiteRestocksTheBoard()
+    public void OnlyAFightableSiteBringsARecruit()
     {
-        Assert.True(TavernRules.RestocksTheBoard(LocationType.Dungeon));
-        Assert.True(TavernRules.RestocksTheBoard(LocationType.Portal));
+        Assert.True(TavernRules.BringsARecruit(LocationType.Dungeon));
+        Assert.True(TavernRules.BringsARecruit(LocationType.Portal));
 
         // Taking a keep takes a region. It must not also buy a night at the inn.
-        Assert.False(TavernRules.RestocksTheBoard(LocationType.Castle));
-        Assert.False(TavernRules.RestocksTheBoard(LocationType.Outpost));
+        Assert.False(TavernRules.BringsARecruit(LocationType.Castle));
+        Assert.False(TavernRules.BringsARecruit(LocationType.Outpost));
     }
 
     private static int Weight(IReadOnlyList<(CharacterRarity Rarity, int Weight)> odds, CharacterRarity rarity)

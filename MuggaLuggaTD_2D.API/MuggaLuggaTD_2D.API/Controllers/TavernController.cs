@@ -26,13 +26,16 @@ public class TavernController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly TavernService _tavern;
     private readonly MaterialWalletService _wallet;
+    private readonly GoldService _gold;
 
     public TavernController(
-        ApplicationDbContext context, TavernService tavern, MaterialWalletService wallet)
+        ApplicationDbContext context, TavernService tavern, MaterialWalletService wallet,
+        GoldService gold)
     {
         _context = context;
         _tavern = tavern;
         _wallet = wallet;
+        _gold = gold;
     }
 
     [HttpGet]
@@ -123,6 +126,42 @@ public class TavernController : ControllerBase
         return Ok(await BoardResponseAsync(gameInstanceId, userId));
     }
 
+    /// <summary>
+    /// Buys a fresh room. The only thing that removes a recruit the player did not hire, so it is
+    /// always their decision that a face on the board is no longer worth waiting for.
+    /// </summary>
+    [HttpPost("refresh")]
+    public async Task<ActionResult<TavernBoardResponse>> Refresh(
+        Guid gameInstanceId, [FromBody] TavernRefreshRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        if (request.SharedContractVersion != SharedContract.Version)
+        {
+            return Conflict(new
+            {
+                error = "Shared contract version mismatch.",
+                expected = SharedContract.Version,
+                received = request.SharedContractVersion
+            });
+        }
+
+        var outcome = await _tavern.RefreshAsync(gameInstanceId, userId);
+
+        if (!outcome.Succeeded)
+        {
+            return outcome.Error switch
+            {
+                TavernError.CannotAfford => Conflict(new { error = outcome.Message }),
+                _ => BadRequest(new { error = outcome.Message })
+            };
+        }
+
+        return Ok(await BoardResponseAsync(gameInstanceId, userId));
+    }
+
     private async Task<TavernBoardResponse> BoardResponseAsync(Guid gameInstanceId, string userId)
     {
         var board = await _tavern.ReadBoardAsync(gameInstanceId, userId);
@@ -134,7 +173,9 @@ public class TavernController : ControllerBase
             board.Count > 0 ? board[0].RolledAt : DateTime.UtcNow,
             roster.Count,
             TavernRules.RosterCap,
-            lures.Select(ToLureState).ToList());
+            lures.Select(ToLureState).ToList(),
+            TavernRules.RefreshCostGold,
+            await _gold.BalanceAsync(gameInstanceId, userId));
     }
 
     private static TavernLureState ToLureState(Models.TavernLure lure)

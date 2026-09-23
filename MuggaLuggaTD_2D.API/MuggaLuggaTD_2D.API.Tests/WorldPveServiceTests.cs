@@ -34,7 +34,7 @@ public class WorldPveServiceTests : IDisposable
         new(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
 
     private TavernService Tavern =>
-        new(_db, _content, Wallet, new FakeSessionLog(), NullLogger<TavernService>.Instance);
+        new(_db, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
 
     private GoldService Gold =>
         new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
