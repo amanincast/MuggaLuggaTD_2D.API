@@ -138,6 +138,15 @@ public class PlayerGameDataController : ControllerBase
                 $"user={userId} dropped={materials.Removed} stack(s) quantity={materials.TotalQuantity}");
         }
 
+        // Level is worth power, and the experience curve now has a cap to hold it to.
+        var levels = _saveValidator.ClampLevels(saveNode);
+        if (levels.Changed)
+        {
+            _sessionLog.Log("SAVE-LEVEL",
+                $"user={userId} clamped={levels.Clamped} highest={levels.HighestSeen} " +
+                $"max={MuggaLuggaTD.Shared.Gameplay.CharacterProgression.MaxLevel}");
+        }
+
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
 
         if (existingData != null)

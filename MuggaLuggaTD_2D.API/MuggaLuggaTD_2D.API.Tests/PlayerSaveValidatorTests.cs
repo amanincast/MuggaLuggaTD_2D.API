@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Enums;
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Services;
 using MuggaLuggaTD_2D.API.Tests.TestSupport;
 
@@ -315,6 +316,83 @@ public class PlayerSaveValidatorTests
         return new JsonObject { ["ItemInventory"] = new JsonObject { ["Items"] = array } };
     }
 
+
+    // -----------------------------------------------------------------
+    // Levels
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void ALevelInsideTheCurveIsLeftAlone()
+    {
+        var save = SaveWithLevels(1, 12, CharacterProgression.MaxLevel);
+
+        var result = ValidatorOfferingTheUsualPool().ClampLevels(save);
+
+        Assert.False(result.Changed);
+        Assert.Equal(CharacterProgression.MaxLevel, result.HighestSeen);
+        Assert.Equal(new long[] { 1, 12, CharacterProgression.MaxLevel }, LevelsIn(save));
+    }
+
+    [Fact]
+    public void AHandEditedLevelIsPulledBackToTheCap()
+    {
+        // Level scales health and ability damage, and PvP power is recomputed from this roster, so a
+        // level 9999 in a save file is a power rating in a siege.
+        var save = SaveWithLevels(9999, 4);
+
+        var result = ValidatorOfferingTheUsualPool().ClampLevels(save);
+
+        Assert.True(result.Changed);
+        Assert.Equal(1, result.Clamped);
+        Assert.Equal(9999, result.HighestSeen);
+        Assert.Equal(new long[] { CharacterProgression.MaxLevel, 4 }, LevelsIn(save));
+    }
+
+    [Fact]
+    public void ALevelBelowOneIsPulledUp()
+    {
+        var save = SaveWithLevels(0, -7);
+
+        var result = ValidatorOfferingTheUsualPool().ClampLevels(save);
+
+        Assert.Equal(2, result.Clamped);
+        Assert.Equal(new long[] { 1, 1 }, LevelsIn(save));
+    }
+
+    [Fact]
+    public void ASaveWithNoCharactersIsNotATragedy()
+    {
+        var validator = ValidatorOfferingTheUsualPool();
+
+        Assert.False(validator.ClampLevels(JsonNode.Parse("{}")).Changed);
+        Assert.False(validator.ClampLevels(JsonNode.Parse("[]")).Changed);
+        Assert.False(validator.ClampLevels(null).Changed);
+    }
+
+    [Fact]
+    public void ACharacterWithNoLevelAtAllIsSkipped_NotDefaulted()
+    {
+        // Writing a level onto a character that never had one would invent progression rather than
+        // bound it.
+        var save = JsonNode.Parse("""{"Characters":[{"CharacterName":"Nameless"}]}""");
+
+        var result = ValidatorOfferingTheUsualPool().ClampLevels(save);
+
+        Assert.False(result.Changed);
+        Assert.Null(save!["Characters"]![0]!["Level"]);
+    }
+
+    private static JsonNode SaveWithLevels(params long[] levels)
+    {
+        var characters = new JsonArray();
+        foreach (var level in levels)
+            characters.Add(new JsonObject { ["CharacterName"] = "Hero", ["Level"] = level });
+
+        return new JsonObject { ["Characters"] = characters };
+    }
+
+    private static long[] LevelsIn(JsonNode? save)
+        => ((JsonArray)save!["Characters"]!).Select(c => (long)c!["Level"]!).ToArray();
     // -----------------------------------------------------------------
 
     private static JsonArray AppliedUpgrades(JsonNode? save)

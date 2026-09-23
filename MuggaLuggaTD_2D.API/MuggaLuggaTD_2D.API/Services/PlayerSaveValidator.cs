@@ -11,6 +11,12 @@ public record UpgradeValidationResult(int Accepted, int Rejected, IReadOnlyList<
     public bool Changed => Rejected > 0;
 }
 
+/// <summary>How many character levels were out of range and pulled back in.</summary>
+public record LevelClampResult(int Clamped, long HighestSeen)
+{
+    public bool Changed => Clamped > 0;
+}
+
 /// <summary>How many client-written material stacks were dropped from a save.</summary>
 public record MaterialStripResult(int Removed, int TotalQuantity)
 {
@@ -118,9 +124,51 @@ public class PlayerSaveValidator
         return new MaterialStripResult(removed, quantity);
     }
 
+    /// <summary>
+    /// Pulls every character level back inside 1..<see cref="CharacterProgression.MaxLevel"/>.
+    ///
+    /// <para>Level is client-written and it is worth money: it scales health and ability damage, and
+    /// PvP power is recomputed from this roster, so a hand-edited level 9999 is a hand-edited power
+    /// rating. There was no bound to check against until the experience curve gained a cap; now there
+    /// is one, so the save is held to it.</para>
+    ///
+    /// <para>This bounds the <i>ceiling</i>, not the climb - a save can still claim level 30 without
+    /// having earned it, because the server does not yet track how much experience it granted. That
+    /// needs the same grant ledger the equipment gap is waiting on.</para>
+    /// </summary>
+    public LevelClampResult ClampLevels(JsonNode? save)
+    {
+        int clamped = 0;
+        long highest = 0;
+
+        if (save is not JsonObject root || root["Characters"] is not JsonArray characters)
+            return new LevelClampResult(0, 0);
+
+        foreach (var character in characters)
+        {
+            if (character is not JsonObject characterObject) continue;
+
+            var level = ReadLong(characterObject["Level"]);
+            if (level == null) continue;
+
+            if (level > highest) highest = level.Value;
+
+            var bounded = Math.Clamp(level.Value, 1, CharacterProgression.MaxLevel);
+            if (bounded == level.Value) continue;
+
+            characterObject["Level"] = bounded;
+            clamped++;
+        }
+
+        return new LevelClampResult(clamped, highest);
+    }
+
     /// <summary>Materials are ItemTypes.Material (14), whatever else the client wrote on them.</summary>
     private static bool IsMaterial(JsonObject item)
         => ReadInt(item["ItemType"]) == (int)Enums.ItemTypes.Material;
+
+    private static long? ReadLong(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<long>(out var number) ? number : null;
 
     private static int? ReadInt(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<int>(out var number) ? number : null;
