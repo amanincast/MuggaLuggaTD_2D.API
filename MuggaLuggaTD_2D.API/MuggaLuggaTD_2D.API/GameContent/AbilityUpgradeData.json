@@ -1,6 +1,191 @@
 {
   "AbilityUpgrades": [
     {
+      "AbilityLinkName": "Arcane_Detonation_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Arcane Detonation by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Arcane Detonation by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Arcane Detonation by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Arcane Detonation by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Arcane Detonation",
+          "Description": "Arcane Detonation deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Arcane Detonation",
+          "Description": "Arcane Detonation erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Cinder Detonation",
+          "Description": "Arcane Detonation burns what it hits instead of unravelling it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 65
+            }
+          ]
+        },
+        {
+          "Name": "Hollow Detonation",
+          "Description": "Arcane Detonation withers what it hits instead of unravelling it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 6
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 6,
+              "Value": 65
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Arcane_Shield_1",
+      "Upgrades": [
+        {
+          "Name": "Hardened Ward",
+          "Description": "Reduce the cooldown of Arcane Shield by 8%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.08,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Swift Ward",
+          "Description": "Reduce the cooldown of Arcane Shield by a further 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Retaliation",
+          "Description": "Arcane Shield deals 10 more damage to what breaks against it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Greater Retaliation",
+          "Description": "Increase the damage of Arcane Shield by 15%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Broader Ward",
+          "Description": "Increase the size of Arcane Shield by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Withering Ward",
+          "Description": "Arcane Shield withers what breaks against it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 6
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 6,
+              "Value": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
       "AbilityLinkName": "Bow_Attack_1",
       "Upgrades": [
         {
@@ -20,7 +205,7 @@
           "Modifiers": [
             {
               "UpgradeModifierType": 1,
-              "Value": 0.10,
+              "Value": 0.1,
               "Property": "Damage"
             }
           ]
@@ -42,7 +227,7 @@
           "Modifiers": [
             {
               "UpgradeModifierType": 1,
-              "Value": 0.10,
+              "Value": 0.1,
               "Property": "TravelSpeed"
             }
           ]
@@ -109,102 +294,760 @@
       ]
     },
     {
-      "AbilityLinkName": "Inferno_Blast_1",
-      "Upgrades": [
-        {
-          "Name": "Increased Damage",
-          "Description": "Increase the damage of Inferno Blast by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
-        },
-        {
-          "Name": "Reduced Cooldown",
-          "Description": "Reduce the cooldown of Inferno Blast by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
-        },
-        {
-          "Name": "Increased Range",
-          "Description": "Increase the range of Inferno Blast by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
-        },
-        {
-          "Name": "Larger Explosion",
-          "Description": "Increase the blast size of Inferno Blast by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
-        }
-      ]
-    },
-    {
-      "AbilityLinkName": "Arcane_Detonation_1",
-      "Upgrades": [
-        {
-          "Name": "Increased Damage",
-          "Description": "Increase the damage of Arcane Detonation by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
-        },
-        {
-          "Name": "Reduced Cooldown",
-          "Description": "Reduce the cooldown of Arcane Detonation by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
-        },
-        {
-          "Name": "Increased Range",
-          "Description": "Increase the range of Arcane Detonation by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
-        },
-        {
-          "Name": "Larger Explosion",
-          "Description": "Increase the blast size of Arcane Detonation by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
-        }
-      ]
-    },
-    {
       "AbilityLinkName": "Impact_Strike_1",
       "Upgrades": [
         {
           "Name": "Increased Damage",
           "Description": "Increase the damage of Impact Strike by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
         },
         {
           "Name": "Reduced Cooldown",
           "Description": "Reduce the cooldown of Impact Strike by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
         },
         {
           "Name": "Increased Range",
           "Description": "Increase the range of Impact Strike by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
         },
         {
           "Name": "Larger Explosion",
           "Description": "Increase the blast size of Impact Strike by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Impact Strike",
+          "Description": "Impact Strike deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Impact Strike",
+          "Description": "Impact Strike erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Shattering Impact",
+          "Description": "Impact Strike staggers what it hits instead of bleeding it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 3
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 3,
+              "Value": 55
+            }
+          ]
+        },
+        {
+          "Name": "Scorching Impact",
+          "Description": "Impact Strike burns what it hits instead of bleeding it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 55
+            }
+          ]
         }
       ]
     },
     {
-      "AbilityLinkName": "Volatile_Eruption_1",
+      "AbilityLinkName": "Inferno_Blast_1",
       "Upgrades": [
         {
           "Name": "Increased Damage",
-          "Description": "Increase the damage of Volatile Eruption by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+          "Description": "Increase the damage of Inferno Blast by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
         },
         {
           "Name": "Reduced Cooldown",
-          "Description": "Reduce the cooldown of Volatile Eruption by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+          "Description": "Reduce the cooldown of Inferno Blast by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
         },
         {
           "Name": "Increased Range",
-          "Description": "Increase the range of Volatile Eruption by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+          "Description": "Increase the range of Inferno Blast by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
         },
         {
           "Name": "Larger Explosion",
-          "Description": "Increase the blast size of Volatile Eruption by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+          "Description": "Increase the blast size of Inferno Blast by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Inferno Blast",
+          "Description": "Inferno Blast deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Inferno Blast",
+          "Description": "Inferno Blast erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Shadowed Inferno",
+          "Description": "Inferno Blast withers what it hits instead of burning it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 6
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 6,
+              "Value": 80
+            }
+          ]
+        },
+        {
+          "Name": "Quaking Inferno",
+          "Description": "Inferno Blast staggers what it hits instead of burning it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 3
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 3,
+              "Value": 80
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Lightning_Strike_1",
+      "Upgrades": [
+        {
+          "Name": "Stronger Current",
+          "Description": "Increase the damage of Lightning Strike by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Quicker Recovery",
+          "Description": "Reduce the cooldown of Lightning Strike by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Farther Arc",
+          "Description": "Increase the range of Lightning Strike by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Overcharge",
+          "Description": "Lightning Strike deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Forked Lightning",
+          "Description": "Lightning Strike chains to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        },
+        {
+          "Name": "Wider Bolt",
+          "Description": "Increase the size of Lightning Strike by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Thunderclap",
+          "Description": "Lightning Strike staggers what it hits instead of shocking it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 3
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 3,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Stormfire",
+          "Description": "Lightning Strike burns what it hits instead of shocking it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Magic_Burst_1",
+      "Upgrades": [
+        {
+          "Name": "Greater Burst",
+          "Description": "Increase the damage of Magic Burst by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Rapid Burst",
+          "Description": "Reduce the cooldown of Magic Burst by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Distant Burst",
+          "Description": "Increase the range of Magic Burst by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Unmaking",
+          "Description": "Magic Burst deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Burst",
+          "Description": "Increase the size of Magic Burst by 30%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.3,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Twin Burst",
+          "Description": "Magic Burst erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Void Burst",
+          "Description": "Magic Burst withers what it hits instead of unravelling it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 6
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 6,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Cinder Burst",
+          "Description": "Magic Burst burns what it hits instead of unravelling it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Magic_Missile_1",
+      "Upgrades": [
+        {
+          "Name": "Focused Bolt",
+          "Description": "Increase the damage of Magic Missile by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Rapid Casting",
+          "Description": "Reduce the cooldown of Magic Missile by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Extended Reach",
+          "Description": "Increase the range of Magic Missile by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Bolt",
+          "Description": "Magic Missile deals 8 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 8,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Splitting Missile",
+          "Description": "Magic Missile fires one more bolt.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Piercing Missile",
+          "Description": "Magic Missile passes through one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Arcing Missile",
+          "Description": "Magic Missile chains to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        },
+        {
+          "Name": "Ember Missile",
+          "Description": "Magic Missile burns rather than unravels.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Glacial Missile",
+          "Description": "Magic Missile chills rather than unravels.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 2
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 2,
+              "Value": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Melee_Slash_1",
+      "Upgrades": [
+        {
+          "Name": "Honed Edge",
+          "Description": "Increase the damage of Melee Slash by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Swift Swing",
+          "Description": "Reduce the cooldown of Melee Slash by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Long Sweep",
+          "Description": "Increase the reach of Melee Slash by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Cleaving Blow",
+          "Description": "Melee Slash deals 8 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 8,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Follow Through",
+          "Description": "Melee Slash carries into one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Wide Arc",
+          "Description": "Increase the size of Melee Slash by 30%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.3,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Ember Edge",
+          "Description": "Melee Slash burns what it hits instead of bleeding it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Storm Edge",
+          "Description": "Melee Slash shocks what it hits, so the next hit on it chains further.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 4
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 4,
+              "Value": 50
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Melee_Stab_1",
+      "Upgrades": [
+        {
+          "Name": "Sharpened Point",
+          "Description": "Increase the damage of Melee Stab by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Quick Thrust",
+          "Description": "Reduce the cooldown of Melee Stab by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Longer Reach",
+          "Description": "Increase the reach of Melee Stab by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Deeper Wound",
+          "Description": "Melee Stab deals 8 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 8,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Run Through",
+          "Description": "Melee Stab passes through one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Broad Guard",
+          "Description": "Increase the size of Melee Stab by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Searing Point",
+          "Description": "Melee Stab burns what it hits instead of bleeding it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 50
+            }
+          ]
+        },
+        {
+          "Name": "Frostbitten Point",
+          "Description": "Melee Stab chills what it hits instead of bleeding it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 2
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 2,
+              "Value": 50
+            }
+          ]
         }
       ]
     },
@@ -214,22 +1057,96 @@
         {
           "Name": "Increased Damage",
           "Description": "Increase the damage of Plasma Burst by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
         },
         {
           "Name": "Reduced Cooldown",
           "Description": "Reduce the cooldown of Plasma Burst by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
         },
         {
           "Name": "Increased Range",
           "Description": "Increase the range of Plasma Burst by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
         },
         {
           "Name": "Larger Explosion",
           "Description": "Increase the blast size of Plasma Burst by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Plasma Burst",
+          "Description": "Plasma Burst deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Plasma Burst",
+          "Description": "Plasma Burst erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Chained Plasma",
+          "Description": "Plasma Burst chains to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        },
+        {
+          "Name": "Molten Plasma",
+          "Description": "Plasma Burst burns what it hits instead of shocking it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 1
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 1,
+              "Value": 60
+            }
+          ]
         }
       ]
     },
@@ -239,145 +1156,197 @@
         {
           "Name": "Increased Damage",
           "Description": "Increase the damage of Shadow Explosion by 10%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.10, "Property": "Damage" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
         },
         {
           "Name": "Reduced Cooldown",
           "Description": "Reduce the cooldown of Shadow Explosion by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 5, "Value": 0.05, "Property": "ActivationCooldown" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
         },
         {
           "Name": "Increased Range",
           "Description": "Increase the range of Shadow Explosion by 5%.",
-          "Modifiers": [ { "UpgradeModifierType": 1, "Value": 0.05, "Property": "Range" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
         },
         {
           "Name": "Larger Explosion",
           "Description": "Increase the blast size of Shadow Explosion by 25%.",
-          "Modifiers": [ { "UpgradeModifierType": 2, "Value": 0.25, "Property": "CollisionScale" } ]
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Shadow Explosion",
+          "Description": "Shadow Explosion deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Shadow Explosion",
+          "Description": "Shadow Explosion erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Creeping Shadow",
+          "Description": "Shadow Explosion chains to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        },
+        {
+          "Name": "Unmaking Shadow",
+          "Description": "Shadow Explosion unravels what it hits instead of withering it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 7
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 7,
+              "Value": 75
+            }
+          ]
         }
       ]
     },
     {
-      "AbilityName": "Melee Stab",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
-      "AbilityLinkName": "Melee_Stab_1",
-      "ActivationCooldown": 2.0,
-      "Damage": 20,
-      "Range": 1.5,
-      "AnimationPrefix": "Stab",
-      "AffinityStats": [
+      "AbilityLinkName": "Volatile_Eruption_1",
+      "Upgrades": [
         {
-          "AffinityType": 0,
-          "BaseDamage": 50
-        }
-      ],
-      "Classification": 1,
-      "TravelSpeed": 100.0
-    },
-    {
-      "AbilityName": "Melee Slash",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
-      "AbilityLinkName": "Melee_Slash_1",
-      "ActivationCooldown": 2.0,
-      "Damage": 20,
-      "Range": 1.5,
-      "AnimationPrefix": "Attack",
-      "AffinityStats": [
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Volatile Eruption by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
         {
-          "AffinityType": 0,
-          "BaseDamage": 50
-        }
-      ],
-      "Classification": 1,
-      "TravelSpeed": 100.0
-    },
-    {
-      "AbilityName": "Magic Missile",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
-      "AbilityLinkName": "Magic_Missile_1",
-      "ActivationCooldown": 5.0,
-      "Damage": 20,
-      "Range": 10.0,
-      "AnimationPrefix": "SpellCast",
-      "AffinityStats": [
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Volatile Eruption by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
         {
-          "AffinityType": 7,
-          "BaseDamage": 50
-        }
-      ],
-      "Classification": 1,
-      "TravelSpeed": 30.0
-    },
-    {
-      "AbilityName": "Bow Attack",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Bow_Attack_1",
-      "AbilityLinkName": "Bow_Attack_1",
-      "ActivationCooldown": 3.0,
-      "Damage": 20,
-      "Range": 20.0,
-      "AnimationPrefix": "Shoot",
-      "AffinityStats": [
+          "Name": "Increased Range",
+          "Description": "Increase the range of Volatile Eruption by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
         {
-          "AffinityType": 0,
-          "BaseDamage": 50
-        }
-      ],
-      "Classification": 1,
-      "TravelSpeed": 80.0
-    },
-    {
-      "AbilityName": "Arcane Shield",
-      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Arcane_Shield_1",
-      "AbilityLinkName": "Arcane_Shield_1",
-      "ActivationCooldown": 10.0,
-      "Duration": 5.0,
-      "DamageMultiplier": 0.5,
-      "MaxActivations": 1,
-      "AnimationPrefix": "SpellCast",
-      "AffinityStats": [
+          "Name": "Larger Explosion",
+          "Description": "Increase the blast size of Volatile Eruption by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
         {
-          "AffinityType": 7,
-          "BaseDamage": 50
+          "Name": "Heavier Volatile Eruption",
+          "Description": "Volatile Eruption deals 10 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 10,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Repeating Volatile Eruption",
+          "Description": "Volatile Eruption erupts once more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Charged Eruption",
+          "Description": "Volatile Eruption shocks what it hits instead of burning it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 11
+            },
+            {
+              "UpgradeModifierType": 9,
+              "Value": 4
+            },
+            {
+              "UpgradeModifierType": 13,
+              "AffinityType": 4,
+              "Value": 70
+            }
+          ]
+        },
+        {
+          "Name": "Unstable Eruption",
+          "Description": "Volatile Eruption chains to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
         }
-      ],
-      "Classification": 2
-    },
-    {
-      "AbilityName": "Snipe Shot",
-      "PrefabLocation": "Prefabs/Abilities/Offense/Snipe_Shot_1",
-      "AbilityLinkName": "Snipe_Shot_1",
-      "Cooldown": 3.0,
-      "Damage": 15,
-      "Range": 12.0,
-      "AnimationPrefix": "Shoot"
-    },
-    {
-      "AbilityName": "Evasion",
-      "PrefabLocation": "Prefabs/Abilities/Defense/Evasion_1",
-      "AbilityLinkName": "Evasion_1",
-      "Cooldown": 8.0,
-      "Duration": 4.0,
-      "DodgeChance": 0.25,
-      "AnimationPrefix": "SpellCast"
-    },
-    {
-      "AbilityName": "Shield Bash",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Shield_Bash_1",
-      "AbilityLinkName": "Shield_Bash_1",
-      "Cooldown": 6.0,
-      "Damage": 10,
-      "StunDuration": 2.0,
-      "AnimationPrefix": "Attack"
-    },
-    {
-      "AbilityName": "Fortify",
-      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Fortify_1",
-      "AbilityLinkName": "Fortify_1",
-      "Cooldown": 12.0,
-      "Duration": 5.0,
-      "DamageReduction": 0.3,
-      "AnimationPrefix": "SpellCast"
+      ]
     }
   ]
 }
