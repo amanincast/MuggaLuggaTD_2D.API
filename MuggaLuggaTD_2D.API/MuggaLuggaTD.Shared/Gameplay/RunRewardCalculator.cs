@@ -85,10 +85,17 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return rewards;
         }
 
+        /// <summary>
+        /// The enemy the reward is priced from. Via <see cref="EnemyStatScaling"/> so this is the same
+        /// health the client gives that enemy - the two used to differ by one level of scaling, and the
+        /// payout was 7-15% light as a result.
+        /// </summary>
         private static long ScaledEnemyHealth(RunTuning tuning, int enemyLevel)
         {
-            var scaled = tuning.BaseEnemyHealth * (1f + tuning.EnemyHealthMultiplierPerLevel * (enemyLevel - 1));
-            return (long)Math.Max(1, scaled);
+            long scaled = EnemyStatScaling.ScaledHealth(
+                tuning.BaseEnemyHealth, enemyLevel, tuning.EnemyHealthMultiplierPerLevel);
+
+            return scaled < 1 ? 1 : scaled;
         }
 
         /// <summary>

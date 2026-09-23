@@ -74,6 +74,12 @@ namespace MuggaLuggaTD.Shared
         //   through an endpoint. They are the Tavern's currency, so a client-written balance would be
         //   a client-minted one. A 1.13.0 client keeps writing materials into its save and would
         //   believe it holds what the server has dropped.
-        public const string Version = "1.14.0";
+        // 1.15.0 - the balance pass (design doc 03). Enemy health and damage scale through one shared
+        //   EnemyStatScaling (the client and the reward pricing disagreed by a level), enemy damage is
+        //   a 0.4 factor of the ability growing linearly rather than the ability's full value
+        //   compounding at 10%, and levels cost 4000 x 1.2^(L-1) to a cap of 30 instead of
+        //   100 x 1.5^(L-1) uncapped. A 1.14.0 client fights different enemies and levels at a
+        //   different rate than the server prices.
+        public const string Version = "1.15.0";
     }
 }
