@@ -27,6 +27,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>One more elite per wave every this many waves after the first elite wave.</summary>
         public int EliteIntervalWaves { get; set; } = 2;
 
+        /// <summary>
+        /// The lowest tier whose last wave carries a boss. Zero for none - a tier-1 dungeon is a
+        /// three-wave errand and does not want a set piece.
+        /// </summary>
+        public int BossFromTier { get; set; } = 3;
+
         /// <summary>Health of a representative enemy at level 1, used to value a kill.</summary>
         public long BaseEnemyHealth { get; set; } = 50;
 
