@@ -140,6 +140,12 @@ namespace MuggaLuggaTD.Shared
         //   saving up was self-defeating. Hiring frees a seat, a full board takes nobody, and a paid
         //   refresh (RefreshCostGold) is the only thing that removes a recruit the player did not
         //   hire. RestocksTheBoard is renamed BringsARecruit to say what it now means.
-        public const string Version = "1.26.0";
+        // 1.27.0 - the Tavern refresh escalates. Each paid refresh costs double the last
+        //   (TavernRules.RefreshCostFor), and a claimed dungeon puts it back to the base price. A flat
+        //   price was no gate for a rich player: enough gold bought enough rolls to fish for one exact
+        //   class/signature/affinity, which made lures pointless - there is no reason to spend a
+        //   crystal shifting odds you can simply buy more dice against. The reset is dungeon-gated
+        //   rather than timed, because the escalation is meant as a pull back toward playing.
+        public const string Version = "1.27.0";
     }
 }

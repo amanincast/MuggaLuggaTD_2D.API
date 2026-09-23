@@ -174,7 +174,7 @@ public class TavernController : ControllerBase
             roster.Count,
             TavernRules.RosterCap,
             lures.Select(ToLureState).ToList(),
-            TavernRules.RefreshCostGold,
+            await _tavern.RefreshCostAsync(gameInstanceId, userId),
             await _gold.BalanceAsync(gameInstanceId, userId));
     }
 
