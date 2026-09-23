@@ -85,17 +85,71 @@ public class TavernController : ControllerBase
             materials.Select(m => new MaterialBalance(m.MaterialName, m.Quantity)).ToList()));
     }
 
+    /// <summary>
+    /// Offers a crystal against the next restock. The crystal is spent now; the board it buys arrives
+    /// with the next dungeon cleared, because a dungeon is still the only refresh.
+    /// </summary>
+    [HttpPost("lure")]
+    public async Task<ActionResult<TavernBoardResponse>> Lure(
+        Guid gameInstanceId, [FromBody] TavernLureRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        if (request.SharedContractVersion != SharedContract.Version)
+        {
+            return Conflict(new
+            {
+                error = "Shared contract version mismatch.",
+                expected = SharedContract.Version,
+                received = request.SharedContractVersion
+            });
+        }
+
+        var (outcome, _) = await _tavern.PlaceLureAsync(
+            gameInstanceId, userId, request.Affinity, request.Strength);
+
+        if (!outcome.Succeeded)
+        {
+            return outcome.Error switch
+            {
+                TavernError.LureAlreadyStanding => Conflict(new { error = outcome.Message }),
+                TavernError.CannotAfford => Conflict(new { error = outcome.Message }),
+                _ => BadRequest(new { error = outcome.Message })
+            };
+        }
+
+        return Ok(await BoardResponseAsync(gameInstanceId, userId));
+    }
+
     private async Task<TavernBoardResponse> BoardResponseAsync(Guid gameInstanceId, string userId)
     {
         var board = await _tavern.ReadBoardAsync(gameInstanceId, userId);
         var roster = await _tavern.ReadHiredAsync(gameInstanceId, userId);
+        var lures = await _tavern.ReadLuresAsync(gameInstanceId, userId);
 
         return new TavernBoardResponse(
             board.Select(ToCard).ToList(),
             board.Count > 0 ? board[0].RolledAt : DateTime.UtcNow,
             roster.Count,
-            TavernRules.RosterCap);
+            TavernRules.RosterCap,
+            lures.Select(ToLureState).ToList());
     }
+
+    private static TavernLureState ToLureState(Models.TavernLure lure)
+        => new(
+            lure.Affinity,
+            lure.PendingStrength,
+            lure.MissedRestocks,
+            // What the NEXT lured board would aim for. When an offer is standing that is its own
+            // target; when none is, it is what a Minor crystal would buy today, pity included -
+            // which is the number that tells a player whether their drought is worth anything.
+            TavernRules.EffectiveLureTarget(
+                lure.PendingStrength == TavernRules.LureStrength.None
+                    ? TavernRules.LureStrength.Minor
+                    : lure.PendingStrength,
+                lure.MissedRestocks));
 
     private static TavernRecruitCard ToCard(TavernRecruit recruit)
         => new(

@@ -1,3 +1,4 @@
+using Enums;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD.Shared.World;
@@ -14,7 +15,9 @@ public enum TavernError
     AlreadyHired,
     RosterFull,
     CannotAfford,
-    ContentMismatch
+    ContentMismatch,
+    LureAlreadyStanding,
+    NoSuchCrystal
 }
 
 public record TavernOutcome(TavernError Error, string? Message = null)
@@ -90,8 +93,16 @@ public class TavernService
     public async Task RestockAsync(
         Guid gameInstanceId, string userId, int locationTier, BiomeType? biome, string reason)
     {
+        // A crystal offered before the run is spent by the board that comes back from it.
+        var lure = await StandingLureAsync(gameInstanceId, userId);
+
+        double target = lure == null
+            ? 0
+            : TavernRules.EffectiveLureTarget(lure.PendingStrength, lure.MissedRestocks);
+
         var rolls = RecruitRoller.RollBoard(
-            _content.RecruitSheets, _content.Signatures, locationTier, biome, Random.Shared);
+            _content.RecruitSheets, _content.Signatures, locationTier, biome, Random.Shared,
+            TavernRules.BoardSize, lure?.Affinity, target);
 
         if (rolls.Count == 0)
         {
@@ -123,11 +134,27 @@ public class TavernService
             });
         }
 
+        // The lure is spent whether or not it worked, and the pity it leaves behind is the whole
+        // reason a miss is not simply a wasted crystal.
+        string lureNote = "none";
+        if (lure != null)
+        {
+            bool appeared = rolls.Any(r => r.Affinity == lure.Affinity);
+
+            lureNote = $"{lure.PendingStrength}/{lure.Affinity}@{target:P0}" +
+                       (appeared ? " HIT" : $" MISS pity={lure.MissedRestocks + 1}");
+
+            lure.MissedRestocks = appeared ? 0 : lure.MissedRestocks + 1;
+            lure.PendingStrength = TavernRules.LureStrength.None;
+            lure.PlacedAt = null;
+            lure.UpdatedAt = DateTime.UtcNow;
+        }
+
         await _context.SaveChangesAsync();
 
         _sessionLog.Log("TAVERN-RESTOCK",
             $"user={userId} instance={gameInstanceId} reason={reason} tier={locationTier} " +
-            $"biome={biome?.ToString() ?? "none"} " +
+            $"biome={biome?.ToString() ?? "none"} lure={lureNote} " +
             $"board={string.Join(",", rolls.Select(r => $"{r.Class}/{r.SignatureId}/{r.Affinity}/{r.Rarity}"))}");
     }
 
@@ -207,6 +234,80 @@ public class TavernService
     }
 
     /// <summary>Every character this player is entitled to in this realm.</summary>
+    // -----------------------------------------------------------------
+    // Lures and pity
+    // -----------------------------------------------------------------
+
+    /// <summary>Every affinity this player has a standing offer or a debt on, in affinity order.</summary>
+    public async Task<List<TavernLure>> ReadLuresAsync(Guid gameInstanceId, string userId)
+        => await _context.TavernLures
+            .Where(l => l.GameInstanceId == gameInstanceId && l.UserId == userId)
+            .OrderBy(l => l.Affinity)
+            .ToListAsync();
+
+    /// <summary>The offer waiting to be spent, if there is one.</summary>
+    public async Task<TavernLure?> StandingLureAsync(Guid gameInstanceId, string userId)
+        => await _context.TavernLures
+            .FirstOrDefaultAsync(l => l.GameInstanceId == gameInstanceId && l.UserId == userId
+                && l.PendingStrength != TavernRules.LureStrength.None);
+
+    /// <summary>
+    /// Offers a crystal against the next restock. The crystal is spent now, not when the board
+    /// turns over, so the commitment is real before the player goes out — and so a restock, which
+    /// happens inside a PvE claim, never has to take a payment that might fail.
+    ///
+    /// <para>Only one offer may stand at a time. A second would be silently unspent by the restock
+    /// that takes the first, and quietly losing a crystal is worse than being told no.</para>
+    /// </summary>
+    public async Task<(TavernOutcome Outcome, TavernLure? Lure)> PlaceLureAsync(
+        Guid gameInstanceId, string userId, AffinityTypes affinity, TavernRules.LureStrength strength)
+    {
+        if (strength == TavernRules.LureStrength.None)
+            return (new TavernOutcome(TavernError.NoSuchCrystal, "No crystal was named."), null);
+
+        var standing = await StandingLureAsync(gameInstanceId, userId);
+        if (standing != null)
+        {
+            return (new TavernOutcome(TavernError.LureAlreadyStanding,
+                $"A {standing.PendingStrength} {standing.Affinity} crystal is already offered. " +
+                "Clear a dungeon to spend it."), null);
+        }
+
+        var cost = TavernRules.LureCost(affinity, strength);
+
+        var payment = await _wallet.SpendAsync(
+            gameInstanceId, userId, cost, $"tavern-lure {strength}/{affinity}");
+
+        if (!payment.Succeeded)
+            return (new TavernOutcome(TavernError.CannotAfford, payment.Message), null);
+
+        var row = await _context.TavernLures.FirstOrDefaultAsync(
+            l => l.GameInstanceId == gameInstanceId && l.UserId == userId && l.Affinity == affinity);
+
+        if (row == null)
+        {
+            row = new TavernLure
+            {
+                GameInstanceId = gameInstanceId,
+                UserId = userId,
+                Affinity = affinity
+            };
+            _context.TavernLures.Add(row);
+        }
+
+        row.PendingStrength = strength;
+        row.PlacedAt = DateTime.UtcNow;
+        row.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("TAVERN-LURE",
+            $"user={userId} instance={gameInstanceId} affinity={affinity} strength={strength} " +
+            $"pity={row.MissedRestocks} target={TavernRules.EffectiveLureTarget(strength, row.MissedRestocks):P0}");
+
+        return (new TavernOutcome(TavernError.None), row);
+    }
+
     public async Task<List<HiredCharacter>> ReadHiredAsync(Guid gameInstanceId, string userId)
         => await _context.HiredCharacters
             .Where(h => h.GameInstanceId == gameInstanceId && h.UserId == userId)

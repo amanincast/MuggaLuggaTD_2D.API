@@ -1,4 +1,5 @@
 using Enums;
+using MuggaLuggaTD.Shared.Gameplay;
 
 namespace MuggaLuggaTD_2D.API.DTOs;
 
@@ -27,7 +28,35 @@ public record TavernBoardResponse(
     List<TavernRecruitCard> Recruits,
     DateTime RolledAt,
     int RosterCount,
-    int RosterCap);
+    int RosterCap,
+    /// <summary>
+    /// Every affinity this player has an offer or a debt on. Sent whole rather than as "the standing
+    /// one", so the room can show a player what their misses have already bought them on affinities
+    /// they are not currently luring.
+    /// </summary>
+    List<TavernLureState>? Lures = null);
+
+/// <summary>
+/// What a player stands to get on one affinity: the crystal currently offered against it, the run of
+/// lured boards that have missed it, and the share the next lured board would actually aim for.
+///
+/// <para><see cref="Target"/> is computed by the server and sent, rather than being recomputed by the
+/// client from its own copy of the rules — the player is shown the odds they will actually be given.</para>
+/// </summary>
+public record TavernLureState(
+    AffinityTypes Affinity,
+    TavernRules.LureStrength PendingStrength,
+    int MissedRestocks,
+    double Target);
+
+/// <summary>
+/// Offers a crystal against the next restock. Names the affinity and the strength rather than the
+/// material, so the server decides which crystal that costs.
+/// </summary>
+public record TavernLureRequest(
+    AffinityTypes Affinity,
+    TavernRules.LureStrength Strength,
+    string SharedContractVersion);
 
 /// <summary>A request to take on the recruit in one slot. It names the slot, never the recruit.</summary>
 public record TavernHireRequest(int Slot, string SharedContractVersion);
