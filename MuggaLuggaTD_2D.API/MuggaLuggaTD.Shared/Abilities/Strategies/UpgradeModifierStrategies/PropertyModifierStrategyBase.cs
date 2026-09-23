@@ -1,14 +1,17 @@
 using Abilities.Models;
+using System;
 using System.Collections.Generic;
 
 namespace Abilities.Strategies.UpgradeModifierStrategies
 {
     public abstract class PropertyModifierStrategyBase : IAbilityUpgradeModifierStrategy
     {
-        // Map user-facing property names to actual GameAbility property names
+        /// <summary>The property an upgrade means by "Damage": every affinity the ability deals.</summary>
+        private const string DamageProperty = "Damage";
+
+        // Content writes the name a designer would; this maps it to the property that holds it.
         private static readonly Dictionary<string, string> PropertyNameMap = new Dictionary<string, string>
         {
-            { "Damage", "Range" },
             { "Cooldown", "ActivationCooldown" }
         };
 
@@ -17,12 +20,26 @@ namespace Abilities.Strategies.UpgradeModifierStrategies
             if (abilityModifier.Value == null)
                 return;
 
-            // Map the property name if an alias exists
+            // Damage is not a property of the ability - it is one per affinity the ability deals, so
+            // it cannot be reached by reflecting over GameAbility.
+            //
+            // It used to be mapped to "Range" instead, which meant every "Increase damage by 10%"
+            // upgrade in the game silently increased the ability's RANGE and left its damage exactly
+            // where it started. That is most of the upgrade content, on every ability.
+            if (string.Equals(abilityModifier.Property, DamageProperty, StringComparison.Ordinal))
+            {
+                ApplyToEveryAffinity(gameAbility, abilityModifier.Value.Value);
+                return;
+            }
+
             var propertyName = abilityModifier.Property;
-            if (PropertyNameMap.TryGetValue(propertyName, out var mappedName))
+            if (propertyName != null && PropertyNameMap.TryGetValue(propertyName, out var mappedName))
             {
                 propertyName = mappedName;
             }
+
+            if (string.IsNullOrEmpty(propertyName))
+                return;
 
             var propertyInfo = gameAbility.GetType().GetProperty(propertyName);
             if (propertyInfo == null)
@@ -44,6 +61,26 @@ namespace Abilities.Strategies.UpgradeModifierStrategies
             {
                 EnsureInitialized(longProp);
                 ApplyToLong(longProp, abilityModifier.Value.Value);
+            }
+        }
+
+        /// <summary>
+        /// A damage modifier moves every affinity the ability deals, each by its own base - so a
+        /// multiplier means the same thing to a single-affinity ability and to one that has been
+        /// given a second affinity by an earlier upgrade.
+        /// </summary>
+        private void ApplyToEveryAffinity(IGameAbility gameAbility, double value)
+        {
+            if (gameAbility.AffinityStats == null)
+                return;
+
+            foreach (var stat in gameAbility.AffinityStats)
+            {
+                if (stat?.Damage == null)
+                    continue;
+
+                EnsureInitialized(stat.Damage);
+                ApplyToLong(stat.Damage, value);
             }
         }
 

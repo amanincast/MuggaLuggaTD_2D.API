@@ -50,6 +50,16 @@ namespace Abilities.Handlers
                 }
             }
 
+            // Affinity damage is reset too, and it is not reachable by that reflection - it hangs off
+            // each affinity stat, not off the ability. Every upgrade is re-applied from the base on
+            // every pick, so without this a second damage upgrade would compound on top of the first
+            // one's result instead of both being measured from the ability's own damage.
+            if (gameAbility.AffinityStats != null)
+            {
+                foreach (var stat in gameAbility.AffinityStats)
+                    stat?.Damage?.Reset();
+            }
+
             //Apply each upgrade's modifiers
             foreach (var upgrade in upgrades)
             {
