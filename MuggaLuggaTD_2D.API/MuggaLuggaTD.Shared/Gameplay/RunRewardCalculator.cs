@@ -91,6 +91,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 }
             }
 
+            // From tier 3 up the run ends on a boss, and the wave does not end until it is dead. It
+            // is most of the last wave's difficulty, so it has to be most of its price too.
+            if (BossRules.HasBoss(tuning, locationTier))
+            {
+                int finalLevel = baseLevel + ((waves - 1) / levelInterval);
+                long bossHealth = BossRules.BossHealth(ScaledEnemyHealth(tuning, finalLevel));
+
+                rewards.Experience += BossRules.BossExperience(ExperienceForEnemy(finalLevel, bossHealth));
+            }
+
             return rewards;
         }
 

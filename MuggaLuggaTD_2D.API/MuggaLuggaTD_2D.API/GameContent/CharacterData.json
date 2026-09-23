@@ -504,5 +504,37 @@
         }
       ]
     }
+  ],
+
+  // Bosses. One of these closes a run from tier 3 up, and the last wave does not end until it is
+  // dead. The abilities are read in order, one per phase: the boss opens with the first and gains
+  // the next at 66% and 33% health, so the same enemy asks a different question as it goes down.
+  "Bosses": [
+    {
+      "TypeName": "Lizard Warlord",
+      "PrefabAssetLocation": "Prefabs/Characters/Enemies/EnemyCharacter",
+      "SpriteLibraryAssetLocation": "Animation/Characters/Enemies/Grasslands/Enemy_Grassland_Lizard_Boss_1",
+      "LinkName": "Enemy_Grassland_Lizard_Boss_1",
+      "MovementSpeed": {
+        "BaseValue": 2.5
+      },
+      "MaxHealth": {
+        "BaseValue": 60.0
+      },
+      "UnlockableAbilities": [
+        {
+          "AbilityLinkName": "Melee_Slash_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        },
+        {
+          "AbilityLinkName": "Magic_Burst_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        },
+        {
+          "AbilityLinkName": "Shadow_Explosion_1",
+          "ValidTargetTags": [ "Player", "Ally" ]
+        }
+      ]
+    }
   ]
 }
