@@ -74,6 +74,9 @@ namespace MuggaLuggaTD.Shared
         //   through an endpoint. They are the Tavern's currency, so a client-written balance would be
         //   a client-minted one. A 1.13.0 client keeps writing materials into its save and would
         //   believe it holds what the server has dropped.
+        // 1.19.0 - player classes. A character has a Class that provides its basic ability and how
+        //   fast it gains health, and player base health is 2.5x what it was (design doc 03 §2b).
+        //   Health is a term in PvP power, so a 1.18.0 client and this one disagree about a party.
         // 1.18.0 - bosses. From tier 3 the last wave carries a boss (x12 health, x1.5 damage, phases
         //   at 66% and 33%) and does not end until it is dead; RunRewardCalculator prices it.
         // 1.17.0 - elites. Some of each wave from the third on is an elite (x2 health, x1.25 damage,
@@ -89,6 +92,6 @@ namespace MuggaLuggaTD.Shared
         //   compounding at 10%, and levels cost 4000 x 1.2^(L-1) to a cap of 30 instead of
         //   100 x 1.5^(L-1) uncapped. A 1.14.0 client fights different enemies and levels at a
         //   different rate than the server prices.
-        public const string Version = "1.18.0";
+        public const string Version = "1.19.0";
     }
 }
