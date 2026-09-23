@@ -69,9 +69,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 int enemyLevel = baseLevel + (wave / levelInterval);
                 long enemyHealth = ScaledEnemyHealth(tuning, enemyLevel);
 
+                // Some of the wave is elite, on the same schedule the combat scene spawns them - an
+                // elite is tougher and worth more, and a run priced as if every enemy were a trash
+                // mob would pay for an easier fight than the one the location demands.
+                int elites = Math.Min(perWave, Math.Max(0, EliteRules.ElitesInWave(tuning, wave + 1)));
+
                 for (int i = 0; i < perWave; i++)
                 {
-                    rewards.Experience += ExperienceForEnemy(enemyLevel, enemyHealth);
+                    bool isElite = i < elites;
+
+                    long health = isElite ? EliteRules.EliteHealth(enemyHealth) : enemyHealth;
+                    long experience = ExperienceForEnemy(enemyLevel, health);
+                    rewards.Experience += isElite ? EliteRules.EliteExperience(experience) : experience;
 
                     if (itemTemplates != null && itemTemplates.Count > 0
                         && ItemDropCalculator.ShouldDropItem(enemyLevel))

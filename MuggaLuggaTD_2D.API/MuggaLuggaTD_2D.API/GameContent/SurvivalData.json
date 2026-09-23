@@ -12,6 +12,12 @@
   "EnemiesRequiredPerWave": 10,
   "EnemyLevelIncreaseInterval": 3,
 
+  // Elites. From this wave on, some of the wave is an elite - x2 health, x1.25 damage, x1.5
+  // experience - and one more elite joins every EliteIntervalWaves waves after that. The reward
+  // calculator prices them from the same numbers the combat scene spawns them from.
+  "ElitesFromWave": 3,
+  "EliteIntervalWaves": 2,
+
   // A representative enemy, used to value a kill (see RunRewardCalculator.ExperienceForEnemy).
   "BaseEnemyHealth": 50,
   "EnemyHealthMultiplierPerLevel": 0.15
