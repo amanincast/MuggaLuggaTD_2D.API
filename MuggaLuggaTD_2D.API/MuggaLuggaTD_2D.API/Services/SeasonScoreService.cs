@@ -42,6 +42,7 @@ public class SeasonScoreService
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> ClosingLocks = new();
 
     private readonly ApplicationDbContext _context;
+    private readonly GoldService _gold;
     private readonly WorldProvisioningService _worlds;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly ISessionLog _sessionLog;
@@ -49,12 +50,14 @@ public class SeasonScoreService
 
     public SeasonScoreService(
         ApplicationDbContext context,
+        GoldService gold,
         WorldProvisioningService worlds,
         IHubContext<GameHub> hubContext,
         ISessionLog sessionLog,
         ILogger<SeasonScoreService> logger)
     {
         _context = context;
+        _gold = gold;
         _worlds = worlds;
         _hubContext = hubContext;
         _sessionLog = sessionLog;
@@ -94,6 +97,12 @@ public class SeasonScoreService
         }
 
         await _context.SaveChangesAsync();
+
+        // Gold accrues from exactly the same holdings, so it is settled here rather than from each
+        // of the five places a holding can change. Passing the world and the instant we just used
+        // means the purse and the scoreboard can never disagree about when a region changed hands -
+        // and a future sixth caller cannot forget to settle one of them.
+        await _gold.SettleAllAsync(gameInstanceId, regions, scores.Keys, until);
     }
 
     /// <summary>

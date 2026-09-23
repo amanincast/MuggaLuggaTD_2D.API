@@ -26,6 +26,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
     public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
+    public DbSet<PlayerGold> PlayerGold => Set<PlayerGold>();
     public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
 
@@ -136,6 +137,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerMaterial>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.MaterialName }).IsUnique();
+        });
+
+        // Configure PlayerGold (one purse per player per realm; every read and write is by that
+        // key, and a second row would be a second balance quietly accruing alongside the first)
+        builder.Entity<PlayerGold>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
         });
 
         // Configure TavernRecruit (one player's board in one realm; read and replaced by that key)

@@ -57,6 +57,7 @@ public class WorldPveService
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
     private readonly MaterialWalletService _wallet;
+    private readonly GoldService _gold;
     private readonly TavernService _tavern;
     private readonly ILogger<WorldPveService> _logger;
 
@@ -64,12 +65,14 @@ public class WorldPveService
         ApplicationDbContext context,
         IGameContentProvider content,
         MaterialWalletService wallet,
+        GoldService gold,
         TavernService tavern,
         ILogger<WorldPveService> logger)
     {
         _context = context;
         _content = content;
         _wallet = wallet;
+        _gold = gold;
         _tavern = tavern;
         _logger = logger;
     }
@@ -235,6 +238,12 @@ public class WorldPveService
 
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
 
+        // Gold is paid as one figure at the end rather than dropped during the fight, so the client
+        // never holds a coin it could have minted. GrantAsync settles the purse first, which means
+        // the balance it returns already includes whatever the players land earned mid-run.
+        long goldBalance = await _gold.GrantAsync(
+            gameInstanceId, userId, rewards.Gold, $"pve-claim run={run.Id}");
+
         // Clearing a dungeon is what restocks the Tavern - there is no timer and no refresh button,
         // so the board is attached to playing the game rather than to polling a menu. The tier raises
         // the rarity odds and the region's biome nudges the affinities, so where you cleared shows up
@@ -252,7 +261,8 @@ public class WorldPveService
             materials.Sum(m => m.Quantity));
 
         var response = new PveClaimResponse(
-            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials);
+            run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials,
+            rewards.Gold, goldBalance);
 
         return (new PveOutcome(PveError.None), response, world);
     }

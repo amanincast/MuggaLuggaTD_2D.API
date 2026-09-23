@@ -121,6 +121,13 @@ namespace MuggaLuggaTD.Shared
         //   client and the DLL it ships with honest about each other, not because the two sides could
         //   disagree. Reactions are the other half and are client-only, keyed on a combat status the
         //   server never sees.
-        public const string Version = "1.23.0";
+        // 1.24.0 - gold. A currency the player never picks up: a claimed clear pays one figure
+        //   derived from the experience that clear is worth (GoldRules.GoldPerExperience, computed in
+        //   the same walk so the two cannot drift), and ground held pays by the hour on the same
+        //   weighting the season prices land at - with its own base rate, because points are the win
+        //   condition and gold is the economy, and retuning one must not silently retune the other.
+        //   This DOES change a server-computed result: RunRewards now carries Gold, so a client on an
+        //   older DLL would be claiming against a payout it cannot describe.
+        public const string Version = "1.24.0";
     }
 }

@@ -30,6 +30,7 @@ public class SeasonScoreServiceTests : IDisposable
 
     private SeasonScoreService Service => new(
         _db,
+        new GoldService(_db, _log, NullLogger<GoldService>.Instance),
         new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance),
         _hub,
         _log,
