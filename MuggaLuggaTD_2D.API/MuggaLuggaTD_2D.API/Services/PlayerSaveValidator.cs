@@ -17,6 +17,12 @@ public record LevelClampResult(int Clamped, long HighestSeen)
     public bool Changed => Clamped > 0;
 }
 
+/// <summary>How many character identity rolls a save claimed that content does not allow.</summary>
+public record SignatureValidationResult(int Cleared, int RarityReset, IReadOnlyList<string> Details)
+{
+    public bool Changed => Cleared > 0 || RarityReset > 0;
+}
+
 /// <summary>How many client-written material stacks were dropped from a save.</summary>
 public record MaterialStripResult(int Removed, int TotalQuantity)
 {
@@ -161,6 +167,59 @@ public class PlayerSaveValidator
         }
 
         return new LevelClampResult(clamped, highest);
+    }
+
+    /// <summary>
+    /// Clears a character's identity roll when content does not allow it: an unknown signature, or
+    /// an affinity that signature may not have. Rarity is pulled back to Common whatever the save
+    /// says, because nothing grants a higher one yet - the Tavern's hire record is what will.
+    ///
+    /// <para>What this does <i>not</i> check is whether the player ever earned the roll it names.
+    /// That needs the hire record of design doc 05 §5, which arrives with the Tavern. Until then a
+    /// save may claim any legal combination; it just cannot claim an illegal one, and it cannot
+    /// claim a rarity at all.</para>
+    /// </summary>
+    public SignatureValidationResult ValidateSignatures(JsonNode? save)
+    {
+        var details = new List<string>();
+        int cleared = 0, rarityReset = 0;
+
+        if (save is not JsonObject root || root["Characters"] is not JsonArray characters)
+            return new SignatureValidationResult(0, 0, details);
+
+        foreach (var character in characters)
+        {
+            if (character is not JsonObject characterObject) continue;
+
+            var rarity = ReadInt(characterObject["Rarity"]);
+            if (rarity is not null && rarity != (int)Enums.CharacterRarity.Common)
+            {
+                characterObject["Rarity"] = (int)Enums.CharacterRarity.Common;
+                rarityReset++;
+                details.Add($"rarity {rarity} on '{ReadString(characterObject["LinkName"]) ?? "?"}'");
+            }
+
+            var signatureId = ReadString(characterObject["SignatureId"]);
+            if (string.IsNullOrEmpty(signatureId)) continue;
+
+            var signature = SignatureRules.Find(_content.Signatures, signatureId);
+            var affinity = ReadInt(characterObject["SignatureAffinity"]);
+
+            bool unknown = signature == null;
+            bool disallowed = signature != null && affinity is not null
+                              && !SignatureRules.IsAffinityAllowed(signature, (Enums.AffinityTypes)affinity.Value);
+
+            if (!unknown && !disallowed) continue;
+
+            characterObject["SignatureId"] = null;
+            characterObject["SignatureAffinity"] = null;
+            cleared++;
+            details.Add(unknown
+                ? $"unknown signature '{signatureId}'"
+                : $"affinity {affinity} not allowed for '{signatureId}'");
+        }
+
+        return new SignatureValidationResult(cleared, rarityReset, details);
     }
 
     /// <summary>Materials are ItemTypes.Material (14), whatever else the client wrote on them.</summary>

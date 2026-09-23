@@ -1,0 +1,73 @@
+{
+  // Signatures: the ability that makes this Warrior different from that one.
+  //
+  // A character is a CLASS (its basic and how fast it gains health), a SIGNATURE (one of these)
+  // and an AFFINITY (what the signature is made of). The class is what everyone of that kind can
+  // do; the signature and affinity are the roll the Tavern is worth hunting through.
+  // Design doc 05 §1.
+  //
+  // An affinity is NOT a separate ability per combination: the signature's ability is retuned to
+  // the rolled affinity, which keeps its total damage and changes its damage type - and therefore
+  // which status effect it applies. AffinityAbilities is the sparse exception for a signature whose
+  // affinities really are different spells; the mage's Blast is a different explosion for each.
+  //
+  // AllowedAffinities empty means all eight. The mage signatures list seven, because a bolt of
+  // Physical is not a thing.
+  "Signatures": [
+    {
+      "SignatureId": "warrior_cleave",
+      "DisplayName": "Cleaving Blow",
+      "Description": "A wide swing that catches everything standing close.",
+      "Class": "Warrior",
+      "BaseAbilityLinkName": "Cleaving_Blow_1"
+    },
+    {
+      "SignatureId": "warrior_slam",
+      "DisplayName": "Ground Slam",
+      "Description": "The ground erupts a few paces out, wherever the fight is thickest.",
+      "Class": "Warrior",
+      "BaseAbilityLinkName": "Ground_Slam_1"
+    },
+    {
+      "SignatureId": "archer_snipe",
+      "DisplayName": "Snipe Shot",
+      "Description": "One arrow, from further than anything can answer, through two of them.",
+      "Class": "Archer",
+      "BaseAbilityLinkName": "Snipe_Shot_1"
+    },
+    {
+      "SignatureId": "archer_volley",
+      "DisplayName": "Volley",
+      "Description": "Five arrows at five of them at once. Worth little against one.",
+      "Class": "Archer",
+      "BaseAbilityLinkName": "Volley_1"
+    },
+    {
+      "SignatureId": "mage_blast",
+      "DisplayName": "Blast",
+      "Description": "The element itself, detonated where it will do the most harm.",
+      "Class": "Mage",
+      "BaseAbilityLinkName": "Magic_Burst_1",
+      "AllowedAffinities": [ 1, 2, 3, 4, 5, 6, 7 ],
+      // Every affinity of Blast is genuinely its own explosion, so each names its ability rather
+      // than recolouring one. Arcane is the base and needs no entry.
+      "AffinityAbilities": [
+        { "AffinityType": 1, "AbilityLinkName": "Inferno_Blast_1" },
+        { "AffinityType": 2, "AbilityLinkName": "Frost_Nova_1" },
+        { "AffinityType": 3, "AbilityLinkName": "Tremor_1" },
+        { "AffinityType": 4, "AbilityLinkName": "Plasma_Burst_1" },
+        { "AffinityType": 5, "AbilityLinkName": "Radiant_Burst_1" },
+        { "AffinityType": 6, "AbilityLinkName": "Shadow_Explosion_1" },
+        { "AffinityType": 7, "AbilityLinkName": "Arcane_Detonation_1" }
+      ]
+    },
+    {
+      "SignatureId": "mage_bolt",
+      "DisplayName": "Bolt",
+      "Description": "A single lance of the element, cheap and constant.",
+      "Class": "Mage",
+      "BaseAbilityLinkName": "Lightning_Strike_1",
+      "AllowedAffinities": [ 1, 2, 3, 4, 5, 6, 7 ]
+    }
+  ]
+}

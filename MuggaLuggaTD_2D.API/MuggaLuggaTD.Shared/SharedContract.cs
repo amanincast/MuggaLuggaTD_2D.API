@@ -92,6 +92,13 @@ namespace MuggaLuggaTD.Shared
         //   compounding at 10%, and levels cost 4000 x 1.2^(L-1) to a cap of 30 instead of
         //   100 x 1.5^(L-1) uncapped. A 1.14.0 client fights different enemies and levels at a
         //   different rate than the server prices.
-        public const string Version = "1.19.0";
+        // 1.20.0 - signatures and affinities. A character is now a class, a signature and an
+        //   affinity, and its kit is derived from that triple rather than listed per character: the
+        //   class basic plus the signature's ability, retuned to the affinity so it deals that type
+        //   and applies its status effect. Retuning preserves total damage, but the mage's Blast is a
+        //   different explosion per affinity, so which ability a character casts - and therefore the
+        //   damage term in its power - depends on the roll. A 1.19.0 client reads none of it and
+        //   would fight with the old hand-listed abilities. Design doc 05 §3.
+        public const string Version = "1.20.0";
     }
 }

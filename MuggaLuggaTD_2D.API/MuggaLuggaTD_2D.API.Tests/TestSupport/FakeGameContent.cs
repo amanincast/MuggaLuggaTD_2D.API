@@ -32,6 +32,9 @@ public class FakeGameContent : IGameContentProvider
     /// <summary>Empty by default: a run then pays no materials, which most tests do not care about.</summary>
     public IReadOnlyList<MaterialTemplate> Materials { get; set; } = Array.Empty<MaterialTemplate>();
 
+    /// <summary>Empty by default: only the signature tests care what rolls exist.</summary>
+    public IReadOnlyList<SignatureDefinition> Signatures { get; set; } = Array.Empty<SignatureDefinition>();
+
     /// <summary>Content offering <paramref name="upgrades"/> for the named ability and nothing else.</summary>
     public static FakeGameContent WithUpgradePool(string abilityLinkName, params AbilityUpgrade[] upgrades)
     {

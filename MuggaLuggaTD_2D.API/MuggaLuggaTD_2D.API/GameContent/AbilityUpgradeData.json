@@ -68,42 +68,6 @@
               "Property": "ProjectileCount"
             }
           ]
-        },
-        {
-          "Name": "Cinder Detonation",
-          "Description": "Arcane Detonation burns what it hits instead of unravelling it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 65
-            }
-          ]
-        },
-        {
-          "Name": "Hollow Detonation",
-          "Description": "Arcane Detonation withers what it hits instead of unravelling it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 6
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 6,
-              "Value": 65
-            }
-          ]
         }
       ]
     },
@@ -162,24 +126,6 @@
               "UpgradeModifierType": 2,
               "Value": 0.25,
               "Property": "CollisionScale"
-            }
-          ]
-        },
-        {
-          "Name": "Withering Ward",
-          "Description": "Arcane Shield withers what breaks against it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 6
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 6,
-              "Value": 50
             }
           ]
         }
@@ -263,25 +209,6 @@
           ]
         },
         {
-          "Name": "Add Water Affinity",
-          "Description": "Add Water affinity to Bow Attack, increasing its damage against Fire enemies.",
-          "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Arrow_1_Water",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 2
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 2,
-              "Value": 50
-            }
-          ]
-        },
-        {
           "Name": "Add +1 Chaining",
           "Description": "Causes the ability to chain to the next enemy one more time.",
           "Modifiers": [
@@ -361,42 +288,6 @@
               "Property": "ProjectileCount"
             }
           ]
-        },
-        {
-          "Name": "Shattering Impact",
-          "Description": "Impact Strike staggers what it hits instead of bleeding it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 3
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 3,
-              "Value": 55
-            }
-          ]
-        },
-        {
-          "Name": "Scorching Impact",
-          "Description": "Impact Strike burns what it hits instead of bleeding it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 55
-            }
-          ]
         }
       ]
     },
@@ -466,42 +357,6 @@
               "UpgradeModifierType": 4,
               "Value": 1,
               "Property": "ProjectileCount"
-            }
-          ]
-        },
-        {
-          "Name": "Shadowed Inferno",
-          "Description": "Inferno Blast withers what it hits instead of burning it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 6
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 6,
-              "Value": 80
-            }
-          ]
-        },
-        {
-          "Name": "Quaking Inferno",
-          "Description": "Inferno Blast staggers what it hits instead of burning it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 3
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 3,
-              "Value": 80
             }
           ]
         }
@@ -574,42 +429,6 @@
               "Property": "CollisionScale"
             }
           ]
-        },
-        {
-          "Name": "Thunderclap",
-          "Description": "Lightning Strike staggers what it hits instead of shocking it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 3
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 3,
-              "Value": 50
-            }
-          ]
-        },
-        {
-          "Name": "Stormfire",
-          "Description": "Lightning Strike burns what it hits instead of shocking it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 50
-            }
-          ]
         }
       ]
     },
@@ -679,42 +498,6 @@
               "UpgradeModifierType": 4,
               "Value": 1,
               "Property": "ProjectileCount"
-            }
-          ]
-        },
-        {
-          "Name": "Void Burst",
-          "Description": "Magic Burst withers what it hits instead of unravelling it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 6
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 6,
-              "Value": 50
-            }
-          ]
-        },
-        {
-          "Name": "Cinder Burst",
-          "Description": "Magic Burst burns what it hits instead of unravelling it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 50
             }
           ]
         }
@@ -798,42 +581,6 @@
               "Value": 1
             }
           ]
-        },
-        {
-          "Name": "Ember Missile",
-          "Description": "Magic Missile burns rather than unravels.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 50
-            }
-          ]
-        },
-        {
-          "Name": "Glacial Missile",
-          "Description": "Magic Missile chills rather than unravels.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 2
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 2,
-              "Value": 50
-            }
-          ]
         }
       ]
     },
@@ -905,42 +652,6 @@
               "Property": "CollisionScale"
             }
           ]
-        },
-        {
-          "Name": "Ember Edge",
-          "Description": "Melee Slash burns what it hits instead of bleeding it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 50
-            }
-          ]
-        },
-        {
-          "Name": "Storm Edge",
-          "Description": "Melee Slash shocks what it hits, so the next hit on it chains further.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 4
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 4,
-              "Value": 50
-            }
-          ]
         }
       ]
     },
@@ -1010,42 +721,6 @@
               "UpgradeModifierType": 2,
               "Value": 0.25,
               "Property": "CollisionScale"
-            }
-          ]
-        },
-        {
-          "Name": "Searing Point",
-          "Description": "Melee Stab burns what it hits instead of bleeding it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 50
-            }
-          ]
-        },
-        {
-          "Name": "Frostbitten Point",
-          "Description": "Melee Stab chills what it hits instead of bleeding it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 2
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 2,
-              "Value": 50
             }
           ]
         }
@@ -1129,24 +804,6 @@
               "Value": 1
             }
           ]
-        },
-        {
-          "Name": "Molten Plasma",
-          "Description": "Plasma Burst burns what it hits instead of shocking it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 1
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 1,
-              "Value": 60
-            }
-          ]
         }
       ]
     },
@@ -1228,24 +885,6 @@
               "Value": 1
             }
           ]
-        },
-        {
-          "Name": "Unmaking Shadow",
-          "Description": "Shadow Explosion unravels what it hits instead of withering it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 11
-            },
-            {
-              "UpgradeModifierType": 9,
-              "Value": 7
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 7,
-              "Value": 75
-            }
-          ]
         }
       ]
     },
@@ -1319,26 +958,577 @@
           ]
         },
         {
-          "Name": "Charged Eruption",
-          "Description": "Volatile Eruption shocks what it hits instead of burning it.",
+          "Name": "Unstable Eruption",
+          "Description": "Volatile Eruption chains to one more enemy.",
           "Modifiers": [
             {
-              "UpgradeModifierType": 11
-            },
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Cleaving_Blow_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Cleaving Blow by 10%.",
+          "Modifiers": [
             {
-              "UpgradeModifierType": 9,
-              "Value": 4
-            },
-            {
-              "UpgradeModifierType": 13,
-              "AffinityType": 4,
-              "Value": 70
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
             }
           ]
         },
         {
-          "Name": "Unstable Eruption",
-          "Description": "Volatile Eruption chains to one more enemy.",
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Cleaving Blow by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Cleaving Blow by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Cleaving Blow",
+          "Description": "Increase the area Cleaving Blow covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Cleaving Blow",
+          "Description": "Add 15 damage to Cleaving Blow.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Sweeping Blow",
+          "Description": "Cleaving Blow strikes an additional enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Follow-Through",
+          "Description": "Cleaving Blow carries on to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Ground_Slam_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Ground Slam by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Ground Slam by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Ground Slam by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Ground Slam",
+          "Description": "Increase the area Ground Slam covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Ground Slam",
+          "Description": "Add 15 damage to Ground Slam.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Aftershock",
+          "Description": "Ground Slam erupts at an additional enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Fissure",
+          "Description": "Ground Slam splits onward to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Snipe_Shot_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Snipe Shot by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Snipe Shot by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Snipe Shot by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Snipe Shot",
+          "Description": "Increase the area Snipe Shot covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Snipe Shot",
+          "Description": "Add 15 damage to Snipe Shot.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Deeper Penetration",
+          "Description": "Snipe Shot pierces one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Swift Arrow",
+          "Description": "Increase how fast Snipe Shot travels by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.25,
+              "Property": "TravelSpeed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Volley_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Volley by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Volley by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Volley by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Volley",
+          "Description": "Increase the area Volley covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Volley",
+          "Description": "Add 15 damage to Volley.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Volley",
+          "Description": "Volley looses one more arrow.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Barbed Arrows",
+          "Description": "Volley's arrows pierce one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Frost_Nova_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Frost Nova by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Frost Nova by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Frost Nova by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Frost Nova",
+          "Description": "Increase the area Frost Nova covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Frost Nova",
+          "Description": "Add 15 damage to Frost Nova.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Second Nova",
+          "Description": "Frost Nova bursts at an additional enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Creeping Frost",
+          "Description": "Frost Nova spreads onward to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Tremor_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Tremor by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Tremor by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Tremor by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Tremor",
+          "Description": "Increase the area Tremor covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Tremor",
+          "Description": "Add 15 damage to Tremor.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Second Tremor",
+          "Description": "Tremor erupts at an additional enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Rolling Quake",
+          "Description": "Tremor rolls onward to one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Radiant_Burst_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Radiant Burst by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Radiant Burst by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Radiant Burst by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Radiant Burst",
+          "Description": "Increase the area Radiant Burst covers by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Name": "Heavier Radiant Burst",
+          "Description": "Add 15 damage to Radiant Burst.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 15,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Second Burst",
+          "Description": "Radiant Burst flares at an additional enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Name": "Refracted Light",
+          "Description": "Radiant Burst bends onward to one more enemy.",
           "Modifiers": [
             {
               "UpgradeModifierType": 14,
