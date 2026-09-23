@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD_2D.API.Models;
 using StateManagement.Models;
 
 namespace MuggaLuggaTD_2D.API.Services;
@@ -17,10 +18,10 @@ public record LevelClampResult(int Clamped, long HighestSeen)
     public bool Changed => Clamped > 0;
 }
 
-/// <summary>How many character identity rolls a save claimed that content does not allow.</summary>
-public record SignatureValidationResult(int Cleared, int RarityReset, IReadOnlyList<string> Details)
+/// <summary>What reconciling a save's roster against the server's hire records changed.</summary>
+public record RosterReconciliation(int Corrected, int Stripped, IReadOnlyList<string> Details)
 {
-    public bool Changed => Cleared > 0 || RarityReset > 0;
+    public bool Changed => Corrected > 0 || Stripped > 0;
 }
 
 /// <summary>How many client-written material stacks were dropped from a save.</summary>
@@ -170,56 +171,126 @@ public class PlayerSaveValidator
     }
 
     /// <summary>
-    /// Clears a character's identity roll when content does not allow it: an unknown signature, or
-    /// an affinity that signature may not have. Rarity is pulled back to Common whatever the save
-    /// says, because nothing grants a higher one yet - the Tavern's hire record is what will.
+    /// Reconciles the save's roster against what the server says this player is entitled to.
     ///
-    /// <para>What this does <i>not</i> check is whether the player ever earned the roll it names.
-    /// That needs the hire record of design doc 05 §5, which arrives with the Tavern. Until then a
-    /// save may claim any legal combination; it just cannot claim an illegal one, and it cannot
-    /// claim a rarity at all.</para>
+    /// <para><b>This is what makes the roll mean anything.</b> A character's signature, affinity and
+    /// rarity decide its whole kit, and the save is written by the client — so a roll with nothing
+    /// behind it is a character the player awarded themselves. Design doc 05 §5.2.</para>
+    ///
+    /// <para>A character is entitled to its roll in one of two ways:</para>
+    /// <list type="bullet">
+    /// <item>the server has a <b>hire record</b> for that character id, in which case the record is
+    /// written over whatever the save said — the record is the truth, not a second opinion; or</item>
+    /// <item>it is one of the <b>starting roster</b>, matching an ally template's link name and the
+    /// roll that template ships with. Those were never hired, so there is nothing to have a record
+    /// of.</item>
+    /// </list>
+    ///
+    /// <para>Anything else <b>loses its roll</b> rather than being deleted: the character survives
+    /// with its class basic, and the player keeps whatever else it had. Deleting a character on a
+    /// validation edge is a worse failure than a weak one, and the log says exactly what happened.</para>
     /// </summary>
-    public SignatureValidationResult ValidateSignatures(JsonNode? save)
+    public RosterReconciliation ReconcileRoster(JsonNode? save, IReadOnlyCollection<HiredCharacter>? hired)
     {
         var details = new List<string>();
-        int cleared = 0, rarityReset = 0;
+        int corrected = 0, stripped = 0;
 
         if (save is not JsonObject root || root["Characters"] is not JsonArray characters)
-            return new SignatureValidationResult(0, 0, details);
+            return new RosterReconciliation(0, 0, details);
+
+        var records = (hired ?? Array.Empty<HiredCharacter>())
+            .Where(h => h != null && !string.IsNullOrEmpty(h.CharacterId))
+            .GroupBy(h => h.CharacterId, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
         foreach (var character in characters)
         {
             if (character is not JsonObject characterObject) continue;
 
-            var rarity = ReadInt(characterObject["Rarity"]);
-            if (rarity is not null && rarity != (int)Enums.CharacterRarity.Common)
+            var id = ReadString(characterObject["Id"]) ?? string.Empty;
+            var linkName = ReadString(characterObject["LinkName"]) ?? "?";
+
+            if (records.TryGetValue(id, out var record))
             {
-                characterObject["Rarity"] = (int)Enums.CharacterRarity.Common;
-                rarityReset++;
-                details.Add($"rarity {rarity} on '{ReadString(characterObject["LinkName"]) ?? "?"}'");
+                if (Rewrite(characterObject, record.SignatureId, record.Affinity, record.Rarity, record.Sheet))
+                {
+                    corrected++;
+                    details.Add($"'{id}' rewritten to its hire record ({record.SignatureId}/{record.Affinity}/{record.Rarity})");
+                }
+
+                continue;
             }
 
-            var signatureId = ReadString(characterObject["SignatureId"]);
-            if (string.IsNullOrEmpty(signatureId)) continue;
+            if (IsStarter(characterObject, linkName))
+                continue;
 
-            var signature = SignatureRules.Find(_content.Signatures, signatureId);
-            var affinity = ReadInt(characterObject["SignatureAffinity"]);
-
-            bool unknown = signature == null;
-            bool disallowed = signature != null && affinity is not null
-                              && !SignatureRules.IsAffinityAllowed(signature, (Enums.AffinityTypes)affinity.Value);
-
-            if (!unknown && !disallowed) continue;
-
-            characterObject["SignatureId"] = null;
-            characterObject["SignatureAffinity"] = null;
-            cleared++;
-            details.Add(unknown
-                ? $"unknown signature '{signatureId}'"
-                : $"affinity {affinity} not allowed for '{signatureId}'");
+            if (Rewrite(characterObject, null, null, Enums.CharacterRarity.Common, sheet: null))
+            {
+                stripped++;
+                details.Add($"'{id}' ({linkName}) has no hire record — roll stripped");
+            }
         }
 
-        return new SignatureValidationResult(cleared, rarityReset, details);
+        return new RosterReconciliation(corrected, stripped, details);
+    }
+
+    /// <summary>
+    /// True when this character is one of the starting roster carrying exactly the roll its template
+    /// ships with. A starter whose roll has been edited is not a starter any more.
+    /// </summary>
+    private bool IsStarter(JsonObject character, string linkName)
+    {
+        var sheet = _content.RecruitSheets?.FirstOrDefault(s =>
+            s != null && string.Equals(s.Sheet, linkName, StringComparison.Ordinal));
+
+        if (sheet?.SignatureId == null || sheet.SignatureAffinity == null)
+            return false;
+
+        var rarity = ReadInt(character["Rarity"]) ?? (int)Enums.CharacterRarity.Common;
+
+        return string.Equals(ReadString(character["SignatureId"]), sheet.SignatureId, StringComparison.Ordinal)
+               && ReadInt(character["SignatureAffinity"]) == (int)sheet.SignatureAffinity.Value
+               && rarity == (int)Enums.CharacterRarity.Common;
+    }
+
+    /// <summary>
+    /// Writes a roll onto a saved character, returning whether anything actually differed — so a save
+    /// that was already right is not reported as having been corrected.
+    /// </summary>
+    private static bool Rewrite(
+        JsonObject character, string? signatureId, Enums.AffinityTypes? affinity,
+        Enums.CharacterRarity rarity, string? sheet)
+    {
+        bool changed = false;
+
+        if (!string.Equals(ReadString(character["SignatureId"]), signatureId, StringComparison.Ordinal))
+        {
+            character["SignatureId"] = signatureId;
+            changed = true;
+        }
+
+        int? affinityValue = affinity.HasValue ? (int)affinity.Value : null;
+        if (ReadInt(character["SignatureAffinity"]) != affinityValue)
+        {
+            character["SignatureAffinity"] = affinityValue;
+            changed = true;
+        }
+
+        if ((ReadInt(character["Rarity"]) ?? (int)Enums.CharacterRarity.Common) != (int)rarity)
+        {
+            character["Rarity"] = (int)rarity;
+            changed = true;
+        }
+
+        // The sheet decides the art, and a hire record names one. It is only written when the record
+        // has one to write: stripping a roll must not also take a character's face away.
+        if (sheet != null && !string.Equals(ReadString(character["LinkName"]), sheet, StringComparison.Ordinal))
+        {
+            character["LinkName"] = sheet;
+            changed = true;
+        }
+
+        return changed;
     }
 
     /// <summary>Materials are ItemTypes.Material (14), whatever else the client wrote on them.</summary>

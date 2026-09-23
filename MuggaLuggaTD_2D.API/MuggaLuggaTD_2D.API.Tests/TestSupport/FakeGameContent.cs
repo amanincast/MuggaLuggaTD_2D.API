@@ -35,6 +35,9 @@ public class FakeGameContent : IGameContentProvider
     /// <summary>Empty by default: only the signature tests care what rolls exist.</summary>
     public IReadOnlyList<SignatureDefinition> Signatures { get; set; } = Array.Empty<SignatureDefinition>();
 
+    /// <summary>Empty by default: only the Tavern tests care what a recruit can be rolled onto.</summary>
+    public IReadOnlyList<RecruitSheet> RecruitSheets { get; set; } = Array.Empty<RecruitSheet>();
+
     /// <summary>Content offering <paramref name="upgrades"/> for the named ability and nothing else.</summary>
     public static FakeGameContent WithUpgradePool(string abilityLinkName, params AbilityUpgrade[] upgrades)
     {

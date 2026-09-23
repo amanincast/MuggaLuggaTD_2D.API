@@ -99,6 +99,11 @@ namespace MuggaLuggaTD.Shared
         //   different explosion per affinity, so which ability a character casts - and therefore the
         //   damage term in its power - depends on the roll. A 1.19.0 client reads none of it and
         //   would fight with the old hand-listed abilities. Design doc 05 §3.
-        public const string Version = "1.20.0";
+        // 1.21.0 - the Tavern. Characters are hired from a six-recruit board the server rolls and
+        //   restocks when a dungeon is cleared, paid for out of the material wallet at a price set by
+        //   rarity. The client shows the board, the odds and the cost before the player spends, so
+        //   both sides must price a recruit the same way - and every hire leaves a record the save is
+        //   reconciled against, so a roll a 1.20.0 client wrote for itself is now stripped.
+        public const string Version = "1.21.0";
     }
 }

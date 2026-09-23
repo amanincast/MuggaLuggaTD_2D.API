@@ -49,6 +49,13 @@ public interface IGameContentProvider
     IReadOnlyList<SignatureDefinition> Signatures { get; }
 
     /// <summary>
+    /// The character sheets the Tavern may put a recruit on, and the roll each ships with for the
+    /// starting roster. Read from CharacterData's allies - design doc 05 §6 turns those into sheets
+    /// tagged by class rather than finished characters, and this reads them either way.
+    /// </summary>
+    IReadOnlyList<RecruitSheet> RecruitSheets { get; }
+
+    /// <summary>
     /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
     /// validated against these so an upgrade outside the pool can't be persisted.
     /// </summary>
@@ -114,6 +121,8 @@ public class GameContentProvider : IGameContentProvider
     public IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools => _snapshot.AbilityUpgradePools;
 
     public IReadOnlyList<SignatureDefinition> Signatures => _snapshot.Signatures;
+
+    public IReadOnlyList<RecruitSheet> RecruitSheets => _snapshot.RecruitSheets;
 
     /// <summary>
     /// Reads AbilityUpgradeData into the per-ability legal upgrade pools used to validate saves.
@@ -326,6 +335,49 @@ public class GameContentProvider : IGameContentProvider
         }
     }
 
+    /// <summary>
+    /// Reads the ally templates into recruit sheets. An ally with no class cannot be rolled onto -
+    /// there would be nothing to pick its signature from - so it is left out rather than guessed at.
+    /// </summary>
+    private IReadOnlyList<RecruitSheet> ParseRecruitSheets(string rawCharacterData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<CharacterContentDocument>(rawCharacterData);
+            var sheets = (document?.Allies ?? new List<AllyEntry>())
+                .Where(a => a != null && !string.IsNullOrEmpty(a.LinkName) && !string.IsNullOrEmpty(a.Class))
+                .Select(a => new RecruitSheet
+                {
+                    Sheet = a.LinkName,
+                    Class = a.Class,
+                    SignatureId = a.SignatureId,
+                    SignatureAffinity = a.SignatureAffinity
+                })
+                .ToList();
+
+            _logger.LogInformation("Parsed {Count} recruit sheets.", sheets.Count);
+            return sheets;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("CharacterData.json could not be parsed into recruit sheets.", ex);
+        }
+    }
+
+    /// <summary>Only the slice of CharacterData the server needs. The client owns the rest.</summary>
+    private sealed class CharacterContentDocument
+    {
+        public List<AllyEntry> Allies { get; set; } = new();
+    }
+
+    private sealed class AllyEntry
+    {
+        public string LinkName { get; set; } = string.Empty;
+        public string Class { get; set; } = string.Empty;
+        public string? SignatureId { get; set; }
+        public Enums.AffinityTypes? SignatureAffinity { get; set; }
+    }
+
     private Snapshot Load()
     {
         var documents = new Dictionary<string, JsonNode>(DocumentNames.Length, StringComparer.OrdinalIgnoreCase);
@@ -335,6 +387,7 @@ public class GameContentProvider : IGameContentProvider
         string rawUpgradeData = null!;
         string rawMaterialData = null!;
         string rawSignatureData = null!;
+        string rawCharacterData = null!;
 
         // Hash the raw file bytes rather than the re-serialized nodes: the version must change when
         // a file changes, and must not change just because System.Text.Json reformats it.
@@ -370,6 +423,7 @@ public class GameContentProvider : IGameContentProvider
             if (name == "AbilityUpgradeData") rawUpgradeData = raw;
             if (name == "MaterialData") rawMaterialData = raw;
             if (name == "SignatureData") rawSignatureData = raw;
+            if (name == "CharacterData") rawCharacterData = raw;
 
             var segment = Encoding.UTF8.GetBytes($"{name}:{raw}\n");
             hash.TransformBlock(segment, 0, segment.Length, null, 0);
@@ -382,7 +436,7 @@ public class GameContentProvider : IGameContentProvider
         return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
             ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData),
             ParseUpgradePools(rawUpgradeData), ParseMaterials(rawMaterialData),
-            ParseSignatures(rawSignatureData));
+            ParseSignatures(rawSignatureData), ParseRecruitSheets(rawCharacterData));
     }
 
     private sealed record Snapshot(
@@ -393,5 +447,6 @@ public class GameContentProvider : IGameContentProvider
         IReadOnlyList<ItemTemplate> DroppableItems,
         IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools,
         IReadOnlyList<MaterialTemplate> Materials,
-        IReadOnlyList<SignatureDefinition> Signatures);
+        IReadOnlyList<SignatureDefinition> Signatures,
+        IReadOnlyList<RecruitSheet> RecruitSheets);
 }
