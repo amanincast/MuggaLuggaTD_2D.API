@@ -104,13 +104,23 @@ public class TavernService
     public async Task<TavernOutcome> BringARecruitAsync(
         Guid gameInstanceId, string userId, int locationTier, BiomeType? biome, string reason)
     {
+        // The clear resets the refresh price whatever else happens here. The player did the work, and
+        // the escalation is a pull back toward playing rather than a toll on the board - so it must
+        // reset even when the room turns out to be full and nobody can sit down.
+        var state = await StateAsync(gameInstanceId, userId);
+        state.RefreshesSinceClear = 0;
+        state.UpdatedAt = DateTime.UtcNow;
+
         var board = await LoadBoardAsync(gameInstanceId, userId);
 
         int seat = FreeSeat(board);
         if (seat < 0)
         {
+            await _context.SaveChangesAsync();
+
             _sessionLog.Log("TAVERN-ARRIVAL",
-                $"user={userId} instance={gameInstanceId} reason={reason} FULL — nobody could sit down");
+                $"user={userId} instance={gameInstanceId} reason={reason} FULL — nobody could sit down " +
+                "(refresh price reset anyway)");
 
             return new TavernOutcome(TavernError.BoardIsFull,
                 "The Tavern is full. Hire somebody, or pay for a fresh room.");
@@ -152,8 +162,10 @@ public class TavernService
     /// </summary>
     public async Task<TavernOutcome> RefreshAsync(Guid gameInstanceId, string userId)
     {
-        var payment = await _gold.SpendAsync(
-            gameInstanceId, userId, TavernRules.RefreshCostGold, "tavern-refresh");
+        var state = await StateAsync(gameInstanceId, userId);
+        long cost = TavernRules.RefreshCostFor(state.RefreshesSinceClear);
+
+        var payment = await _gold.SpendAsync(gameInstanceId, userId, cost, "tavern-refresh");
 
         if (!payment.Succeeded)
             return new TavernOutcome(TavernError.CannotAfford, payment.Message);
@@ -165,12 +177,43 @@ public class TavernService
         if (!outcome.Succeeded)
         {
             // Nobody came, so the gold goes back. A refresh that charged for an empty room would be
-            // a bug the player pays for.
-            await _gold.GrantAsync(
-                gameInstanceId, userId, TavernRules.RefreshCostGold, "tavern-refresh-refund");
+            // a bug the player pays for - and it must not raise the price of the next one either.
+            await _gold.GrantAsync(gameInstanceId, userId, cost, "tavern-refresh-refund");
+            return outcome;
         }
 
+        // Each refresh makes the next dearer, until a dungeon puts it back to nothing.
+        state.RefreshesSinceClear++;
+        state.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("TAVERN-REFRESH",
+            $"user={userId} instance={gameInstanceId} cost={cost} " +
+            $"next={TavernRules.RefreshCostFor(state.RefreshesSinceClear)} " +
+            $"sinceClear={state.RefreshesSinceClear}");
+
         return outcome;
+    }
+
+    /// <summary>What the player's next refresh would cost, for the board to quote.</summary>
+    public async Task<long> RefreshCostAsync(Guid gameInstanceId, string userId)
+    {
+        var state = await _context.TavernStates.FirstOrDefaultAsync(
+            t => t.GameInstanceId == gameInstanceId && t.UserId == userId);
+
+        return TavernRules.RefreshCostFor(state?.RefreshesSinceClear ?? 0);
+    }
+
+    private async Task<TavernState> StateAsync(Guid gameInstanceId, string userId)
+    {
+        var state = await _context.TavernStates.FirstOrDefaultAsync(
+            t => t.GameInstanceId == gameInstanceId && t.UserId == userId);
+
+        if (state != null) return state;
+
+        state = new TavernState { GameInstanceId = gameInstanceId, UserId = userId };
+        _context.TavernStates.Add(state);
+        return state;
     }
 
     /// <summary>

@@ -234,5 +234,51 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// reflex.</para>
         /// </summary>
         public const long RefreshCostGold = 600;
+
+        /// <summary>
+        /// How much dearer each refresh is than the last, until a dungeon resets the count.
+        ///
+        /// <para><b>A flat price is not a gate for a rich player.</b> At 600 gold a player sitting on
+        /// ten thousand can chain sixteen refreshes back to back - ninety-six rolls in about a minute,
+        /// which is enough to fish for one exact class, signature and affinity. That quietly makes
+        /// lures pointless: there is no reason to spend a crystal shifting the odds when you can buy
+        /// more dice instead.</para>
+        ///
+        /// <para>Doubling gets out of reach fast - 600, 1,200, 2,400, 4,800, 9,600 - so the fifth
+        /// refresh in a row costs sixteen times the first. Spending a little is cheap and spamming is
+        /// not, which is the whole shape being aimed for.</para>
+        /// </summary>
+        public const int RefreshCostDoublesEach = 2;
+
+        /// <summary>
+        /// Where the doubling stops, so a long run cannot overflow the arithmetic. By this point the
+        /// price is prohibitive many times over; the clamp is for safety, not for balance.
+        /// </summary>
+        public const int MaximumRefreshEscalations = 10;
+
+        /// <summary>
+        /// What the next refresh costs, given how many have already been bought since the last
+        /// dungeon.
+        ///
+        /// <para><b>A dungeon resets it</b>, which is the point: the escalation is not a punishment
+        /// for refreshing, it is a pull back toward playing. A player who wants another cheap board
+        /// can always have one - by going and clearing something, which is what the Tavern has always
+        /// been attached to.</para>
+        /// </summary>
+        public static long RefreshCostFor(int refreshesSinceClear)
+        {
+            if (refreshesSinceClear <= 0)
+                return RefreshCostGold;
+
+            int steps = refreshesSinceClear > MaximumRefreshEscalations
+                ? MaximumRefreshEscalations
+                : refreshesSinceClear;
+
+            long cost = RefreshCostGold;
+            for (int i = 0; i < steps; i++)
+                cost *= RefreshCostDoublesEach;
+
+            return cost;
+        }
     }
 }

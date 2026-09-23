@@ -29,6 +29,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerGold> PlayerGold => Set<PlayerGold>();
     public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
+    public DbSet<TavernState> TavernStates => Set<TavernState>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -143,6 +144,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // Configure PlayerGold (one purse per player per realm; every read and write is by that
         // key, and a second row would be a second balance quietly accruing alongside the first)
         builder.Entity<PlayerGold>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // Configure TavernState (one row per player per realm; it is read and written on every
+        // refresh and every clear, and a second row would be a second refresh count)
+        builder.Entity<TavernState>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
         });

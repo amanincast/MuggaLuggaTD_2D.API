@@ -204,6 +204,71 @@ public class TavernServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task EachRefreshCostsMoreThanTheLast()
+    {
+        await FillPurseAsync(100_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        long before = await Gold.BalanceAsync(Realm, Player);
+
+        await Service.RefreshAsync(Realm, Player);
+        long afterFirst = await Gold.BalanceAsync(Realm, Player);
+
+        await Service.RefreshAsync(Realm, Player);
+        long afterSecond = await Gold.BalanceAsync(Realm, Player);
+
+        Assert.Equal(TavernRules.RefreshCostFor(0), before - afterFirst);
+        Assert.Equal(TavernRules.RefreshCostFor(1), afterFirst - afterSecond);
+    }
+
+    [Fact]
+    public async Task ADungeonPutsTheRefreshPriceBack()
+    {
+        // The escalation is a pull back toward playing, not a toll on the board.
+        await FillPurseAsync(100_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.RefreshAsync(Realm, Player);
+        await Service.RefreshAsync(Realm, Player);
+
+        Assert.Equal(TavernRules.RefreshCostFor(2), await Service.RefreshCostAsync(Realm, Player));
+
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
+
+        Assert.Equal(TavernRules.RefreshCostGold, await Service.RefreshCostAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task AClearResetsThePriceEvenWhenTheRoomIsFull()
+    {
+        // The player did the work. A full room is the moment they most need a cheap refresh, so
+        // charging them the escalated price for it would be exactly backwards.
+        await FillPurseAsync(100_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        await Service.RefreshAsync(Realm, Player);
+        Assert.Equal(TavernRules.RefreshCostFor(1), await Service.RefreshCostAsync(Realm, Player));
+
+        var outcome = await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
+
+        Assert.Equal(TavernError.BoardIsFull, outcome.Error);
+        Assert.Equal(TavernRules.RefreshCostGold, await Service.RefreshCostAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task ARefundedRefreshDoesNotRaiseThePriceOfTheNext()
+    {
+        await FillPurseAsync(100_000);
+        await Service.ReadBoardAsync(Realm, Player);
+
+        _content.Signatures = new List<SignatureDefinition>();
+        await Service.RefreshAsync(Realm, Player);
+
+        Assert.Equal(TavernRules.RefreshCostGold, await Service.RefreshCostAsync(Realm, Player));
+    }
+
+    [Fact]
     public async Task ARefreshNobodyCanAffordChangesNothing()
     {
         var before = await Service.ReadBoardAsync(Realm, Player);

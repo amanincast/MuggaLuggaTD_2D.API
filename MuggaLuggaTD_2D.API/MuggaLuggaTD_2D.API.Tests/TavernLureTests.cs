@@ -75,6 +75,39 @@ public class TavernLureTests
     }
 
     // -----------------------------------------------------------------
+    // The escalating refresh
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void TheFirstRefreshAfterADungeonIsTheBasePrice()
+    {
+        Assert.Equal(TavernRules.RefreshCostGold, TavernRules.RefreshCostFor(0));
+        Assert.Equal(TavernRules.RefreshCostGold, TavernRules.RefreshCostFor(-1));
+    }
+
+    [Fact]
+    public void EachRefreshCostsDoubleTheLast()
+    {
+        // Spending a little is cheap; spamming is not. The fifth in a row is sixteen times the first,
+        // which is what stops enough gold from simply buying an exact character.
+        Assert.Equal(600, TavernRules.RefreshCostFor(0));
+        Assert.Equal(1_200, TavernRules.RefreshCostFor(1));
+        Assert.Equal(2_400, TavernRules.RefreshCostFor(2));
+        Assert.Equal(4_800, TavernRules.RefreshCostFor(3));
+        Assert.Equal(9_600, TavernRules.RefreshCostFor(4));
+    }
+
+    [Fact]
+    public void TheDoublingStopsBeforeItCanOverflow()
+    {
+        long capped = TavernRules.RefreshCostFor(TavernRules.MaximumRefreshEscalations);
+
+        Assert.Equal(capped, TavernRules.RefreshCostFor(TavernRules.MaximumRefreshEscalations + 50));
+        Assert.Equal(capped, TavernRules.RefreshCostFor(int.MaxValue));
+        Assert.True(capped > 0, "a clamped price must not have wrapped");
+    }
+
+    // -----------------------------------------------------------------
     // Pity
     // -----------------------------------------------------------------
 
