@@ -23,13 +23,16 @@ public class WalletController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly MaterialWalletService _wallet;
+    private readonly GoldService _gold;
     private readonly ISessionLog _sessionLog;
 
     public WalletController(
-        ApplicationDbContext context, MaterialWalletService wallet, ISessionLog sessionLog)
+        ApplicationDbContext context, MaterialWalletService wallet, GoldService gold,
+        ISessionLog sessionLog)
     {
         _context = context;
         _wallet = wallet;
+        _gold = gold;
         _sessionLog = sessionLog;
     }
 
@@ -40,10 +43,7 @@ public class WalletController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
-        var rows = await _wallet.ReadAsync(gameInstanceId, userId);
-
-        return Ok(new WalletResponse(
-            rows.Select(r => new MaterialBalance(r.MaterialName, r.Quantity)).ToList()));
+        return Ok(await BuildAsync(gameInstanceId, userId));
     }
 
     [HttpPost("spend")]
@@ -76,9 +76,25 @@ public class WalletController : ControllerBase
             };
         }
 
+        return Ok(await BuildAsync(gameInstanceId, userId));
+    }
+
+    /// <summary>
+    /// Materials and gold together, because the client wants them at the same moments — entering a
+    /// realm, and after a claim — and a second round trip would only let the two drift apart on
+    /// screen.
+    /// </summary>
+    private async Task<WalletResponse> BuildAsync(Guid gameInstanceId, string userId)
+    {
         var rows = await _wallet.ReadAsync(gameInstanceId, userId);
-        return Ok(new WalletResponse(
-            rows.Select(r => new MaterialBalance(r.MaterialName, r.Quantity)).ToList()));
+        var purse = await _gold.ReadAsync(gameInstanceId, userId);
+
+        long gold = await _gold.BalanceAsync(gameInstanceId, userId);
+
+        return new WalletResponse(
+            rows.Select(r => new MaterialBalance(r.MaterialName, r.Quantity)).ToList(),
+            gold,
+            purse?.GoldPerHour ?? 0);
     }
 
     private async Task<bool> HasAccessToGameInstance(Guid gameInstanceId, string userId)

@@ -11,6 +11,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
     public class RunRewards
     {
         public long Experience { get; set; }
+
+        /// <summary>
+        /// What the clear pays in gold. Derived from <see cref="Experience"/> rather than counted
+        /// separately, so the two can never disagree about how long or how hard the run was.
+        /// </summary>
+        public long Gold { get; set; }
+
         public List<ItemSaveData> Items { get; set; } = new List<ItemSaveData>();
     }
 
@@ -100,6 +107,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
                 rewards.Experience += BossRules.BossExperience(ExperienceForEnemy(finalLevel, bossHealth));
             }
+
+            // Gold is priced last, off the experience the whole clear came to. It is not a drop and
+            // never was one - see GoldRules - so there is nothing to roll here, only to convert.
+            rewards.Gold = GoldRules.GoldForClear(rewards.Experience);
 
             return rewards;
         }

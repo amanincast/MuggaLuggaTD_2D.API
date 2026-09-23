@@ -36,8 +36,11 @@ public class WorldPveServiceTests : IDisposable
     private TavernService Tavern =>
         new(_db, _content, Wallet, new FakeSessionLog(), NullLogger<TavernService>.Instance);
 
+    private GoldService Gold =>
+        new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
+
     private WorldPveService Service =>
-        new(_db, _content, Wallet, Tavern, NullLogger<WorldPveService>.Instance);
+        new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance);
 
     private static string Contract => SharedContract.Version;
 
@@ -307,6 +310,25 @@ public class WorldPveServiceTests : IDisposable
     // -----------------------------------------------------------------
     // Claiming a run
     // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task AClaimPaysGoldIntoThePurse()
+    {
+        // Gold is never picked up in the level, so the claim is the only place it can arrive. What
+        // matters is that the figure the response reports is the figure the server actually banked.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (outcome, response, _) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(GoldRules.GoldForClear(response!.Experience), response.Gold);
+        Assert.True(response.Gold > 0, "a cleared dungeon should pay something");
+        Assert.Equal(response.GoldBalance, await Gold.BalanceAsync(instanceId, TestIds.Player));
+    }
 
     [Fact]
     public async Task AClaimForARunThatWasNeverOpenedIsRefused()

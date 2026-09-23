@@ -45,5 +45,16 @@ public record PveClaimResponse(
     /// Materials paid into the player's wallet for the clear, rolled by the server. The client shows
     /// these and re-reads its balances; it does not add them itself.
     /// </summary>
-    List<MuggaLuggaTD.Shared.Gameplay.MaterialGrant>? Materials = null
+    List<MuggaLuggaTD.Shared.Gameplay.MaterialGrant>? Materials = null,
+    /// <summary>
+    /// Gold paid for the clear. Derived from <see cref="Experience"/> by the server, never picked up
+    /// in the scene — there is no coin to collect, so there is nothing for a client to over-report.
+    /// </summary>
+    long Gold = 0,
+    /// <summary>
+    /// The purse after the clear, including whatever the players land accrued while they were
+    /// fighting. Sent back so the completion screen can show a real balance rather than adding the
+    /// grant to a figure it read before the run.
+    /// </summary>
+    long GoldBalance = 0
 );

@@ -33,6 +33,7 @@ public class WorldSiegeServiceTests : IDisposable
         _db, _content, _hub, _log, NullLogger<WorldSiegeService>.Instance, _clock,
         new SeasonScoreService(
             _db,
+            new GoldService(_db, _log, NullLogger<GoldService>.Instance),
             new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance),
             _hub,
             _log,
