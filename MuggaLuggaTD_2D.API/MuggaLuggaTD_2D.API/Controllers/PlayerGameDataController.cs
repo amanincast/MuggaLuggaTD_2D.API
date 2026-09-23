@@ -20,10 +20,14 @@ public class PlayerGameDataController : ControllerBase
     private readonly PlayerSaveValidator _saveValidator;
     private readonly ISessionLog _sessionLog;
 
-    public PlayerGameDataController(ApplicationDbContext context, PlayerSaveValidator saveValidator, ISessionLog sessionLog)
+    private readonly TavernService _tavern;
+
+    public PlayerGameDataController(
+        ApplicationDbContext context, PlayerSaveValidator saveValidator, TavernService tavern, ISessionLog sessionLog)
     {
         _context = context;
         _saveValidator = saveValidator;
+        _tavern = tavern;
         _sessionLog = sessionLog;
     }
 
@@ -147,14 +151,17 @@ public class PlayerGameDataController : ControllerBase
                 $"max={MuggaLuggaTD.Shared.Gameplay.CharacterProgression.MaxLevel}");
         }
 
-        // The identity roll drives the kit, so a save naming a signature content does not have would
-        // leave the character with its class basic alone - and rarity is not granted by anything yet.
-        var signatures = _saveValidator.ValidateSignatures(saveNode);
-        if (signatures.Changed)
+        // The identity roll drives the kit and PvP power is computed from it, so a roll the server
+        // did not hand out is a character the player awarded themselves. Every roster is written back
+        // to what the hire records say - design doc 05 §5.2.
+        var roster = _saveValidator.ReconcileRoster(
+            saveNode, await _tavern.ReadHiredAsync(gameInstanceId, userId));
+
+        if (roster.Changed)
         {
-            _sessionLog.Log("SAVE-SIGNATURE",
-                $"user={userId} cleared={signatures.Cleared} rarityReset={signatures.RarityReset} " +
-                $"[{string.Join(", ", signatures.Details)}]");
+            _sessionLog.Log("SAVE-ROSTER",
+                $"user={userId} corrected={roster.Corrected} stripped={roster.Stripped} " +
+                $"[{string.Join(", ", roster.Details)}]");
         }
 
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);

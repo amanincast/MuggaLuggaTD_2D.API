@@ -33,7 +33,11 @@ public class WorldPveServiceTests : IDisposable
     private MaterialWalletService Wallet =>
         new(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
 
-    private WorldPveService Service => new(_db, _content, Wallet, NullLogger<WorldPveService>.Instance);
+    private TavernService Tavern =>
+        new(_db, _content, Wallet, new FakeSessionLog(), NullLogger<TavernService>.Instance);
+
+    private WorldPveService Service =>
+        new(_db, _content, Wallet, Tavern, NullLogger<WorldPveService>.Instance);
 
     private static string Contract => SharedContract.Version;
 

@@ -57,17 +57,20 @@ public class WorldPveService
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
     private readonly MaterialWalletService _wallet;
+    private readonly TavernService _tavern;
     private readonly ILogger<WorldPveService> _logger;
 
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
         MaterialWalletService wallet,
+        TavernService tavern,
         ILogger<WorldPveService> logger)
     {
         _context = context;
         _content = content;
         _wallet = wallet;
+        _tavern = tavern;
         _logger = logger;
     }
 
@@ -231,6 +234,17 @@ public class WorldPveService
             Random.Shared);
 
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
+
+        // Clearing a dungeon is what restocks the Tavern - there is no timer and no refresh button,
+        // so the board is attached to playing the game rather than to polling a menu. The tier raises
+        // the rarity odds and the region's biome nudges the affinities, so where you cleared shows up
+        // on the board. Design doc 05 §4.
+        if (TavernRules.RestocksTheBoard(resolved.Site.Type))
+        {
+            await _tavern.RestockAsync(
+                gameInstanceId, userId, resolved.Site.Tier, resolved.Region.Biome,
+                $"pve-claim run={run.Id} site={run.LocationId}");
+        }
 
         _logger.LogInformation(
             "PvE conquest {Outcome} at {Site} by {User} (run {RunId}, {Seconds:F0}s) — {Xp} XP, {Items} item(s), {Materials} material(s).",

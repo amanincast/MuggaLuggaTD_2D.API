@@ -26,6 +26,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
     public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
+    public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
+    public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -134,6 +136,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerMaterial>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.MaterialName }).IsUnique();
+        });
+
+        // Configure TavernRecruit (one player's board in one realm; read and replaced by that key)
+        builder.Entity<TavernRecruit>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.Slot }).IsUnique();
+        });
+
+        // Configure HiredCharacter (the entitlement record every save is reconciled against, looked
+        // up by the character id the save carries)
+        builder.Entity<HiredCharacter>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.CharacterId }).IsUnique();
         });
 
         // Configure WarLogEntry entity (a realm's war log, read newest first per season)
