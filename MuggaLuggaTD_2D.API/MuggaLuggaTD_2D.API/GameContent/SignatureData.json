@@ -13,34 +13,290 @@
   //
   // AllowedAffinities empty means all eight. The mage signatures list seven, because a bolt of
   // Physical is not a thing.
+  //
+  // AWAKENING is what the signature grows into. Stage is derived from RARITY (the ceiling:
+  // Common II, Rare III, Epic IV, Legendary Apex) and LEVEL (the climb: II at 10, III at 20,
+  // IV and Apex at 30) - never stored, so a save cannot claim a stage it has not earned.
+  // Stages are CUMULATIVE: II is still there under IV. Stage I is the signature itself and has
+  // no entry. Stages II and IV are the same for every signature (potency, then a spike); III and
+  // Apex are its own, which is where two level-30 characters stop feeling like one character.
+  // Design doc 05 §2.
   "Signatures": [
     {
       "SignatureId": "warrior_cleave",
       "DisplayName": "Cleaving Blow",
       "Description": "A wide swing that catches everything standing close.",
       "Class": "Warrior",
-      "BaseAbilityLinkName": "Cleaving_Blow_1"
+      "BaseAbilityLinkName": "Cleaving_Blow_1",
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The swing opens up, catching a wider arc of whatever is crowding in.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Reaving Arc",
+          "Description": "The blow no longer cares how many are in the way.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "CollisionScale"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.25,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        }
+      ]
     },
     {
       "SignatureId": "warrior_slam",
       "DisplayName": "Ground Slam",
       "Description": "The ground erupts a few paces out, wherever the fight is thickest.",
       "Class": "Warrior",
-      "BaseAbilityLinkName": "Ground_Slam_1"
+      "BaseAbilityLinkName": "Ground_Slam_1",
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The quake carries further out from the impact.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Faultline",
+          "Description": "The ground does not settle where this one lands.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "CollisionScale"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.25,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        }
+      ]
     },
     {
       "SignatureId": "archer_snipe",
       "DisplayName": "Snipe Shot",
       "Description": "One arrow, from further than anything can answer, through two of them.",
       "Class": "Archer",
-      "BaseAbilityLinkName": "Snipe_Shot_1"
+      "BaseAbilityLinkName": "Snipe_Shot_1",
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The shot punches through two more bodies before it stops.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 2,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Through-Line",
+          "Description": "One shot, one line, everything standing on it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 2,
+              "Value": 3,
+              "Property": "PierceCount"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.2,
+              "Property": "Range"
+            }
+          ]
+        }
+      ]
     },
     {
       "SignatureId": "archer_volley",
       "DisplayName": "Volley",
       "Description": "Five arrows at five of them at once. Worth little against one.",
       "Class": "Archer",
-      "BaseAbilityLinkName": "Volley_1"
+      "BaseAbilityLinkName": "Volley_1",
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "Two more arrows leave the bow with the rest.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 2,
+              "Property": "ProjectileCount"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Arrowfall",
+          "Description": "The sky goes dark for a moment.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 2,
+              "Value": 3,
+              "Property": "ProjectileCount"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.25,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        }
+      ]
     },
     {
       "SignatureId": "mage_blast",
@@ -48,17 +304,106 @@
       "Description": "The element itself, detonated where it will do the most harm.",
       "Class": "Mage",
       "BaseAbilityLinkName": "Magic_Burst_1",
-      "AllowedAffinities": [ 1, 2, 3, 4, 5, 6, 7 ],
-      // Every affinity of Blast is genuinely its own explosion, so each names its ability rather
-      // than recolouring one. Arcane is the base and needs no entry.
+      "AllowedAffinities": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
       "AffinityAbilities": [
-        { "AffinityType": 1, "AbilityLinkName": "Inferno_Blast_1" },
-        { "AffinityType": 2, "AbilityLinkName": "Frost_Nova_1" },
-        { "AffinityType": 3, "AbilityLinkName": "Tremor_1" },
-        { "AffinityType": 4, "AbilityLinkName": "Plasma_Burst_1" },
-        { "AffinityType": 5, "AbilityLinkName": "Radiant_Burst_1" },
-        { "AffinityType": 6, "AbilityLinkName": "Shadow_Explosion_1" },
-        { "AffinityType": 7, "AbilityLinkName": "Arcane_Detonation_1" }
+        {
+          "AffinityType": 1,
+          "AbilityLinkName": "Inferno_Blast_1"
+        },
+        {
+          "AffinityType": 2,
+          "AbilityLinkName": "Frost_Nova_1"
+        },
+        {
+          "AffinityType": 3,
+          "AbilityLinkName": "Tremor_1"
+        },
+        {
+          "AffinityType": 4,
+          "AbilityLinkName": "Plasma_Burst_1"
+        },
+        {
+          "AffinityType": 5,
+          "AbilityLinkName": "Radiant_Burst_1"
+        },
+        {
+          "AffinityType": 6,
+          "AbilityLinkName": "Shadow_Explosion_1"
+        },
+        {
+          "AffinityType": 7,
+          "AbilityLinkName": "Arcane_Detonation_1"
+        }
+      ],
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The detonation swells well past where it used to stop.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Cataclysm",
+          "Description": "The spell stops being an explosion and becomes weather.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "CollisionScale"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.25,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        }
       ]
     },
     {
@@ -67,7 +412,75 @@
       "Description": "A single lance of the element, cheap and constant.",
       "Class": "Mage",
       "BaseAbilityLinkName": "Lightning_Strike_1",
-      "AllowedAffinities": [ 1, 2, 3, 4, 5, 6, 7 ]
+      "AllowedAffinities": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The bolt leaps on to two more targets before it earths.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 14,
+              "Value": 2
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Stormcall",
+          "Description": "It stops being a bolt and starts being a storm.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 14,
+              "Value": 3
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.25,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

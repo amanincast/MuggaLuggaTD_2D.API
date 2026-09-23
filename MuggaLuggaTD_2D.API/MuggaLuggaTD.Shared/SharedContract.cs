@@ -104,6 +104,14 @@ namespace MuggaLuggaTD.Shared
         //   rarity. The client shows the board, the odds and the cost before the player spends, so
         //   both sides must price a recruit the same way - and every hire leaves a record the save is
         //   reconciled against, so a roll a 1.20.0 client wrote for itself is now stripped.
-        public const string Version = "1.21.0";
+        // 1.22.0 - awakening. A signature now grows with the character: rarity sets the ceiling
+        //   (Common II, Rare III, Epic IV, Legendary Apex) and level sets the climb (II at 10, III at
+        //   20, IV and Apex at 30). The stages are cumulative and are DERIVED from rarity and level
+        //   rather than stored, so a save cannot claim one it has not earned - but they raise the
+        //   signature's damage, which means power is no longer the same number on both sides unless
+        //   both derive it. Retuning was safe to leave out of power before this because it preserves
+        //   total damage; awakening is not. A 1.21.0 client would fight with an unawakened signature
+        //   while the server priced an awakened one. Design doc 05 §2.
+        public const string Version = "1.22.0";
     }
 }

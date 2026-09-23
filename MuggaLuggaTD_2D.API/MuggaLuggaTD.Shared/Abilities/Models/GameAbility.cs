@@ -26,6 +26,7 @@ namespace Abilities.Models
         AbilityClassifications Classification { get; set; }
         AbilityActivationTracker ActivationTracker { get; set; }
         List<AbilityUpgrade> AppliedUpgrades { get; set; }
+        List<AbilityUpgrade> DerivedUpgrades { get; set; }
         List<AbilityUpgrade> AvailableUpgrades { get; set; }
         AbilityAnimationState AnimationState { get; set; }
         AbilityMovementTypes MovementType { get; set; }
@@ -72,6 +73,16 @@ namespace Abilities.Models
         public AbilityClassifications Classification { get; set; } = AbilityClassifications.NotSpecified;
         public AbilityActivationTracker ActivationTracker { get; set; } = new AbilityActivationTracker();
         public List<AbilityUpgrade> AppliedUpgrades { get; set; } = new List<AbilityUpgrade>();
+
+        // What the character IS, as opposed to what the player picked. Awakening writes here
+        // (AwakeningRules), and nothing else does.
+        //
+        // It is deliberately NOT saved and NOT validated against an ability's upgrade pool: it is
+        // re-derived from signature, affinity, rarity and level on every load, so it cannot be forged
+        // into a save and AbilityUpgradeValidator cannot strip it out of one. Keeping it separate is
+        // also what stops a level-up pick from wiping it - ApplyAbilityUpgrade replays from the base,
+        // so awakening has to be part of what gets replayed.
+        public List<AbilityUpgrade> DerivedUpgrades { get; set; } = new List<AbilityUpgrade>();
         public List<AbilityUpgrade> AvailableUpgrades { get; set; } = new List<AbilityUpgrade>();
         public AbilityAnimationState AnimationState { get; set; } = new AbilityAnimationState();
         public AbilityMovementTypes MovementType { get; set; }
@@ -101,7 +112,12 @@ namespace Abilities.Models
         public void ApplyAbilityUpgrade(AbilityUpgrade abilityUpgrade)
         {
             AppliedUpgrades.Add(abilityUpgrade);
-            UpgradeModifierHandler.ApplyUpgrades(this, AppliedUpgrades);
+
+            // Derived first, then picked. ApplyUpgrades replays everything from the base, so leaving
+            // DerivedUpgrades out here would silently undo awakening the moment a player took a
+            // level-up upgrade.
+            UpgradeModifierHandler.ApplyUpgrades(
+                this, (DerivedUpgrades ?? new List<AbilityUpgrade>()).Concat(AppliedUpgrades).ToList());
         }
     }
 }

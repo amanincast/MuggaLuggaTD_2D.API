@@ -31,9 +31,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// that is its signature. It is applied <b>before</b> the upgrades rather than after: upgrades
         /// are replayed from the base every time one is picked, so retuning afterwards would fold the
         /// upgraded total into the base and compound it on the next pick.</para>
+        ///
+        /// <para><paramref name="awakening"/> is the character's signature, rarity and level, which
+        /// together decide how far the signature has woken up. It lands on the ability's
+        /// <see cref="GameAbility.DerivedUpgrades"/> rather than its applied ones, so it is never
+        /// saved and never validated as a pick.</para>
         /// </summary>
         public static GameAbility Resolve(AbilitySaveData saveData, IReadOnlyCollection<GameAbility> templates,
-            Enums.AffinityTypes? retuneTo = null)
+            Enums.AffinityTypes? retuneTo = null, AwakeningContext awakening = null)
         {
             if (saveData == null || templates == null)
                 return null;
@@ -47,6 +52,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             if (retuneTo.HasValue)
                 SignatureRules.Retune(ability, retuneTo.Value);
+
+            // Between retune and the picked upgrades, for the same reason retune comes before them:
+            // awakening is part of what the ability is, and the picks multiply what it is.
+            awakening?.ApplyTo(ability);
 
             if (saveData.AppliedUpgrades != null)
             {
