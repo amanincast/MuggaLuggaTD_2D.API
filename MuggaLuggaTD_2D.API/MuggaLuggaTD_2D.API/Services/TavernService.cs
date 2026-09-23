@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Enums;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
@@ -19,7 +20,8 @@ public enum TavernError
     LureAlreadyStanding,
     NoSuchCrystal,
     BoardIsFull,
-    NoContent
+    NoContent,
+    NoSlotsLeft
 }
 
 public record TavernOutcome(TavernError Error, string? Message = null)
@@ -36,10 +38,11 @@ public record TavernOutcome(TavernError Error, string? Message = null)
 /// it liked one, and a character is the most valuable thing in the game. The client asks for the
 /// board and asks to hire slot N; it never sends a recruit.</para>
 ///
-/// <para><b>The restock is paid for with a dungeon.</b> There is no timer and no refresh button, so
-/// the only way to see new faces is to go and clear something - which is what keeps the Tavern
-/// attached to the game rather than being a menu you poll. The dungeon's tier raises the rarity odds
-/// and its region's biome nudges the affinities, so <i>where</i> you cleared shows up on the board.</para>
+/// <para><b>A dungeon is what brings somebody in.</b> There is no timer, so the ordinary way to see a
+/// new face is to go and clear something - which is what keeps the Tavern attached to the game rather
+/// than being a menu you poll. The dungeon's tier raises the rarity odds and its region's biome nudges
+/// the affinities, so <i>where</i> you cleared shows up on the board. A paid refresh exists for a room
+/// full of people you do not want, and is priced to be a last resort.</para>
 /// </summary>
 public class TavernService
 {
@@ -216,6 +219,133 @@ public class TavernService
         return state;
     }
 
+    // -----------------------------------------------------------------
+    // The roster cap
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// What this player may hold, what they are holding, and where the number came from.
+    ///
+    /// <para>Computed rather than stored, every time it is asked for. A cap written down is a cap that
+    /// can disagree with the map, and the map is the thing the player can see.</para>
+    /// </summary>
+    public record RosterStanding(
+        int Used, int Cap, int RegionsHeld, int FromTerritory, int Purchased,
+        long NextSlotCostGold, bool CanBuyAnother)
+    {
+        public bool HasRoom => Used < Cap;
+    }
+
+    /// <summary>
+    /// This player's roster standing in this realm.
+    ///
+    /// <para><b>The count is the whole roster, not just the hires.</b> It used to be the hire records
+    /// alone, which meant the number the Guild Hall displayed and the number the gate enforced were
+    /// different numbers - a player seeing "7 / 20" actually had twenty hires left on top of their
+    /// seven starting allies. Counting what the player can see is the only version of this that can be
+    /// explained to them.</para>
+    /// </summary>
+    public async Task<RosterStanding> RosterStandingAsync(Guid gameInstanceId, string userId)
+    {
+        var state = await _context.TavernStates.AsNoTracking().FirstOrDefaultAsync(
+            t => t.GameInstanceId == gameInstanceId && t.UserId == userId);
+
+        int purchased = state?.PurchasedRosterSlots ?? 0;
+        int regionsHeld = RosterCapRules.RegionsHeldBy(
+            userId, WorldRegionBlob.ReadAllRegions(await LoadWorldAsync(gameInstanceId)));
+
+        return new RosterStanding(
+            await RosterCountAsync(gameInstanceId, userId),
+            RosterCapRules.CapFor(regionsHeld, purchased),
+            regionsHeld,
+            RosterCapRules.FromTerritory(regionsHeld),
+            purchased,
+            RosterCapRules.SlotCostFor(purchased),
+            RosterCapRules.CanBuyAnother(purchased));
+    }
+
+    /// <summary>
+    /// Buys one permanent roster slot for gold.
+    ///
+    /// <para>The count is checked before the wallet is charged and the charge before the count is
+    /// raised, so a purchase that cannot be paid for leaves nothing behind and a seventh can never be
+    /// bought however the requests are timed.</para>
+    /// </summary>
+    public async Task<(TavernOutcome Outcome, RosterStanding? Standing)> BuyRosterSlotAsync(
+        Guid gameInstanceId, string userId)
+    {
+        var state = await StateAsync(gameInstanceId, userId);
+
+        if (!RosterCapRules.CanBuyAnother(state.PurchasedRosterSlots))
+        {
+            return (new TavernOutcome(TavernError.NoSlotsLeft,
+                $"You have bought every slot there is ({RosterCapRules.MaximumPurchasedSlots}). " +
+                "More room comes from holding more ground."), null);
+        }
+
+        long cost = RosterCapRules.SlotCostFor(state.PurchasedRosterSlots);
+        var payment = await _gold.SpendAsync(gameInstanceId, userId, cost, "roster-slot");
+        if (!payment.Succeeded)
+            return (new TavernOutcome(TavernError.CannotAfford, payment.Message), null);
+
+        state.PurchasedRosterSlots++;
+        state.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var standing = await RosterStandingAsync(gameInstanceId, userId);
+
+        _sessionLog.Log("TAVERN-SLOT",
+            $"user={userId} instance={gameInstanceId} cost={cost} " +
+            $"purchased={state.PurchasedRosterSlots} cap={standing.Cap} used={standing.Used}");
+
+        return (new TavernOutcome(TavernError.None), standing);
+    }
+
+    /// <summary>
+    /// Every character in this player's save, which is what the cap counts.
+    ///
+    /// <para>Falls back to the hire records plus the starting ally templates when there is no save yet
+    /// - a player who has just joined a realm has a roster the client is about to write rather than one
+    /// already on disk, and refusing their first hire would be wrong.</para>
+    /// </summary>
+    private async Task<int> RosterCountAsync(Guid gameInstanceId, string userId)
+    {
+        var save = await _context.PlayerGameData
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+
+        if (save != null)
+        {
+            try
+            {
+                if (JsonNode.Parse(save.GameData) is JsonObject root &&
+                    root["Characters"] is JsonArray characters)
+                {
+                    return characters.Count;
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // A save we cannot read is not a reason to refuse a hire; fall through to the records,
+                // which is the conservative direction.
+            }
+        }
+
+        int hires = await _context.HiredCharacters
+            .CountAsync(h => h.GameInstanceId == gameInstanceId && h.UserId == userId);
+
+        return hires + (_content.RecruitSheets?.Count ?? 0);
+    }
+
+    private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId)
+    {
+        var row = await _context.WorldViewGameData
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+
+        return row == null ? null : JsonNode.Parse(row.GameData);
+    }
+
     /// <summary>
     /// Wipes whatever is there and rolls a full board. Used by a first visit and a paid refresh —
     /// the two moments a whole room is replaced at once.
@@ -341,13 +471,17 @@ public class TavernService
                 "That recruit is no longer possible — clear a dungeon for a new board."), null);
         }
 
-        int roster = await _context.HiredCharacters
-            .CountAsync(h => h.GameInstanceId == gameInstanceId && h.UserId == userId);
+        // The cap gates hiring and nothing else. A player whose land has been taken can be over it
+        // already - that costs them nobody, it just means no new faces until they are under it again.
+        var standing = await RosterStandingAsync(gameInstanceId, userId);
 
-        if (roster >= TavernRules.RosterCap)
+        if (!standing.HasRoom)
         {
             return (new TavernOutcome(TavernError.RosterFull,
-                $"Your roster is full ({TavernRules.RosterCap})."), null);
+                $"You have room for {standing.Cap} and you are holding {standing.Used}. " +
+                (standing.CanBuyAnother
+                    ? $"Take more ground, or buy a slot for {standing.NextSlotCostGold:N0} gold."
+                    : "Take more ground to make room.")), null);
         }
 
         var cost = TavernRules.HireCost(recruit.Rarity);
@@ -380,7 +514,8 @@ public class TavernService
         _sessionLog.Log("TAVERN-HIRE",
             $"user={userId} instance={gameInstanceId} slot={slot} character={hired.CharacterId} " +
             $"{hired.CharacterClass}/{hired.SignatureId}/{hired.Affinity}/{hired.Rarity} " +
-            $"cost={string.Join(",", cost.Select(c => $"{c.MaterialName}x{c.Quantity}"))} roster={roster + 1}");
+            $"cost={string.Join(",", cost.Select(c => $"{c.MaterialName}x{c.Quantity}"))} " +
+            $"roster={standing.Used + 1}/{standing.Cap}");
 
         _logger.LogInformation(
             "Tavern hire by {User}: {Class} {Signature}/{Affinity} ({Rarity}) as {CharacterId}.",

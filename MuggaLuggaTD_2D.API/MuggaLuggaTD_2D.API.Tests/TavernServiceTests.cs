@@ -1,4 +1,5 @@
 using Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD.Shared.World;
@@ -64,6 +65,41 @@ public class TavernServiceTests : IDisposable
     }
 
     public void Dispose() => _db.Dispose();
+
+    /// <summary>Gives the player <paramref name="regions"/> regions, which is what raises their cap.</summary>
+    private async Task GiveLandAsync(int regions)
+    {
+        var owned = Enumerable.Range(1, regions)
+            .Select(i => TestWorld.OwnedBy(Player, $"r{i}"))
+            .ToArray();
+
+        var row = await _db.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == Realm);
+
+        if (row == null)
+        {
+            await _db.AddWorldAsync(Realm, TestWorld.Blob(owned));
+            return;
+        }
+
+        row.GameData = TestWorld.Blob(owned).ToJsonString();
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Hires until the cap refuses one more, and returns how many went through.</summary>
+    private async Task<int> HireUntilFullAsync()
+    {
+        await FillWalletAsync();
+
+        for (int i = 0; i < RosterCapRules.AbsoluteCap + 5; i++)
+        {
+            var board = await Service.ReadBoardAsync(Realm, Player);
+            if (!(await Service.HireAsync(Realm, Player, board[0].Slot)).Outcome.Succeeded)
+                return i;
+        }
+
+        Assert.Fail("the cap never refused a hire");
+        return -1;
+    }
 
     /// <summary>Enough of everything to afford any rarity.</summary>
     private async Task FillWalletAsync()
@@ -413,20 +449,178 @@ public class TavernServiceTests : IDisposable
     [Fact]
     public async Task TheRosterIsCapped()
     {
+        var standing = await Service.RosterStandingAsync(Realm, Player);
+        Assert.Equal(RosterCapRules.BaseSlots, standing.Cap);
+
+        // The count includes the starting roster, so the hires that fit are the room left over.
+        int room = standing.Cap - standing.Used;
+        Assert.Equal(room, await HireUntilFullAsync());
+
+        var full = await Service.RosterStandingAsync(Realm, Player);
+        Assert.Equal(full.Cap, full.Used);
+        Assert.False(full.HasRoom);
+    }
+
+    [Fact]
+    public async Task TheCapCountsTheWholeRosterNotJustTheHires()
+    {
+        // The number the Guild Hall shows and the number that refuses a hire have to be one number.
+        // They were two: the gate counted hire records while the room displayed every character.
+        var before = await Service.RosterStandingAsync(Realm, Player);
+        Assert.Equal(_content.RecruitSheets.Count, before.Used);
+
         await FillWalletAsync();
+        var board = await Service.ReadBoardAsync(Realm, Player);
+        await Service.HireAsync(Realm, Player, board[0].Slot);
 
-        for (int i = 0; i < TavernRules.RosterCap; i++)
-        {
-            var board = await Service.ReadBoardAsync(Realm, Player);
-            Assert.True((await Service.HireAsync(Realm, Player, board[0].Slot)).Outcome.Succeeded,
-                $"hire {i} should succeed");
-        }
+        Assert.Equal(before.Used + 1, (await Service.RosterStandingAsync(Realm, Player)).Used);
+    }
 
-        var last = await Service.ReadBoardAsync(Realm, Player);
-        var (outcome, _) = await Service.HireAsync(Realm, Player, last[0].Slot);
+    // -----------------------------------------------------------------
+    // Where the room comes from
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task HoldingGroundMakesRoomForAnArmy()
+    {
+        await GiveLandAsync(4);
+
+        var standing = await Service.RosterStandingAsync(Realm, Player);
+
+        Assert.Equal(4, standing.RegionsHeld);
+        Assert.Equal(4, standing.FromTerritory);
+        Assert.Equal(RosterCapRules.BaseSlots + 4, standing.Cap);
+    }
+
+    [Fact]
+    public async Task OnlyYourOwnGroundCounts()
+    {
+        await _db.AddWorldAsync(Realm, TestWorld.Blob(
+            TestWorld.OwnedBy(Player, "r1"),
+            TestWorld.OwnedBy(TestIds.Rival, "r2"),
+            TestWorld.Region("r3")));
+
+        Assert.Equal(1, (await Service.RosterStandingAsync(Realm, Player)).RegionsHeld);
+    }
+
+    [Fact]
+    public async Task LosingLandTakesNobodyAway()
+    {
+        // The invariant this whole design rests on. Points are never clawed back when ground is lost
+        // and neither are characters: the cap stops a player hiring, it never unmakes what they built.
+        await GiveLandAsync(6);
+        int hired = await HireUntilFullAsync();
+        Assert.True(hired > 0);
+
+        int held = (await Service.RosterStandingAsync(Realm, Player)).Used;
+
+        await GiveLandAsync(1);
+        var routed = await Service.RosterStandingAsync(Realm, Player);
+
+        Assert.Equal(held, routed.Used);
+        Assert.Equal(hired, (await Service.ReadHiredAsync(Realm, Player)).Count);
+        Assert.True(routed.Used > routed.Cap, "the player should now be over their cap");
+        Assert.False(routed.HasRoom);
+    }
+
+    [Fact]
+    public async Task BeingOverTheCapRefusesAHireAndNothingElse()
+    {
+        await GiveLandAsync(6);
+        await HireUntilFullAsync();
+        await GiveLandAsync(0);
+
+        var board = await Service.ReadBoardAsync(Realm, Player);
+        int before = (await Service.ReadHiredAsync(Realm, Player)).Count;
+
+        var (outcome, hired) = await Service.HireAsync(Realm, Player, board[0].Slot);
 
         Assert.Equal(TavernError.RosterFull, outcome.Error);
-        Assert.Equal(TavernRules.RosterCap, (await Service.ReadHiredAsync(Realm, Player)).Count);
+        Assert.Null(hired);
+        Assert.Equal(before, (await Service.ReadHiredAsync(Realm, Player)).Count);
+
+        // And the board is untouched - a refused hire costs the player nothing at all.
+        Assert.Equal(board.Count, (await Service.ReadBoardAsync(Realm, Player)).Count);
+    }
+
+    // -----------------------------------------------------------------
+    // Buying a slot
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ASlotBoughtWithGoldRaisesTheCap()
+    {
+        await FillPurseAsync(100_000);
+
+        long before = await Gold.BalanceAsync(Realm, Player);
+        int cap = (await Service.RosterStandingAsync(Realm, Player)).Cap;
+
+        var (outcome, standing) = await Service.BuyRosterSlotAsync(Realm, Player);
+
+        Assert.True(outcome.Succeeded);
+        Assert.Equal(cap + 1, standing!.Cap);
+        Assert.Equal(1, standing.Purchased);
+        Assert.Equal(RosterCapRules.SlotCostFor(0), before - await Gold.BalanceAsync(Realm, Player));
+    }
+
+    [Fact]
+    public async Task EachSlotCostsMoreThanTheLast()
+    {
+        await FillPurseAsync(100_000);
+
+        long start = await Gold.BalanceAsync(Realm, Player);
+        await Service.BuyRosterSlotAsync(Realm, Player);
+        long afterFirst = await Gold.BalanceAsync(Realm, Player);
+        await Service.BuyRosterSlotAsync(Realm, Player);
+        long afterSecond = await Gold.BalanceAsync(Realm, Player);
+
+        Assert.Equal(RosterCapRules.SlotCostFor(0), start - afterFirst);
+        Assert.Equal(RosterCapRules.SlotCostFor(1), afterFirst - afterSecond);
+    }
+
+    [Fact]
+    public async Task TheSlotsRunOutHoweverMuchGoldThereIs()
+    {
+        await FillPurseAsync(10_000_000);
+
+        for (int i = 0; i < RosterCapRules.MaximumPurchasedSlots; i++)
+            Assert.True((await Service.BuyRosterSlotAsync(Realm, Player)).Outcome.Succeeded, $"slot {i}");
+
+        long before = await Gold.BalanceAsync(Realm, Player);
+        var (outcome, _) = await Service.BuyRosterSlotAsync(Realm, Player);
+
+        Assert.Equal(TavernError.NoSlotsLeft, outcome.Error);
+        Assert.Equal(before, await Gold.BalanceAsync(Realm, Player));
+
+        var standing = await Service.RosterStandingAsync(Realm, Player);
+        Assert.False(standing.CanBuyAnother);
+        Assert.Equal(0, standing.NextSlotCostGold);
+    }
+
+    [Fact]
+    public async Task ASlotNobodyCanAffordChangesNothing()
+    {
+        var (outcome, standing) = await Service.BuyRosterSlotAsync(Realm, Player);
+
+        Assert.Equal(TavernError.CannotAfford, outcome.Error);
+        Assert.Null(standing);
+        Assert.Equal(0, (await Service.RosterStandingAsync(Realm, Player)).Purchased);
+    }
+
+    [Fact]
+    public async Task ASeasonResetDoesNotTakeBackABoughtSlot()
+    {
+        // The refresh count is a state of play and is reset by a dungeon; a bought slot is a purchase
+        // and is reset by nothing. They share a row, so this is worth pinning.
+        await FillPurseAsync(100_000);
+        await Service.BuyRosterSlotAsync(Realm, Player);
+
+        await FreeSeatsAsync(1);
+        await Service.BringARecruitAsync(Realm, Player, 1, null, "test");
+
+        var standing = await Service.RosterStandingAsync(Realm, Player);
+        Assert.Equal(1, standing.Purchased);
+        Assert.Equal(TavernRules.RefreshCostGold, await Service.RefreshCostAsync(Realm, Player));
     }
 
     [Fact]

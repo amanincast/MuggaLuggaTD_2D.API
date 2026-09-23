@@ -21,14 +21,32 @@ public record TavernRecruitCard(
     bool Hired);
 
 /// <summary>
-/// The board, plus what it cannot tell the player itself: how many characters they hold, and how
-/// many they may.
+/// How much room a player has for characters, and where that room came from.
+///
+/// <para>The breakdown travels with the number because the number alone is not actionable. "You may
+/// hold 15" tells a player nothing about what to do; "10, plus 5 for the regions you hold, and you
+/// may buy 6 more" tells them there are two things they could go and do.</para>
+///
+/// <para><see cref="Used"/> and <see cref="Cap"/> come from the same call that gates hiring, so the
+/// figure in the Guild Hall cannot disagree with the one that refuses a hire.</para>
+/// </summary>
+public record TavernRosterState(
+    int Used,
+    int Cap,
+    int RegionsHeld,
+    int FromTerritory,
+    int Purchased,
+    int PurchasableTotal,
+    long NextSlotCostGold,
+    bool CanBuyAnother);
+
+/// <summary>
+/// The board, plus what it cannot tell the player itself: how much room they have for characters.
 /// </summary>
 public record TavernBoardResponse(
     List<TavernRecruitCard> Recruits,
     DateTime RolledAt,
-    int RosterCount,
-    int RosterCap,
+    TavernRosterState Roster,
     /// <summary>
     /// Every affinity this player has an offer or a debt on. Sent whole rather than as "the standing
     /// one", so the room can show a player what their misses have already bought them on affinities
@@ -55,13 +73,19 @@ public record TavernLureState(
     int MissedRestocks,
     double Target);
 
+/// <summary>Buys a fresh room. Carries nothing but the contract - the price is the server's.</summary>
+public record TavernRefreshRequest(string SharedContractVersion);
+
+/// <summary>
+/// Buys one permanent roster slot. Carries nothing but the contract - which slot this is, and what it
+/// costs, are both the server's to decide.
+/// </summary>
+public record TavernSlotRequest(string SharedContractVersion);
+
 /// <summary>
 /// Offers a crystal against the next restock. Names the affinity and the strength rather than the
 /// material, so the server decides which crystal that costs.
 /// </summary>
-/// <summary>Buys a fresh room. Carries nothing but the contract - the price is the server's.</summary>
-public record TavernRefreshRequest(string SharedContractVersion);
-
 public record TavernLureRequest(
     AffinityTypes Affinity,
     TavernRules.LureStrength Strength,

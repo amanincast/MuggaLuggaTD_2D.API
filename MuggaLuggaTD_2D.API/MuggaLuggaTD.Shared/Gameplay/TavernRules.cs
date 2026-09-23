@@ -27,11 +27,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public const int BoardSize = 6;
 
-        /// <summary>
-        /// How many characters a player may hold. A cap is what makes a miss cost something; without
-        /// one the right answer is always to hire everything and never think about it.
-        /// </summary>
-        public const int RosterCap = 20;
+        // How many characters a player may hold is no longer one number - it is built from the base,
+        // the land they hold and the slots they have bought. See RosterCapRules.
 
         /// <summary>
         /// Base rarity odds in tenths of a percent, so the tier bonuses below are exact integers

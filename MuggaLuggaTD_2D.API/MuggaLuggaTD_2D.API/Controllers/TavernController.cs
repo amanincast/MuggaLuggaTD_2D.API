@@ -162,21 +162,68 @@ public class TavernController : ControllerBase
         return Ok(await BoardResponseAsync(gameInstanceId, userId));
     }
 
+    /// <summary>
+    /// Buys one permanent roster slot for gold.
+    ///
+    /// <para>It lives at the Tavern because that is where the cap is felt — it is the wall a hire runs
+    /// into — even though the roster itself belongs to the Guild Hall.</para>
+    /// </summary>
+    [HttpPost("slot")]
+    public async Task<ActionResult<TavernBoardResponse>> BuySlot(
+        Guid gameInstanceId, [FromBody] TavernSlotRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        if (request.SharedContractVersion != SharedContract.Version)
+        {
+            return Conflict(new
+            {
+                error = "Shared contract version mismatch.",
+                expected = SharedContract.Version,
+                received = request.SharedContractVersion
+            });
+        }
+
+        var (outcome, _) = await _tavern.BuyRosterSlotAsync(gameInstanceId, userId);
+
+        if (!outcome.Succeeded)
+        {
+            return outcome.Error switch
+            {
+                TavernError.CannotAfford => Conflict(new { error = outcome.Message }),
+                _ => BadRequest(new { error = outcome.Message })
+            };
+        }
+
+        return Ok(await BoardResponseAsync(gameInstanceId, userId));
+    }
+
     private async Task<TavernBoardResponse> BoardResponseAsync(Guid gameInstanceId, string userId)
     {
         var board = await _tavern.ReadBoardAsync(gameInstanceId, userId);
-        var roster = await _tavern.ReadHiredAsync(gameInstanceId, userId);
         var lures = await _tavern.ReadLuresAsync(gameInstanceId, userId);
 
         return new TavernBoardResponse(
             board.Select(ToCard).ToList(),
             board.Count > 0 ? board[0].RolledAt : DateTime.UtcNow,
-            roster.Count,
-            TavernRules.RosterCap,
+            ToRosterState(await _tavern.RosterStandingAsync(gameInstanceId, userId)),
             lures.Select(ToLureState).ToList(),
             await _tavern.RefreshCostAsync(gameInstanceId, userId),
             await _gold.BalanceAsync(gameInstanceId, userId));
     }
+
+    private static TavernRosterState ToRosterState(TavernService.RosterStanding standing)
+        => new(
+            standing.Used,
+            standing.Cap,
+            standing.RegionsHeld,
+            standing.FromTerritory,
+            standing.Purchased,
+            RosterCapRules.MaximumPurchasedSlots,
+            standing.NextSlotCostGold,
+            standing.CanBuyAnother);
 
     private static TavernLureState ToLureState(Models.TavernLure lure)
         => new(
