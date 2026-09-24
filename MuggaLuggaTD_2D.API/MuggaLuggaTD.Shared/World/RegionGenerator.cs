@@ -323,17 +323,17 @@ namespace MuggaLuggaTD.Shared.World
         {
             switch (biome)
             {
-                case BiomeType.Fenland:
+                case BiomeType.Lakeland:
                     return new BiomeProfile { WaterBlobs = 3, WaterSize = 40, MountainBlobs = 0, MountainSize = 0, ForestBlobs = 2, ForestSize = 26 };
-                case BiomeType.Marsh:
+                case BiomeType.Swamp:
                     return new BiomeProfile { WaterBlobs = 3, WaterSize = 36, MountainBlobs = 0, MountainSize = 0, ForestBlobs = 2, ForestSize = 24 };
                 case BiomeType.Highland:
                     return new BiomeProfile { WaterBlobs = 1, WaterSize = 22, MountainBlobs = 3, MountainSize = 38, ForestBlobs = 1, ForestSize = 26 };
                 case BiomeType.Volcanic:
                     return new BiomeProfile { WaterBlobs = 0, WaterSize = 0, MountainBlobs = 3, MountainSize = 46, ForestBlobs = 1, ForestSize = 22 };
-                case BiomeType.Thornwood:
+                case BiomeType.Forest:
                     return new BiomeProfile { WaterBlobs = 1, WaterSize = 22, MountainBlobs = 1, MountainSize = 20, ForestBlobs = 3, ForestSize = 40 };
-                default: // RiverVale — the gentle one players start in.
+                default: // Grassland — the gentle one players start in.
                     return new BiomeProfile { WaterBlobs = 2, WaterSize = 28, MountainBlobs = 1, MountainSize = 20, ForestBlobs = 2, ForestSize = 26 };
             }
         }

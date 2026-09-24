@@ -147,7 +147,7 @@ public class WorldProvisioningService
         seat["IsCapital"] = true;
         seat["Entrenchment"] = StartingEntrenchment;
         seat["Tier"] = 1;
-        seat["Biome"] = (int)BiomeType.RiverVale;
+        seat["Biome"] = (int)BiomeType.Grassland;
 
         row.GameData = world!.ToJsonString();
         row.UpdatedAt = DateTime.UtcNow;
