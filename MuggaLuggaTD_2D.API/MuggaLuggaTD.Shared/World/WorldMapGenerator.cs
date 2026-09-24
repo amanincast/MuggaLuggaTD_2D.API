@@ -99,16 +99,16 @@ namespace MuggaLuggaTD.Shared.World
         {
             // The heart of the map is the gentle river vale; the rim is volcanic and highland. In
             // between, weight the roll by distance so biomes form bands rather than confetti.
-            if (distance == 0) return BiomeType.RiverVale;
+            if (distance == 0) return BiomeType.Grassland;
 
             int[] weights =
             {
-                Math.Max(0, 60 - (distance * 12)), // RiverVale
-                30,                                // Thornwood
-                10 + (distance * 4),               // Fenland
+                Math.Max(0, 60 - (distance * 12)), // Grassland
+                30,                                // Forest
+                10 + (distance * 4),               // Lakeland
                 Math.Max(0, (distance - 1) * 10),  // Highland
                 Math.Max(0, (distance - 2) * 12),  // Volcanic
-                10 + (distance * 3)                // Marsh
+                10 + (distance * 3)                // Swamp
             };
 
             return (BiomeType)random.NextWeighted(weights);
@@ -180,7 +180,7 @@ namespace MuggaLuggaTD.Shared.World
                 // A seat starts fortified enough to survive the first days of a world.
                 best.Entrenchment = 2;
                 best.Tier = 1;
-                best.Biome = BiomeType.RiverVale;
+                best.Biome = BiomeType.Grassland;
 
                 taken.Add(best.Hex);
             }

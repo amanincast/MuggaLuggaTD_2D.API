@@ -117,7 +117,7 @@ public class WorldProvisioningServiceTests : IDisposable
 
         Assert.Equal(2, capital.Entrenchment);
         Assert.Equal(1, capital.Tier);
-        Assert.Equal(BiomeType.RiverVale, capital.Biome);
+        Assert.Equal(BiomeType.Grassland, capital.Biome);
         Assert.Equal(100, capital.Resolve);
     }
 

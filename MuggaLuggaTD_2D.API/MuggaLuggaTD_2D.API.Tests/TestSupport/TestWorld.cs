@@ -28,7 +28,7 @@ public static class TestWorld
         LocationOwnership ownership = LocationOwnership.Neutral,
         string? ownerUserId = null,
         int tier = 2,
-        BiomeType biome = BiomeType.RiverVale)
+        BiomeType biome = BiomeType.Grassland)
     {
         return new WorldRegionData
         {

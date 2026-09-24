@@ -83,11 +83,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
             switch (biome)
             {
                 case BiomeType.Volcanic: return AffinityTypes.Fire;
-                case BiomeType.Fenland: return AffinityTypes.Water;
+                case BiomeType.Lakeland: return AffinityTypes.Water;
                 case BiomeType.Highland: return AffinityTypes.Air;
-                case BiomeType.Thornwood: return AffinityTypes.Earth;
-                case BiomeType.Marsh: return AffinityTypes.Dark;
-                case BiomeType.RiverVale: return AffinityTypes.Light;
+                case BiomeType.Forest: return AffinityTypes.Earth;
+                case BiomeType.Swamp: return AffinityTypes.Dark;
+                case BiomeType.Grassland: return AffinityTypes.Light;
                 default: return null;
             }
         }
