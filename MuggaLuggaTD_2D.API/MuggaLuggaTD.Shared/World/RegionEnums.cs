@@ -21,7 +21,10 @@ namespace MuggaLuggaTD.Shared.World
         Lakeland = 2,
         Highland = 3,
         Volcanic = 4,
-        Swamp = 5
+        Swamp = 5,
+
+        /// <summary>Open sand, mesas and the odd oasis — and the ruins of whatever was here first.</summary>
+        Desert = 6
     }
 
     /// <summary>

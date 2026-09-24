@@ -333,6 +333,10 @@ namespace MuggaLuggaTD.Shared.World
                     return new BiomeProfile { WaterBlobs = 0, WaterSize = 0, MountainBlobs = 3, MountainSize = 46, ForestBlobs = 1, ForestSize = 22 };
                 case BiomeType.Forest:
                     return new BiomeProfile { WaterBlobs = 1, WaterSize = 22, MountainBlobs = 1, MountainSize = 20, ForestBlobs = 3, ForestSize = 40 };
+                case BiomeType.Desert:
+                    // Mostly open sand: two mesas, one small oasis, a scrap of green beside it. The
+                    // least covered biome on purpose — emptiness is what a desert looks like.
+                    return new BiomeProfile { WaterBlobs = 1, WaterSize = 14, MountainBlobs = 2, MountainSize = 40, ForestBlobs = 1, ForestSize = 12 };
                 default: // Grassland — the gentle one players start in.
                     return new BiomeProfile { WaterBlobs = 2, WaterSize = 28, MountainBlobs = 1, MountainSize = 20, ForestBlobs = 2, ForestSize = 26 };
             }
@@ -360,9 +364,14 @@ namespace MuggaLuggaTD.Shared.World
             };
 
             // A portal is the rarer, harder fight, and only worth placing where the land is already
-            // dangerous.
-            if (biome == BiomeType.Volcanic || biome == BiomeType.Highland)
+            // dangerous — or, in the desert, where the Arcane is already leaking through.
+            if (biome == BiomeType.Volcanic || biome == BiomeType.Highland || biome == BiomeType.Desert)
                 budget[LocationType.Portal] = 1;
+
+            // The desert is where the ruins are: it keeps what it buries. One from tier 2, a tier
+            // earlier than anywhere else.
+            if (biome == BiomeType.Desert && t >= 2)
+                budget[LocationType.Ruin] = 1;
 
             return budget;
         }
