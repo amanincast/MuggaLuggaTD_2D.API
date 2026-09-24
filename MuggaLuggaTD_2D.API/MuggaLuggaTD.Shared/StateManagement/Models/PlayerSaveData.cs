@@ -22,12 +22,35 @@ namespace StateManagement.Models
         public List<CharacterSaveData> Characters { get; set; } = new List<CharacterSaveData>();
         public List<string> ActiveCharacterIds { get; set; } = new List<string>();
         public List<ItemSaveData> InventoryItems { get; set; } = new List<ItemSaveData>();
+
+        /// <summary>
+        /// Characters taken on a lost run, and when.
+        ///
+        /// <para>Siege captivity is <b>not</b> here — it lives in the shared world, where the captor can
+        /// see it and the server owns it. This is the other kind: nobody else was involved, so there is
+        /// nobody to keep honest. It is safe to take on trust precisely because it only ever <i>removes</i>
+        /// a character from play; a client that edited it could give itself nothing it did not already
+        /// have, which is why the save validator leaves it alone.</para>
+        ///
+        /// <para>Before this, captivity from a lost run lived only in memory and a relaunch freed
+        /// everybody.</para>
+        /// </summary>
+        public List<CapturedCharacterSaveData> CapturedCharacters { get; set; } = new List<CapturedCharacterSaveData>();
     }
 
     /// <summary>
     /// Serializable character data for persistence.
     /// </summary>
     [Serializable]
+    /// <summary>One character held after a lost run, and the instant they were taken.</summary>
+    public class CapturedCharacterSaveData
+    {
+        public string CharacterId { get; set; }
+        public string CharacterName { get; set; }
+        public string CaptorLocationId { get; set; }
+        public long CapturedAtUtcTicks { get; set; }
+    }
+
     public class CharacterSaveData
     {
         // Identity
