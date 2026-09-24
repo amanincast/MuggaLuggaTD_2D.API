@@ -433,15 +433,33 @@ public class WorldRegionBlobTests
     [Fact]
     public void PrisonersAreCommittedWhereverTheyAreHeld()
     {
-        // A captured champion is out of the war until their owner retakes the ground — whoever
-        // happens to hold it now.
+        // A captured champion is out of the war while they are held — whoever happens to hold the
+        // ground now. The stamp is what makes them held: captivity expires (CaptivityRules), and an
+        // unstamped capture reads as already home.
         var theirs = TestWorld.OwnedBy(TestIds.Rival, "r1");
         var world = TestWorld.Blob(theirs);
         var entry = WorldRegionBlob.EnsureOverride(
             WorldRegionBlob.FindRegion(world, "r1")!, TestWorld.KeepIn(theirs));
         entry["CapturedCharacterIds"] = new JsonArray("hero-1");
+        entry["CapturedAtUtcTicks"] = DateTime.UtcNow.Ticks;
 
         Assert.Contains("hero-1", WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player));
+    }
+
+    [Fact]
+    public void APrisonerWhoseTimeIsUpIsNotCommitted()
+    {
+        // Reading the list rather than asking the rule would lock a freed character out of their own
+        // party for ever, because the ids outlive the captivity.
+        var theirs = TestWorld.OwnedBy(TestIds.Rival, "r1");
+        var world = TestWorld.Blob(theirs);
+        var entry = WorldRegionBlob.EnsureOverride(
+            WorldRegionBlob.FindRegion(world, "r1")!, TestWorld.KeepIn(theirs));
+        entry["CapturedCharacterIds"] = new JsonArray("hero-1");
+        entry["CapturedAtUtcTicks"] = DateTime.UtcNow
+            .AddHours(-MuggaLuggaTD.Shared.Gameplay.CaptivityRules.PrisonerReturnHours - 1).Ticks;
+
+        Assert.Empty(WorldRegionBlob.CollectCommittedCharacterIds(world, TestIds.Player));
     }
 
     [Fact]

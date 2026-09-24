@@ -90,7 +90,12 @@ public static class MarchingArmy
     public static string WriteIds(IEnumerable<string> ids)
         => System.Text.Json.JsonSerializer.Serialize(ids.ToList());
 
-    private static async Task<UserSaveData?> LoadPlayerSaveAsync(
+    /// <summary>
+    /// This player's persisted roster in this realm. Public because every server-side decision about
+    /// which characters a player may commit — marching, garrisoning, ransoming — has to be made against
+    /// the same saved roster rather than against whatever the request claimed.
+    /// </summary>
+    public static async Task<UserSaveData?> LoadPlayerSaveAsync(
         ApplicationDbContext context, ILogger logger, Guid gameInstanceId, string userId)
     {
         var row = await context.PlayerGameData

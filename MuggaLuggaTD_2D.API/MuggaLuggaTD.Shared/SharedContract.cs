@@ -146,6 +146,6 @@ namespace MuggaLuggaTD.Shared
         //   class/signature/affinity, which made lures pointless - there is no reason to spend a
         //   crystal shifting odds you can simply buy more dice against. The reset is dungeon-gated
         //   rather than timed, because the escalation is meant as a pull back toward playing.
-        public const string Version = "1.28.0";
+        public const string Version = "1.29.0";
     }
 }

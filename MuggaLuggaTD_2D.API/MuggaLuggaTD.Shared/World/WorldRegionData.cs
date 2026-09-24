@@ -111,6 +111,19 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>Characters imprisoned here after their owner lost the region.</summary>
         public List<string> CapturedCharacterIds = new List<string>();
 
+        /// <summary>
+        /// When they were taken, as UTC ticks. Zero when unknown.
+        ///
+        /// <para>Prisoners come home — see <see cref="Gameplay.CaptivityRules"/>. One stamp covers the
+        /// whole list because a siege takes a region's defenders in a single instant, and a second
+        /// capture at one site cannot happen without the region changing hands twice in between (you
+        /// must hold a site to garrison it), by which point the first company is already free.</para>
+        ///
+        /// <para><b>Zero reads as returned</b>, not as captured long ago, so anyone imprisoned before
+        /// this rule existed is already home.</para>
+        /// </summary>
+        public long CapturedAtUtcTicks;
+
         /// <summary>Resources accrued and not yet collected. Empty until the economy lands.</summary>
         public int StoredYield;
 
@@ -124,6 +137,7 @@ namespace MuggaLuggaTD.Shared.World
                    && ClearedAtUtcTicks == 0
                    && !Repaired
                    && GarrisonPower == 0f
+                   && CapturedAtUtcTicks == 0
                    && StoredYield == 0
                    && LastCollectedUtcTicks == 0
                    && (GarrisonCharacterIds == null || GarrisonCharacterIds.Count == 0)

@@ -111,7 +111,8 @@ public static class WorldRegionBlob
                 Repaired = entry["Repaired"]?.GetValue<bool>() ?? false,
                 GarrisonPower = entry["GarrisonPower"]?.GetValue<float>() ?? 0f,
                 GarrisonCharacterIds = ReadStrings(entry["GarrisonCharacterIds"]),
-                CapturedCharacterIds = ReadStrings(entry["CapturedCharacterIds"])
+                CapturedCharacterIds = ReadStrings(entry["CapturedCharacterIds"]),
+                CapturedAtUtcTicks = entry["CapturedAtUtcTicks"]?.GetValue<long>() ?? 0
             };
         }
 
@@ -240,6 +241,61 @@ public static class WorldRegionBlob
     /// down; clearing the region's own fightable sites builds it back. It is the only part of a
     /// region a rival can move without taking it.</para>
     /// </summary>
+    /// <summary>
+    /// Sets a site's garrison to exactly <paramref name="characterIds"/>, with the power the server
+    /// priced them at.
+    ///
+    /// <para><b>The power is the server's, not the client's.</b> It used to be computed in the Unity
+    /// client and written straight into this blob, which meant a player could set their own region's
+    /// defensive strength to any number they liked - and hold, the raid bar and the siege encounter are
+    /// all derived from it.</para>
+    /// </summary>
+    public static void SetGarrison(JsonNode regionNode, string siteId, IReadOnlyList<string> characterIds, double power)
+    {
+        var entry = EnsureOverride(regionNode, siteId);
+
+        entry["GarrisonCharacterIds"] = new JsonArray((characterIds ?? Array.Empty<string>())
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => (JsonNode)id!)
+            .ToArray());
+
+        entry["GarrisonPower"] = (float)power;
+    }
+
+    /// <summary>
+    /// Frees prisoners from a site - by ransom, by rescue, or because their time ran out. Returns how
+    /// many ids were actually removed.
+    ///
+    /// <para>Clearing the stamp when the last one leaves matters: an empty list with a live stamp would
+    /// read as "holding nobody until 8pm", which is harmless but is also a lie the dossier would
+    /// print.</para>
+    /// </summary>
+    public static int ReleasePrisoners(JsonNode regionNode, string siteId, IEnumerable<string>? ids)
+    {
+        if (GetOverride(regionNode, siteId) is not JsonObject entry) return 0;
+
+        var prisoners = ReadStrings(entry["CapturedCharacterIds"]);
+        if (prisoners.Count == 0) return 0;
+
+        var freeing = new HashSet<string>(ids ?? Array.Empty<string>(), StringComparer.Ordinal);
+        int removed = prisoners.RemoveAll(id => freeing.Contains(id));
+        if (removed == 0) return 0;
+
+        entry["CapturedCharacterIds"] = new JsonArray(prisoners.Select(id => (JsonNode)id!).ToArray());
+        if (prisoners.Count == 0) entry["CapturedAtUtcTicks"] = 0L;
+
+        return removed;
+    }
+
+    /// <summary>Everyone still held at a site, with the instant they were taken.</summary>
+    public static (List<string> Ids, long CapturedAtUtcTicks) PrisonersAt(JsonNode regionNode, string siteId)
+    {
+        if (GetOverride(regionNode, siteId) is not JsonObject entry)
+            return (new List<string>(), 0);
+
+        return (ReadStrings(entry["CapturedCharacterIds"]), entry["CapturedAtUtcTicks"]?.GetValue<long>() ?? 0);
+    }
+
     public static int SetResolve(JsonNode regionNode, int resolve)
     {
         int clamped = RegionResolveRules.Clamp(resolve);
@@ -274,8 +330,11 @@ public static class WorldRegionBlob
                     foreach (var id in over.GarrisonCharacterIds) committed.Add(id);
                 }
 
-                // Prisoners are held wherever they were taken, whoever owns it now.
-                if (over.CapturedCharacterIds != null)
+                // Prisoners are held wherever they were taken, whoever owns it now - but only while
+                // they are actually still held. They walk home after CaptivityRules.PrisonerReturnHours
+                // and the ids linger in the blob after that, so asking the rule rather than the list is
+                // what stops a freed character being locked out of their own party for good.
+                if (CaptivityRules.IsHolding(over, DateTime.UtcNow))
                 {
                     foreach (var id in over.CapturedCharacterIds) committed.Add(id);
                 }
@@ -327,11 +386,13 @@ public static class WorldRegionBlob
                 var garrison = ReadStrings(entry["GarrisonCharacterIds"]);
                 if (garrison.Count > 0)
                 {
-                    var prisoners = ReadStrings(entry["CapturedCharacterIds"]);
-                    foreach (var id in garrison)
-                        if (!prisoners.Contains(id)) prisoners.Add(id);
-
-                    entry["CapturedCharacterIds"] = new JsonArray(prisoners.Select(id => (JsonNode)id!).ToArray());
+                    // Replaces rather than merges, which also clears out anyone whose captivity has
+                    // already lapsed. Two captures at one site cannot happen without the region
+                    // changing hands twice in between - you must hold a site to garrison it - so by
+                    // this point the previous company is long since home, and re-stamping their ids
+                    // would imprison them a second time for a battle they were not in.
+                    entry["CapturedCharacterIds"] = new JsonArray(garrison.Select(id => (JsonNode)id!).ToArray());
+                    entry["CapturedAtUtcTicks"] = claimedAt.Ticks;
                     captured += garrison.Count;
                 }
 

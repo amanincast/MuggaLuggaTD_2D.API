@@ -3,6 +3,27 @@ using System.ComponentModel.DataAnnotations;
 namespace MuggaLuggaTD_2D.API.DTOs;
 
 /// <summary>
+/// Stations characters at one of your sites. Names the site and the characters; the server decides
+/// which of them may actually stand there and what they are worth.
+/// </summary>
+public record GarrisonRequest(string SiteId, List<string> CharacterIds, string SharedContractVersion);
+
+/// <summary>
+/// Who ended up stationed, priced by the server, and what the region now holds at.
+///
+/// <para><see cref="CharacterIds"/> is what was <i>accepted</i>, which can be shorter than what was
+/// asked for — someone already garrisoned elsewhere, locked into a siege or sitting in a cell is
+/// filtered out rather than refusing the whole request.</para>
+/// </summary>
+public record GarrisonResponse(string SiteId, List<string> CharacterIds, double GarrisonPower, long Hold);
+
+/// <summary>Buys your prisoners back out of the site holding them. The price is the server's.</summary>
+public record RansomRequest(string SiteId, string SharedContractVersion);
+
+/// <summary>Who came home, what it cost, and what is left in the purse.</summary>
+public record RansomResponse(string SiteId, List<string> CharacterIds, long CostGold, long Gold);
+
+/// <summary>
 /// A request to besiege a rival region.
 ///
 /// <para>Like a raid, it carries no power and no hold: the server prices the army from the saved

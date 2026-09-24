@@ -75,6 +75,7 @@ builder.Services.AddSingleton<IGameContentProvider, GameContentProvider>();
 
 // Server-side conquest resolution (see WorldRaidService / WorldPveService).
 builder.Services.AddScoped<WorldRaidService>();
+builder.Services.AddScoped<WorldGarrisonService>();
 builder.Services.AddScoped<WorldPveService>();
 
 // The server owns world generation now: a region is validated by regenerating it from its seed,

@@ -499,6 +499,8 @@ public class WorldRaidServiceTests : IDisposable
             var entry = WorldRegionBlob.EnsureOverride(
                 WorldRegionBlob.FindRegion(world, rival.RegionId)!, TestWorld.KeepIn(rival));
             entry["CapturedCharacterIds"] = new JsonArray(prisonersAtRival.Select(id => (JsonNode)id!).ToArray());
+            // Stamped, because captivity expires and an unstamped capture reads as already home.
+            entry["CapturedAtUtcTicks"] = DateTime.UtcNow.Ticks;
         }
 
         await db.AddWorldAsync(instance.Id, world);
