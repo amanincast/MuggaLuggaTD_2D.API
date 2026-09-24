@@ -73,8 +73,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>
         /// The affinity a biome favours, or null where it favours none.
         ///
-        /// <para>Physical and Arcane are nobody's home ground on purpose: one is the absence of an
-        /// element and the other is not of anywhere. A favoured affinity is weighted
+        /// <para>Physical is nobody's home ground on purpose: it is the absence of an element. Arcane
+        /// was too, until the desert — buried ruins and mirages are the one kind of land where magic
+        /// that is "not of anywhere" plausibly comes from. A favoured affinity is weighted
         /// <see cref="BiomeFavourWeight"/> against every other one the signature may roll - a nudge,
         /// not a guarantee, because the guarantee is what the crystal lures are for (§4).</para>
         /// </summary>
@@ -88,6 +89,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case BiomeType.Forest: return AffinityTypes.Earth;
                 case BiomeType.Swamp: return AffinityTypes.Dark;
                 case BiomeType.Grassland: return AffinityTypes.Light;
+                case BiomeType.Desert: return AffinityTypes.Arcane;
                 default: return null;
             }
         }

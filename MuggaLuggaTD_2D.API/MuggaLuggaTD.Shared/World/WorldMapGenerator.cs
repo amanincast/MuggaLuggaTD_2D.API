@@ -97,8 +97,9 @@ namespace MuggaLuggaTD.Shared.World
 
         private static BiomeType BiomeFor(HexCoord hex, int distance, ref DeterministicRandom random)
         {
-            // The heart of the map is the gentle river vale; the rim is volcanic and highland. In
+            // The heart of the map is gentle grassland; the rim is volcanic, highland and desert. In
             // between, weight the roll by distance so biomes form bands rather than confetti.
+            // Indexed by BiomeType's value, so a new biome is appended here in its enum order.
             if (distance == 0) return BiomeType.Grassland;
 
             int[] weights =
@@ -108,7 +109,8 @@ namespace MuggaLuggaTD.Shared.World
                 10 + (distance * 4),               // Lakeland
                 Math.Max(0, (distance - 1) * 10),  // Highland
                 Math.Max(0, (distance - 2) * 12),  // Volcanic
-                10 + (distance * 3)                // Swamp
+                10 + (distance * 3),               // Swamp
+                Math.Max(0, (distance - 1) * 8)    // Desert — away from the start
             };
 
             return (BiomeType)random.NextWeighted(weights);
