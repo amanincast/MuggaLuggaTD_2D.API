@@ -3364,6 +3364,19 @@
           ]
         }
       ]
+    },
+    {
+      "ClassName": "Cleric",
+      "Description": "The mender. Keeps the party standing, and still has a blow of its own.",
+      "HealthGrowthPerLevel": 0.06,
+      "BasicAbilities": [
+        {
+          "AbilityLinkName": "Smite_1",
+          "ValidTargetTags": [
+            "Enemy"
+          ]
+        }
+      ]
     }
   ]
 }

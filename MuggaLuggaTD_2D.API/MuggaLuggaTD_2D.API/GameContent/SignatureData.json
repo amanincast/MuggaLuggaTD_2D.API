@@ -481,6 +481,187 @@
           ]
         }
       ]
+    },
+    {
+      "SignatureId": "cleric_mend",
+      "DisplayName": "Mend",
+      "Description": "Strikes the foe and mends the most wounded of the party. Half weapon, half prayer.",
+      "Class": "Cleric",
+      "BaseAbilityLinkName": "Mend_1",
+      "AllowedAffinities": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder and mends deeper - its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Healing"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The light finds a second wound: Mend heals the two most wounded.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 1,
+              "Property": "HealTargetCount"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, for the blow and the mending alike, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Healing"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Benediction",
+          "Description": "Mend reaches the four most wounded, and heals them far deeper.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Healing"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 2,
+              "Value": 2,
+              "Property": "HealTargetCount"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "SignatureId": "cleric_sanctuary",
+      "DisplayName": "Sanctuary",
+      "Description": "Hallows the ground around the Cleric: allies inside are mended and take 30% less damage for a while, and the foe is struck.",
+      "Class": "Cleric",
+      "BaseAbilityLinkName": "Sanctuary_1",
+      "AllowedAffinities": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder and mends deeper - its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Healing"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The hallowed ground spreads, sheltering a party that has scattered.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "SupportRadius"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "CollisionScale"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, for the blow and the mending alike, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Healing"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Hallowed Ground",
+          "Description": "The sanctuary grows wide enough for a whole company, and mends and smites far harder.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Healing"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.5,
+              "Property": "SupportRadius"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
