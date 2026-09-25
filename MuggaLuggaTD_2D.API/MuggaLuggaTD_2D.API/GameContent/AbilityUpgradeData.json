@@ -1537,6 +1537,175 @@
           ]
         }
       ]
+    },
+    {
+      "AbilityLinkName": "Smite_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Smite by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Deeper Mending",
+          "Description": "Smite heals 15% more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.15,
+              "Property": "Healing"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Smite by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Smite by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Mend_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Mend by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Deeper Mending",
+          "Description": "Mend heals 15% more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.15,
+              "Property": "Healing"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Mend by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Mend by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Larger Burst",
+          "Description": "Increase the blast size of Mend by 25%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.25,
+              "Property": "CollisionScale"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Sanctuary_1",
+      "Upgrades": [
+        {
+          "Name": "Increased Damage",
+          "Description": "Increase the damage of Sanctuary by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Deeper Mending",
+          "Description": "Sanctuary heals 15% more.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.15,
+              "Property": "Healing"
+            }
+          ]
+        },
+        {
+          "Name": "Reduced Cooldown",
+          "Description": "Reduce the cooldown of Sanctuary by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Increased Range",
+          "Description": "Increase the range of Sanctuary by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.05,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Wider Sanctuary",
+          "Description": "The hallowed ground reaches 20% further.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.2,
+              "Property": "SupportRadius"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

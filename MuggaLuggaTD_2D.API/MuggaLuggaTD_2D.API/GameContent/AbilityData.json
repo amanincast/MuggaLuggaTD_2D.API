@@ -584,6 +584,113 @@
       ],
       "Classification": 1,
       "TravelSpeed": 0
+    },
+    {
+      "AbilityName": "Smite",
+      "Description": "A bolt of light at the nearest foe that mends the most wounded ally for part of the blow.",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
+      "AbilityLinkName": "Smite_1",
+      "AnimationState": {
+        "ActivationFrameCount": 5
+      },
+      "ActivationCooldown": {
+        "BaseValue": 3
+      },
+      "Range": {
+        "BaseValue": 10
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 5,
+          "Damage": {
+            "BaseValue": 35
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 30,
+      "Healing": {
+        "BaseValue": 15
+      },
+      "HealTargets": 1
+    },
+    {
+      "AbilityName": "Mend",
+      "Description": "A burst at the foe, and the most wounded of the party is made whole again.",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_9",
+      "AbilityLinkName": "Mend_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 10,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 5
+      },
+      "Range": {
+        "BaseValue": 10
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 5,
+          "Damage": {
+            "BaseValue": 25
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0,
+      "Healing": {
+        "BaseValue": 35
+      },
+      "HealTargets": 1,
+      "HealTargetCount": {
+        "BaseValue": 1
+      }
+    },
+    {
+      "AbilityName": "Sanctuary",
+      "Description": "Hallowed ground around the Cleric: allies inside are mended and take less damage, and the foe is struck.",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Explosion_1",
+      "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Explosion_6",
+      "AbilityLinkName": "Sanctuary_1",
+      "MovementType": 1,
+      "AnimationState": {
+        "ActivationFrameCount": 10,
+        "PreventLooping": true
+      },
+      "ActivationCooldown": {
+        "BaseValue": 8
+      },
+      "Range": {
+        "BaseValue": 10
+      },
+      "AnimationPrefix": "SpellCast",
+      "AffinityStats": [
+        {
+          "AffinityType": 5,
+          "Damage": {
+            "BaseValue": 30
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 0,
+      "CollisionScale": {
+        "BaseValue": 1.5
+      },
+      "Healing": {
+        "BaseValue": 15
+      },
+      "HealTargets": 2,
+      "SupportRadius": {
+        "BaseValue": 3
+      },
+      "WardReduction": 0.3,
+      "WardSeconds": 5
     }
   ]
 }

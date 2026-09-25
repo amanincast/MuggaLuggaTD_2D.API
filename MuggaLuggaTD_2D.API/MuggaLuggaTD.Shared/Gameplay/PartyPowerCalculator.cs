@@ -120,13 +120,27 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     ? AbilityResolver.Resolve(savedAbility, abilityTemplates, awakening.Affinity, awakening)
                     : AbilityResolver.Resolve(savedAbility, abilityTemplates);
 
-                if (resolved?.AffinityStats == null) continue;
+                if (resolved == null) continue;
 
-                foreach (var stat in resolved.AffinityStats)
+                if (resolved.AffinityStats != null)
                 {
-                    var damage = stat?.Damage?.GetCurrentValue();
-                    if (damage.HasValue)
-                        power += damage.Value * POWER_PER_DAMAGE;
+                    foreach (var stat in resolved.AffinityStats)
+                    {
+                        var damage = stat?.Damage?.GetCurrentValue();
+                        if (damage.HasValue)
+                            power += damage.Value * POWER_PER_DAMAGE;
+                    }
+                }
+
+                // A heal is negative damage, so it is priced on the same scale (Mike, 2026-09-24): a
+                // Cleric whose signature splits its weight between hurting and mending is worth what a
+                // Mage is whose signature only hurts. Priced per cast, like damage - an area blast is
+                // not multiplied by how many it might catch, so neither is a heal by how many it mends.
+                if (resolved.HealTargets != AbilitySupportTargeting.None)
+                {
+                    var healing = resolved.Healing?.GetCurrentValue();
+                    if (healing.HasValue && healing.Value > 0)
+                        power += healing.Value * POWER_PER_DAMAGE;
                 }
             }
 

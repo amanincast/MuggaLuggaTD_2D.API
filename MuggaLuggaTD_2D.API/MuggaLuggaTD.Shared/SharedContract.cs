@@ -149,6 +149,11 @@ namespace MuggaLuggaTD.Shared
         // 1.30.0 - the Desert biome (BiomeType 6). New worlds roll it away from the start; its
         //   regions are mostly open sand, carry a portal and a ruin from tier 2, and favour Arcane in
         //   the Tavern. Stored worlds are untouched: no existing region changes biome or terrain.
-        public const string Version = "1.30.0";
+        // 1.31.0 - the Cleric, and support abilities. An ability can carry Healing (with who it lands
+        //   on), a heal-target count, a support radius and a ward, all cloned from the template and
+        //   reachable by upgrades. PartyPowerCalculator prices healing 1:1 with damage, so a Cleric's
+        //   garrison, raid and siege strength include what it mends; a 1.30.0 client would price one
+        //   on its damage alone.
+        public const string Version = "1.31.0";
     }
 }

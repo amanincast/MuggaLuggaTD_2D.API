@@ -104,6 +104,47 @@ namespace Abilities.Models
             BaseValue = 0
         };
 
+        // ---- Support: what a cast does for the caster's own side (the Cleric, design doc 01) ----
+        //
+        // A support ability is still an attack - it fires at an enemy and deals its affinity like any
+        // other, so its affinity, status effect, resonance and reactions all still mean something.
+        // These ride along with the cast. They are modifiable properties so awakening and level-up
+        // picks reach them by name ("Healing", "HealTargetCount", "SupportRadius") exactly as they
+        // reach "Damage" and "CollisionScale".
+
+        /// <summary>Health restored per cast to each target <see cref="HealTargets"/> picks. Counted
+        /// like damage in power: a heal is negative damage, so it is priced on the same scale.</summary>
+        public AbilityModifiableProperty<long?> Healing { get; set; } = new AbilityModifiableProperty<long?>
+        {
+            BaseValue = 0
+        };
+
+        /// <summary>How many of the most wounded a <see cref="AbilitySupportTargeting.MostWounded"/> heal reaches.</summary>
+        public AbilityModifiableProperty<long?> HealTargetCount { get; set; } = new AbilityModifiableProperty<long?>
+        {
+            BaseValue = 1
+        };
+
+        /// <summary>The reach of a support effect centred on the caster: the heal of
+        /// <see cref="AbilitySupportTargeting.AlliesNearCaster"/>, and the ward.</summary>
+        public AbilityModifiableProperty<float?> SupportRadius { get; set; } = new AbilityModifiableProperty<float?>
+        {
+            BaseValue = 0f
+        };
+
+        public AbilitySupportTargeting HealTargets { get; set; } = AbilitySupportTargeting.None;
+
+        /// <summary>Share of incoming damage a ward takes off the allies it covers (0.3 = 30% less).
+        /// Zero means the ability wards nobody.</summary>
+        public float WardReduction { get; set; }
+
+        public float WardSeconds { get; set; }
+
+        /// <summary>True for an ability that does anything for the caster's side.</summary>
+        public bool IsSupport =>
+            (HealTargets != AbilitySupportTargeting.None && (Healing?.GetCurrentValue() ?? 0) > 0)
+            || WardReduction > 0f;
+
         public List<AffinityTypes> GetAffinityTypes()
         {
             return AffinityStats.Select(stat => stat.AffinityType).ToList();

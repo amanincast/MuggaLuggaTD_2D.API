@@ -93,7 +93,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 Classification = template.Classification,
                 MovementType = template.MovementType,
                 TelegraphDuration = template.TelegraphDuration,
-                ValidTargetTags = template.ValidTargetTags?.ToList()
+                ValidTargetTags = template.ValidTargetTags?.ToList(),
+                HealTargets = template.HealTargets,
+                WardReduction = template.WardReduction,
+                WardSeconds = template.WardSeconds
             };
 
             ability.Range = Clone(template.Range) ?? ability.Range;
@@ -102,6 +105,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             ability.PierceCount = Clone(template.PierceCount) ?? ability.PierceCount;
             ability.ProjectileCount = Clone(template.ProjectileCount) ?? ability.ProjectileCount;
             ability.ChainCount = Clone(template.ChainCount) ?? ability.ChainCount;
+            ability.Healing = Clone(template.Healing) ?? ability.Healing;
+            ability.HealTargetCount = Clone(template.HealTargetCount) ?? ability.HealTargetCount;
+            ability.SupportRadius = Clone(template.SupportRadius) ?? ability.SupportRadius;
 
             if (template.AffinityStats != null)
             {
