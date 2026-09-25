@@ -17,6 +17,7 @@ namespace MuggaLuggaTD_2D.API.Tests;
 public class SignatureSaveValidationTests
 {
     private const string Starter = "Ally_Archer_2";
+    private const string Face = "Ally_Human_Archer_1";
 
     private static PlayerSaveValidator Validator()
     {
@@ -30,7 +31,8 @@ public class SignatureSaveValidationTests
                     Class = "Archer",
                     SignatureId = "archer_snipe",
                     SignatureAffinity = AffinityTypes.Water
-                }
+                },
+                new() { Sheet = Face, Class = "Archer" }
             },
             Signatures = new List<SignatureDefinition>
             {
@@ -138,6 +140,19 @@ public class SignatureSaveValidationTests
         var save = Save("c1", Starter, "archer_snipe", AffinityTypes.Water);
 
         Assert.False(Validator().ReconcileRoster(save, Array.Empty<HiredCharacter>()).Changed);
+    }
+
+    [Fact]
+    public void AFaceIsNeverAStarter_WhateverRollItCarries()
+    {
+        // A face ships with no roll, so there is no roll a save could match to pass as a starter:
+        // anyone on a face got there through the Tavern, and the Tavern keeps a record.
+        var save = Save("c1", Face, "archer_snipe", AffinityTypes.Water);
+
+        var result = Validator().ReconcileRoster(save, Array.Empty<HiredCharacter>());
+
+        Assert.Equal(1, result.Stripped);
+        Assert.Null(Hero(save)["SignatureId"]);
     }
 
     [Fact]

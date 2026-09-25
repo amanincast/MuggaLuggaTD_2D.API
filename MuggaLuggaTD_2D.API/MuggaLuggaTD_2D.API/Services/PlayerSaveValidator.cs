@@ -243,7 +243,7 @@ public class PlayerSaveValidator
         var sheet = _content.RecruitSheets?.FirstOrDefault(s =>
             s != null && string.Equals(s.Sheet, linkName, StringComparison.Ordinal));
 
-        if (sheet?.SignatureId == null || sheet.SignatureAffinity == null)
+        if (!sheet.IsStarter())
             return false;
 
         var rarity = ReadInt(character["Rarity"]) ?? (int)Enums.CharacterRarity.Common;
