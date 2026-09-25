@@ -94,6 +94,7 @@ builder.Services.AddHostedService<SiegeScheduler>();
 // Reviewable per-session diagnostics log (off unless Diagnostics:SessionLog is true).
 builder.Services.AddSingleton<ISessionLog, SessionLog>();
 builder.Services.AddScoped<PlayerSaveValidator>();
+builder.Services.AddScoped<PlaytestSeeder>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support
@@ -133,6 +134,19 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+// `dotnet run -- seed-playtest --user <name>`: build a ready-to-play test realm and exit, instead of
+// serving. Development only - it grants gold, materials and a legendary out of thin air.
+if (args.Contains(PlaytestSeeder.Command))
+{
+    if (!app.Environment.IsDevelopment())
+    {
+        Console.Error.WriteLine($"{PlaytestSeeder.Command} runs in Development only.");
+        return 1;
+    }
+
+    return await PlaytestSeeder.RunFromCommandLineAsync(app.Services, args);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -149,3 +163,4 @@ app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
 
 app.Run();
+return 0;

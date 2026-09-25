@@ -20,7 +20,18 @@ dotnet run --project MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API
 
 # Run the tests
 dotnet test MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API.Tests/MuggaLuggaTD_2D.API.Tests.csproj
+
+# Build a ready-to-play test realm, then exit (Development only; stop the running API first)
+dotnet run --project MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API.csproj --launch-profile https -- seed-playtest --user <username or email> [--name Playtest]
 ```
+
+**The playtest seed rebuilds, it never repairs** (`PlaytestSeeder`). It deletes the realm of that
+name the user owns and makes it again: world provisioned and the player seated through the normal
+services, the seven starters at level 10, four hires with real `HiredCharacter` records (Rare and
+Epic Clerics, a Legendary Mage, a Common Warrior — one of each rarity, so every awakening stage is
+on hand), every material ×200 (crystals ×3) and 20,000 gold. The save is written directly, so
+`PlaytestSeederTests` pins that `ReconcileRoster` leaves it untouched — otherwise the client's first
+save would silently strip the seeded rolls.
 
 ## Tests
 
