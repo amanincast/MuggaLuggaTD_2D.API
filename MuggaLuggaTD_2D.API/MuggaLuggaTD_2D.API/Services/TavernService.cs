@@ -334,7 +334,8 @@ public class TavernService
         int hires = await _context.HiredCharacters
             .CountAsync(h => h.GameInstanceId == gameInstanceId && h.UserId == userId);
 
-        return hires + (_content.RecruitSheets?.Count ?? 0);
+        // The starting roster, not every template: most templates are only faces for the Tavern.
+        return hires + (_content.RecruitSheets?.Count(s => s.IsStarter()) ?? 0);
     }
 
     private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId)
