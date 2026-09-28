@@ -5,7 +5,7 @@ using MuggaLuggaTD.Shared.World;
 namespace MuggaLuggaTD.Shared.Gameplay
 {
     /// <summary>
-    /// How a company gets from one site to another inside a region, and how long it takes
+    /// How a company gets from one site to another - in a region or across several - and how long it takes
     /// (<c>docs/design/parties-and-travel.md</c> §3, Unity repo).
     ///
     /// <para><b>A journey is an order, not a walk.</b> The server finds the route and stamps when it
@@ -37,63 +37,131 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static Journey Plan(RegionRoadNetwork roads, GridCell from, GridCell to) => Plan(roads, from, to, 0);
 
         /// <summary>
-        /// Seconds spent crossing from one region into the next before the company is seen on the far
-        /// side. The crossing itself is not walked on any map yet (§6, phase 4); it is a leg of time.
+        /// Seconds spent crossing from one region into the next: the edge of one map to the edge of
+        /// the other. Not walked on either map; the company is between them.
         /// </summary>
-        public const double CrossingSeconds = 60;
+        public const double CrossingSeconds = 20;
 
         /// <summary>
-        /// A journey from another region into this one: across the border (<see cref="CrossingSeconds"/>),
-        /// in by the road that leaves this region on the side facing where the company came from, and
-        /// on to <paramref name="to"/>. The first cell is reached at <see cref="CrossingSeconds"/>, not 0.
+        /// A journey from a cell of one region to a cell of another - or of the same one - across the
+        /// world (§6, phase 4). The regions are found hex by hex (fewest crossings; a hex with no region
+        /// cannot be crossed), and each is walked on its own roads: in by the road from the region
+        /// behind, out by the road toward the region ahead, <see cref="CrossingSeconds"/> between them.
+        /// Every region's walk is its own one to five minutes. Null if there is no way.
         /// </summary>
-        public static Journey PlanArrival(RegionRoadNetwork roads, HexCoord fromHex, HexCoord toHex, GridCell to)
+        public static RoutePlan PlanRoute(Func<HexCoord, WorldRegionData> regionAt,
+            WorldRegionData fromRegion, GridCell from, WorldRegionData toRegion, GridCell to)
         {
-            if (roads?.Layout == null) return null;
-            var entry = EntryCell(roads, SideFacing(toHex, fromHex));
-            if (entry == null) return null;
-            if (entry.Value == to)
-                return new Journey(new List<GridCell> { to }, new[] { MinimumJourney.TotalSeconds });
-            return Plan(roads, entry.Value, to, CrossingSeconds);
-        }
+            if (regionAt == null || fromRegion == null || toRegion == null) return null;
 
-        /// <summary>Which side of the region at <paramref name="here"/> faces the region at <paramref name="there"/>.</summary>
-        public static RegionSide SideFacing(HexCoord here, HexCoord there)
-        {
-            // The world map lays hexes out pointy-top with +r running south-east (HexLayout.ToWorld).
-            double dx = Math.Sqrt(3) * ((there.Q - here.Q) + (there.R - here.R) * 0.5);
-            double dy = -1.5 * (there.R - here.R);
-            if (Math.Abs(dx) >= Math.Abs(dy)) return dx >= 0 ? RegionSide.East : RegionSide.West;
-            return dy >= 0 ? RegionSide.North : RegionSide.South;
-        }
+            var regions = RegionPath(regionAt, fromRegion, toRegion);
+            if (regions == null) return null;
 
-        /// <summary>Where a company from beyond <paramref name="side"/> comes in: that side's road, else the nearest road out, else the keep.</summary>
-        private static GridCell? EntryCell(RegionRoadNetwork roads, RegionSide side)
-        {
-            RoadExit best = null;
-            int bestScore = int.MinValue;
-            foreach (var exit in roads.Exits)
+            var legs = new List<RouteLeg>();
+            double clock = 0;
+            for (int i = 0; i < regions.Count; i++)
             {
-                if (exit.Path == null || exit.Path.Count == 0) continue;
-                int score = exit.Side == side ? 2 : Opposite(exit.Side) == side ? 0 : 1;
-                if (score > bestScore) { best = exit; bestScore = score; }
+                var region = regions[i];
+                var roads = RegionRoadNetwork.For(region, hex => regionAt(hex) != null);
+                if (roads.Layout == null) return null;
+
+                GridCell? start = i == 0 ? from : GateToward(roads, DirectionTo(region, regions[i - 1]));
+                GridCell? end = i == regions.Count - 1 ? to : GateToward(roads, DirectionTo(region, regions[i + 1]));
+                if (start == null || end == null) return null;
+
+                if (i > 0) clock += CrossingSeconds;
+
+                List<GridCell> cells;
+                double[] seconds;
+                if (start.Value == end.Value)
+                {
+                    // In at the very door it leaves by (or already standing at the gate): a moment.
+                    cells = new List<GridCell> { start.Value };
+                    seconds = new[] { 0.0 };
+                }
+                else
+                {
+                    var walk = Plan(roads, start.Value, end.Value, 0);
+                    if (walk == null) return null;
+                    cells = walk.Cells;
+                    seconds = walk.CumulativeSeconds;
+                }
+
+                var leg = new RouteLeg { RegionId = region.RegionId };
+                for (int c = 0; c < cells.Count; c++)
+                {
+                    leg.Cells.Add(new[] { cells[c].X, cells[c].Y });
+                    leg.Seconds.Add(Math.Round(clock + seconds[c], 2));
+                }
+                legs.Add(leg);
+                clock = leg.Seconds[leg.Seconds.Count - 1];
             }
-            if (best != null) return best.Path[0];
+
+            // A walk of no length (to the cell it stands on) is not a journey.
+            if (clock <= 0) return null;
+            return new RoutePlan(legs);
+        }
+
+        /// <summary>The regions a journey passes through, first to last, by fewest crossings; null if cut off.</summary>
+        public static List<WorldRegionData> RegionPath(Func<HexCoord, WorldRegionData> regionAt,
+            WorldRegionData from, WorldRegionData to)
+        {
+            if (from == null || to == null) return null;
+            if (from.RegionId == to.RegionId) return new List<WorldRegionData> { from };
+
+            var cameFrom = new Dictionary<HexCoord, HexCoord> { [from.Hex] = from.Hex };
+            var queue = new Queue<HexCoord>();
+            queue.Enqueue(from.Hex);
+            while (queue.Count > 0)
+            {
+                var here = queue.Dequeue();
+                if (here == to.Hex) break;
+                for (int d = 0; d < 6; d++)
+                {
+                    var next = here.Neighbour(d);
+                    if (cameFrom.ContainsKey(next) || regionAt(next) == null) continue;
+                    cameFrom[next] = here;
+                    queue.Enqueue(next);
+                }
+            }
+            if (!cameFrom.ContainsKey(to.Hex)) return null;
+
+            var path = new List<WorldRegionData>();
+            for (var hex = to.Hex; ; hex = cameFrom[hex])
+            {
+                path.Add(regionAt(hex));
+                if (hex == from.Hex) break;
+            }
+            path.Reverse();
+            return path;
+        }
+
+        /// <summary>The hex direction from <paramref name="here"/> to its neighbour <paramref name="there"/>.</summary>
+        public static int DirectionTo(WorldRegionData here, WorldRegionData there)
+        {
+            for (int d = 0; d < 6; d++)
+                if (here.Hex.Neighbour(d) == there.Hex) return d;
+            return 0;
+        }
+
+        /// <summary>
+        /// Where a road toward hex direction <paramref name="direction"/> meets the edge: that road, else
+        /// one leaving by the same side, else any road out, else the keep.
+        /// </summary>
+        public static GridCell? GateToward(RegionRoadNetwork roads, int direction)
+        {
+            var exit = roads.ExitToward(direction);
+            if (exit == null)
+            {
+                var side = RegionRoadNetwork.SideOf(direction);
+                foreach (var e in roads.Exits) if (e.Side == side) { exit = e; break; }
+            }
+            if (exit == null && roads.Exits.Count > 0) exit = roads.Exits[0];
+            if (exit != null && exit.Path.Count > 0) return exit.Path[0];
 
             foreach (var site in roads.Layout.Sites)
                 if (site.Type == LocationType.Castle) return site.Cell;
             return roads.Layout.Sites.Count > 0 ? roads.Layout.Sites[0].Cell : (GridCell?)null;
-        }
-
-        private static RegionSide Opposite(RegionSide side)
-        {
-            switch (side)
-            {
-                case RegionSide.West: return RegionSide.East;
-                case RegionSide.East: return RegionSide.West;
-                case RegionSide.South: return RegionSide.North;
-                default: return RegionSide.South;
-            }
         }
 
         private static Journey Plan(RegionRoadNetwork roads, GridCell from, GridCell to, double leadSeconds)
@@ -178,6 +246,45 @@ namespace MuggaLuggaTD.Shared.Gameplay
         {
             Cells = cells;
             CumulativeSeconds = cumulativeSeconds;
+        }
+    }
+
+    /// <summary>
+    /// One region's stretch of a journey: the region, its cells as [x, y], and the seconds after
+    /// departure at which each is reached. Between two legs is a border crossing, walked on no map.
+    /// Stored as it is (the server's <c>RouteJson</c>) and sent as it is, so both sides walk the same.
+    /// </summary>
+    public sealed class RouteLeg
+    {
+        public string RegionId { get; set; }
+        public List<int[]> Cells { get; set; } = new List<int[]>();
+        public List<double> Seconds { get; set; } = new List<double>();
+    }
+
+    /// <summary>A journey across one region or several, leg by leg.</summary>
+    public sealed class RoutePlan
+    {
+        public List<RouteLeg> Legs { get; }
+
+        public TimeSpan Duration
+        {
+            get
+            {
+                var last = Legs.Count > 0 ? Legs[Legs.Count - 1] : null;
+                return TimeSpan.FromSeconds(last == null || last.Seconds.Count == 0 ? 0 : last.Seconds[last.Seconds.Count - 1]);
+            }
+        }
+
+        public RoutePlan(List<RouteLeg> legs) => Legs = legs ?? new List<RouteLeg>();
+
+        /// <summary>The leg a company is on <paramref name="seconds"/> after setting out: the last one begun.</summary>
+        public static int LegAt(IReadOnlyList<RouteLeg> legs, double seconds)
+        {
+            if (legs == null || legs.Count == 0) return -1;
+            int at = 0;
+            for (int i = 0; i < legs.Count; i++)
+                if (legs[i].Seconds.Count > 0 && legs[i].Seconds[0] <= seconds) at = i;
+            return at;
         }
     }
 }

@@ -30,8 +30,8 @@ public record JourneyDto(
     string ToSiteId,
     DateTime DepartedAt,
     DateTime ArrivesAt,
-    List<int[]> Cells,
-    List<double> Seconds,
+    /// <summary>Its road, region by region: each leg's cells and the seconds after departure at which each is reached.</summary>
+    List<RouteLeg> Legs,
     /// <summary>When an ambush stopped it on this road, else null. It stands where it was at that moment.</summary>
     DateTime? HaltedAt = null
 );
