@@ -114,6 +114,14 @@ business, so nothing here is broadcast.
   is in the region its road has reached. Every region has **a road toward each neighbouring hex**
   on the facing side (`RegionRoadNetwork.For`: E/W edges, NE/NW top, SE/SW bottom, each on its
   half), so a leg enters by the gate facing where it came from.
+- **Other players' companies** (phase 5): `GET parties/others` (`PartyService.OthersAsync`) settles
+  every company in the realm (arrivals and ambushes are fixed by the clock, so whose read it is does
+  not matter), then returns the others' companies in regions the viewer can see — `RegionSight.Lit`
+  (held + one ring, the map's rule) plus wherever the viewer's companies are. A `RivalCompanyDto`
+  carries owner, name, banner, state, place, each member's sheet from the owner's save, and a
+  journey trimmed to the legs in sight (ends nulled when out of sight); never the ambush. Every
+  successful company change (form, set, travel, flee, claim, disband) broadcasts **`PartyMoved`**
+  with only the mover's id: clients re-ask, so the fog lives in the GET, not in the broadcast.
 - **You fight where you stand:** PvE begin takes `PartyId`; the company must be at rest **at that
   site**, and its members are the fighters (`PveError.NoCompanyThere` otherwise). A company on
   the road can be renamed but not re-manned.

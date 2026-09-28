@@ -90,6 +90,72 @@ public class PartyService
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
 
+    /// <summary>
+    /// The other players' companies <paramref name="userId"/> can see now (phase 5): those standing
+    /// or walking in a region the viewer holds or borders (<see cref="RegionSight"/>), or where one of
+    /// the viewer's own companies is. Of a company's road only the legs in sight are sent, and of its
+    /// ends only those in sight. Arrivals and ambushes are settled first, as any read settles them -
+    /// both are fixed by the clock, so it does not matter whose read it is.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, RivalCompaniesResponse? Response)> OthersAsync(Guid gameInstanceId, string userId)
+    {
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var now = DateTime.UtcNow;
+        var all = await _context.PlayerParties.Where(p => p.GameInstanceId == gameInstanceId).ToListAsync();
+        bool settled = false;
+        foreach (var p in all) settled |= SettleArrival(p, now);
+        if (settled) await _context.SaveChangesAsync();
+
+        var sight = RegionSight.Lit(WorldRegionBlob.ReadAllRegions(world), userId);
+        foreach (var mine in all.Where(p => p.UserId == userId && p.RegionId != null)) sight.Add(mine.RegionId!);
+
+        var seen = all
+            .Where(p => p.UserId != userId && p.RegionId != null && sight.Contains(p.RegionId))
+            .Where(p => MarchingArmy.ReadIds(p.CharacterIdsJson).Count > 0)
+            .OrderBy(p => p.UserId).ThenBy(p => p.SortOrder)
+            .ToList();
+
+        var owners = seen.Select(p => p.UserId).Distinct().ToList();
+        var names = await _context.Users.AsNoTracking()
+            .Where(u => owners.Contains(u.Id))
+            .Select(u => new { u.Id, u.DisplayName, u.UserName })
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName ?? u.UserName ?? "A rival");
+        var sheets = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        foreach (var owner in owners)
+        {
+            var save = await MarchingArmy.LoadPlayerSaveAsync(_context, _logger, gameInstanceId, owner);
+            sheets[owner] = save?.Characters?
+                .Where(c => c?.Id != null && !string.IsNullOrEmpty(c.SpriteLibraryAssetLocation))
+                .GroupBy(c => c.Id)
+                .ToDictionary(g => g.Key, g => g.First().SpriteLibraryAssetLocation, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        string? InSight(string? siteId) =>
+            siteId != null && sight.Contains(SiteSpec.RegionIdOf(siteId)) ? siteId : null;
+
+        var companies = seen.Select(p =>
+        {
+            var journey = JourneyOf(p);
+            if (journey != null)
+                journey = journey with
+                {
+                    FromSiteId = InSight(journey.FromSiteId),
+                    ToSiteId = InSight(journey.ToSiteId),
+                    Legs = journey.Legs.Where(l => sight.Contains(l.RegionId)).ToList(),
+                };
+            var looks = MarchingArmy.ReadIds(p.CharacterIdsJson)
+                .Select(id => sheets[p.UserId].TryGetValue(id, out var sheet) ? sheet : null)
+                .Where(s => s != null).Select(s => s!).ToList();
+            return new RivalCompanyDto(p.Id, p.Name, p.Banner, p.State, p.RegionId, p.SiteId, journey,
+                p.UserId, names.TryGetValue(p.UserId, out var name) ? name : "A rival", looks);
+        }).ToList();
+
+        return (new PartyOutcome(PartyError.None), new RivalCompaniesResponse(companies, now));
+    }
+
     public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> CreateAsync(
         Guid gameInstanceId, string userId, PartyCreateRequest request)
     {
