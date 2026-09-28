@@ -77,6 +77,23 @@ public class PlayerParty
     /// </summary>
     public string? RouteJson { get; set; }
 
+    // ---- Ambushes (§4, phase 3) ----
+
+    /// <summary>
+    /// The share of the journey's time at which it is ambushed, rolled when the order was accepted, or
+    /// null for a quiet road. Never sent to the client: a player learns of an ambush when it strikes.
+    /// </summary>
+    public double? AmbushAt { get; set; }
+
+    /// <summary>When the ambush halted the company (state Ambushed). The client stands it where it stopped.</summary>
+    public DateTime? HaltedAt { get; set; }
+
+    /// <summary>The run opened to fight the ambush, which its claim must name.</summary>
+    public Guid? AmbushRunId { get; set; }
+
+    /// <summary>When that run opened; a claim faster than a fight could be is refused.</summary>
+    public DateTime? AmbushRunStartedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

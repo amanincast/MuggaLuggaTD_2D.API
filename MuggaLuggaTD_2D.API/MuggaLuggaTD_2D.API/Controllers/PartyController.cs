@@ -73,6 +73,44 @@ public class PartyController : ControllerBase
         return Respond(outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
     }
 
+    /// <summary>Fights the warband that has a company halted: opens the run its claim will name.</summary>
+    [HttpPost("{partyId:guid}/ambush/fight")]
+    public async Task<ActionResult<AmbushFightResponse>> FightAmbush(Guid gameInstanceId, Guid partyId, [FromBody] AmbushOrderRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.FightAmbushAsync(gameInstanceId, userId, partyId, request);
+        if (outcome.Succeeded && response != null) return Ok(response);
+        return Refuse(outcome, userId, $"ambush-fight {partyId}");
+    }
+
+    /// <summary>Turns a halted company back the way it came.</summary>
+    [HttpPost("{partyId:guid}/ambush/flee")]
+    public async Task<ActionResult<PartiesResponse>> FleeAmbush(Guid gameInstanceId, Guid partyId, [FromBody] AmbushOrderRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.FleeAmbushAsync(gameInstanceId, userId, partyId, request);
+        return Respond(outcome, response, userId, $"ambush-flee {partyId}");
+    }
+
+    /// <summary>Settles an ambush fight, won or lost.</summary>
+    [HttpPost("{partyId:guid}/ambush/claim")]
+    public async Task<ActionResult<AmbushClaimResponse>> ClaimAmbush(Guid gameInstanceId, Guid partyId, [FromBody] AmbushClaimRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.ClaimAmbushAsync(gameInstanceId, userId, partyId, request);
+        if (outcome.Succeeded && response != null) return Ok(response);
+        return Refuse(outcome, userId, $"ambush-claim {partyId} won={request.Won}");
+    }
+
     [HttpDelete("{partyId:guid}")]
     public async Task<ActionResult<PartiesResponse>> Disband(Guid gameInstanceId, Guid partyId)
     {
@@ -87,7 +125,11 @@ public class PartyController : ControllerBase
     private ActionResult<PartiesResponse> Respond(PartyOutcome outcome, PartiesResponse? response, string userId, string what)
     {
         if (outcome.Succeeded && response != null) return Ok(response);
+        return Refuse(outcome, userId, what);
+    }
 
+    private ObjectResult Refuse(PartyOutcome outcome, string userId, string what)
+    {
         _sessionLog.Log("PARTY-DENY", $"user={userId} {what} {outcome.Error}: {outcome.Message}");
         return outcome.Error switch
         {
@@ -95,6 +137,7 @@ public class PartyController : ControllerBase
             PartyError.ContractMismatch or PartyError.TooManyCompanies or PartyError.CharacterCommitted
                 or PartyError.InAnotherCompany or PartyError.LastCompany or PartyError.Busy
                 or PartyError.AlreadyThere or PartyError.NoRoute or PartyError.NotInThisRegion or PartyError.Empty
+                or PartyError.NotAmbushed or PartyError.RunNotFound or PartyError.RunTooFast
                 => Conflict(new { message = outcome.Message }),
             _ => BadRequest(new { message = outcome.Message })
         };
