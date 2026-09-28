@@ -12,7 +12,30 @@ public record PartyDto(
     int SortOrder,
     CompanyState State,
     string? RegionId,
-    string? SiteId
+    /// <summary>The site it stands at; null while on the road.</summary>
+    string? SiteId,
+    /// <summary>Its journey while travelling, else null.</summary>
+    JourneyDto? Journey = null
+);
+
+/// <summary>
+/// A company on the road: where from and to, when it left and arrives, and the route the server timed -
+/// its region cells as [x, y] pairs and the seconds after departure at which each is reached. The
+/// client walks the company along it by the clock (<see cref="TravelRules.Progress"/>).
+/// </summary>
+public record JourneyDto(
+    string FromSiteId,
+    string ToSiteId,
+    DateTime DepartedAt,
+    DateTime ArrivesAt,
+    List<int[]> Cells,
+    List<double> Seconds
+);
+
+/// <summary>Sends a company to a site in the region it stands in.</summary>
+public record PartyTravelRequest(
+    [Required] string SiteId,
+    [Required] string SharedContractVersion
 );
 
 /// <summary>
@@ -28,7 +51,9 @@ public record PartiesResponse(
     int MaxParties,
     int MaxSize,
     int RosterCap,
-    List<CharacterCommitmentDto> Commitments
+    List<CharacterCommitmentDto> Commitments,
+    /// <summary>The server's clock when this was written, so a client can walk journeys by server time.</summary>
+    DateTime ServerNow = default
 );
 
 /// <summary>

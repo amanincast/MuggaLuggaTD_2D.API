@@ -75,7 +75,7 @@ public class WorldPveServiceTests : IDisposable
         var instance = await _db.AddInstanceAsync();
 
         var (outcome, _) = await Service.BeginAsync(
-            instance.Id, TestIds.Player, new PveBeginRequest("r0:1", Contract, Fighters));
+            instance.Id, TestIds.Player, await HereAsync(instance.Id, "r0:1"));
 
         Assert.Equal(PveError.WorldNotFound, outcome.Error);
     }
@@ -88,7 +88,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(TestWorld.Region());
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest("r0:999", Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, "r0:999"));
 
         Assert.Equal(PveError.LocationNotFound, outcome.Error);
         Assert.Empty(await _db.PveRuns.ToListAsync());
@@ -102,7 +102,7 @@ public class WorldPveServiceTests : IDisposable
         var siteId = TestWorld.DungeonIn(region);
 
         var (outcome, runId) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
 
         Assert.True(outcome.Succeeded);
         Assert.NotEqual(Guid.Empty, runId);
@@ -124,7 +124,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.DungeonIn(region)));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -137,7 +137,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.KeepIn(region)));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
     }
@@ -151,7 +151,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.DungeonIn(region)));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
         Assert.Contains("siege", outcome.Message, StringComparison.OrdinalIgnoreCase);
@@ -164,7 +164,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.KeepIn(region)));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
     }
@@ -177,7 +177,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.KeepIn(region)));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -192,7 +192,7 @@ public class WorldPveServiceTests : IDisposable
         foreach (var type in new[] { LocationType.NeutralHome, LocationType.ResourceNode })
         {
             var (outcome, _) = await Service.BeginAsync(
-                instanceId, TestIds.Player, new PveBeginRequest(TestWorld.SiteOfType(region, type).SiteId, Contract, Fighters));
+                instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.SiteOfType(region, type).SiteId));
 
             Assert.Equal(PveError.NotPveTarget, outcome.Error);
         }
@@ -210,7 +210,7 @@ public class WorldPveServiceTests : IDisposable
             WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId));
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
         Assert.Contains("spent", outcome.Message, StringComparison.OrdinalIgnoreCase);
@@ -235,7 +235,7 @@ public class WorldPveServiceTests : IDisposable
         });
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -287,7 +287,7 @@ public class WorldPveServiceTests : IDisposable
         // spend them all on one clear.
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
-        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters);
+        var request = await HereAsync(instanceId, TestWorld.DungeonIn(region));
 
         var (_, first) = await Service.BeginAsync(instanceId, TestIds.Player, request);
         var (_, second) = await Service.BeginAsync(instanceId, TestIds.Player, request);
@@ -303,10 +303,10 @@ public class WorldPveServiceTests : IDisposable
     {
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
-        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters);
+        var siteId = TestWorld.DungeonIn(region);
 
-        await Service.BeginAsync(instanceId, TestIds.Player, request);
-        await Service.BeginAsync(instanceId, TestIds.Rival, request);
+        await Service.BeginAsync(instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
+        await Service.BeginAsync(instanceId, TestIds.Rival, await HereAsync(instanceId, siteId, TestIds.Rival));
 
         Assert.Equal(2, await _db.PveRuns.CountAsync(r => r.ClaimedAt == null));
     }
@@ -567,7 +567,7 @@ public class WorldPveServiceTests : IDisposable
         var siteId = TestWorld.DungeonIn(region);
 
         var (beginOutcome, runId) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
+            instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
         Assert.True(beginOutcome.Succeeded, beginOutcome.Message);
 
         await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
@@ -712,10 +712,33 @@ public class WorldPveServiceTests : IDisposable
     private async Task<Guid> SeedWorldAsync(WorldRegionData region, string ownerId)
         => await SeedWorldAsync(new[] { region }, ownerId);
 
+    /// <summary>
+    /// A begin request from a company standing at <paramref name="siteId"/>: you fight where you stand
+    /// (1.33.0), so each test stands its player's company there first.
+    /// </summary>
+    private async Task<PveBeginRequest> HereAsync(Guid instanceId, string siteId, string userId = TestIds.Player)
+    {
+        var party = await _db.PlayerParties.FirstOrDefaultAsync(p => p.GameInstanceId == instanceId && p.UserId == userId);
+        if (party == null)
+        {
+            party = new PlayerParty
+            {
+                GameInstanceId = instanceId, UserId = userId, Name = "The Vanguard",
+                CharacterIdsJson = MarchingArmy.WriteIds(Fighters),
+            };
+            _db.PlayerParties.Add(party);
+        }
+        party.State = MuggaLuggaTD.Shared.Gameplay.CompanyState.Idle;
+        party.RegionId = MuggaLuggaTD.Shared.World.SiteSpec.RegionIdOf(siteId);
+        party.SiteId = siteId;
+        await _db.SaveChangesAsync();
+        return new PveBeginRequest(siteId, Contract, null, party.Id);
+    }
+
     /// <summary>Opens a run the way the service does, so a claim has something legitimate to find.</summary>
     private async Task<Guid> OpenRunAsync(Guid instanceId, string userId, string siteId)
     {
-        var (outcome, runId) = await Service.BeginAsync(instanceId, userId, new PveBeginRequest(siteId, Contract, Fighters));
+        var (outcome, runId) = await Service.BeginAsync(instanceId, userId, await HereAsync(instanceId, siteId, userId));
         Assert.True(outcome.Succeeded, outcome.Message);
         return runId;
     }

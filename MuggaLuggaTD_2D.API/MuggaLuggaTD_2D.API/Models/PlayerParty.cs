@@ -58,6 +58,25 @@ public class PlayerParty
     [MaxLength(64)]
     public string? SiteId { get; set; }
 
+    // ---- The journey, while Travelling (§3). SiteId is null on the road. ----
+
+    /// <summary>Where the journey set out from, and where it is going.</summary>
+    [MaxLength(64)]
+    public string? FromSiteId { get; set; }
+
+    [MaxLength(64)]
+    public string? ToSiteId { get; set; }
+
+    /// <summary>When it left and when it arrives. Where it is in between is worked out from the clock.</summary>
+    public DateTime? DepartedAt { get; set; }
+    public DateTime? ArrivesAt { get; set; }
+
+    /// <summary>
+    /// The route the server timed, as JSON (<c>JourneyRoute</c>): its cells and the seconds at which
+    /// each is reached. Sent to the client as it is, so the region view walks the same road.
+    /// </summary>
+    public string? RouteJson { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

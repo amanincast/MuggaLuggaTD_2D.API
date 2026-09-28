@@ -110,7 +110,7 @@ public class PveController : ControllerBase
     {
         PveError.WorldNotFound or PveError.LocationNotFound or PveError.RunNotFound
             => NotFound(new { message = outcome.Message }),
-        PveError.ContractMismatch or PveError.RunAlreadyClaimed or PveError.FightersUnavailable
+        PveError.ContractMismatch or PveError.RunAlreadyClaimed or PveError.FightersUnavailable or PveError.NoCompanyThere
             => Conflict(new { message = outcome.Message }),
         _ => BadRequest(new { message = outcome.Message })
     };

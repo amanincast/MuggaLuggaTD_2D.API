@@ -62,6 +62,17 @@ public class PartyController : ControllerBase
         return Respond(outcome, response, userId, $"set {partyId}");
     }
 
+    [HttpPost("{partyId:guid}/travel")]
+    public async Task<ActionResult<PartiesResponse>> Travel(Guid gameInstanceId, Guid partyId, [FromBody] PartyTravelRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.TravelAsync(gameInstanceId, userId, partyId, request);
+        return Respond(outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
+    }
+
     [HttpDelete("{partyId:guid}")]
     public async Task<ActionResult<PartiesResponse>> Disband(Guid gameInstanceId, Guid partyId)
     {
@@ -80,9 +91,10 @@ public class PartyController : ControllerBase
         _sessionLog.Log("PARTY-DENY", $"user={userId} {what} {outcome.Error}: {outcome.Message}");
         return outcome.Error switch
         {
-            PartyError.WorldNotFound or PartyError.PartyNotFound => NotFound(new { message = outcome.Message }),
+            PartyError.WorldNotFound or PartyError.PartyNotFound or PartyError.SiteNotFound => NotFound(new { message = outcome.Message }),
             PartyError.ContractMismatch or PartyError.TooManyCompanies or PartyError.CharacterCommitted
                 or PartyError.InAnotherCompany or PartyError.LastCompany or PartyError.Busy
+                or PartyError.AlreadyThere or PartyError.NoRoute or PartyError.NotInThisRegion or PartyError.Empty
                 => Conflict(new { message = outcome.Message }),
             _ => BadRequest(new { message = outcome.Message })
         };

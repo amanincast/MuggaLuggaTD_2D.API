@@ -100,8 +100,19 @@ business, so nothing here is broadcast.
   not the player's own or are committed (`PveError.FightersUnavailable`). Before this a run asked
   nothing, so a siege army could slip off and run dungeons. Who fought is kept in
   `PveRun.FighterIdsJson`. An empty list is refused.
-- `CompanyState` (Idle/Travelling/Returning/Ambushed/InRun/Stationed) and the company's
-  `RegionId`/`SiteId` exist for the travel phases; only Idle is set today.
+- **Travel** (1.33.0, phase 2): `POST parties/{id}/travel { siteId }`. The route is found on the
+  region's roads — `RegionRoadNetwork` (shared), the very network the client paints — and timed by
+  `TravelRules` (road 5 s a cell, land 11, woods 18; the whole journey scaled into **1–5 minutes**,
+  Mike's call). The company is stamped `Travelling` with `DepartedAt`/`ArrivesAt` and the route
+  (cells + cumulative seconds, `RouteJson`); **nothing ticks** — the first read after `ArrivesAt`
+  lands it (`SettleArrival`). The response carries `ServerNow` so the client walks it by server time.
+- **Into another region** a company crosses for `CrossingSeconds` (60) and enters by the exit road
+  on the side facing home (`TravelRules.SideFacing` from the hex positions), then walks to the
+  site. A stop-gap for §6 until multi-leg crossings (phase 4): without it "fight where you stand"
+  would have confined every company to its capital.
+- **You fight where you stand:** PvE begin takes `PartyId`; the company must be at rest **at that
+  site**, and its members are the fighters (`PveError.NoCompanyThere` otherwise). A company on
+  the road can be renamed but not re-manned.
 
 ## Development URLs
 
