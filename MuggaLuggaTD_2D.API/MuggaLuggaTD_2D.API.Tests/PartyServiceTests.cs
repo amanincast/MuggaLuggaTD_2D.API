@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using MuggaLuggaTD.Shared;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD.Shared.World;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Models;
@@ -287,15 +288,174 @@ public class PartyServiceTests : IDisposable
     }
 
     // -----------------------------------------------------------------
-    // Who fights a run
+    // Travel (1.33.0)
     // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ACompanyIsSentDownTheRoadAndTakesOneToFiveMinutes()
+    {
+        var (instance, keep) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+
+        var (outcome, response) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var dto = response!.Parties[0];
+        Assert.Equal(CompanyState.Travelling, dto.State);
+        Assert.Null(dto.SiteId);
+        Assert.NotNull(dto.Journey);
+        Assert.Equal(keep, dto.Journey!.FromSiteId);
+        Assert.Equal(DungeonId, dto.Journey.ToSiteId);
+
+        var took = dto.Journey.ArrivesAt - dto.Journey.DepartedAt;
+        Assert.InRange(took.TotalSeconds, TravelRules.MinimumJourney.TotalSeconds - 1, TravelRules.MaximumJourney.TotalSeconds + 1);
+
+        // The route runs from the keep's cell to the dungeon's, and its clock reads the same total.
+        var region = TestWorld.ReadRegion(await _db.ReadWorldAsync(instance), "r1");
+        var layout = RegionGenerator.Generate(region);
+        var from = layout.FindSite(keep)!.Cell;
+        var to = layout.FindSite(DungeonId)!.Cell;
+        Assert.Equal(new[] { from.X, from.Y }, dto.Journey.Cells[0]);
+        Assert.Equal(new[] { to.X, to.Y }, dto.Journey.Cells[^1]);
+        Assert.Equal(dto.Journey.Cells.Count, dto.Journey.Seconds.Count);
+        Assert.InRange(dto.Journey.Seconds[^1], took.TotalSeconds - 1, took.TotalSeconds + 1);
+    }
+
+    [Fact]
+    public async Task ACompanyArrivesWhenItsTimeIsUp_NoticedByTheNextRead()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+        await BackdateJourneyAsync(first.Id);
+
+        var (_, response) = await Service.ListAsync(instance, TestIds.Player);
+
+        var dto = response!.Parties[0];
+        Assert.Equal(CompanyState.Idle, dto.State);
+        Assert.Equal(DungeonId, dto.SiteId);
+        Assert.Null(dto.Journey);
+    }
+
+    [Fact]
+    public async Task ACompanyOnTheRoadCannotBeSentAgainOrRemanned()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        var (again, _) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+        var (reman, _) = await Service.UpdateAsync(instance, TestIds.Player, first.Id, Man("hero-1"));
+        var (rename, _) = await Service.UpdateAsync(instance, TestIds.Player, first.Id,
+            new PartyUpdateRequest("On The Road", null, null, Contract));
+
+        Assert.Equal(PartyError.Busy, again.Error);
+        Assert.Equal(PartyError.Busy, reman.Error);
+        Assert.True(rename.Succeeded, rename.Message);
+    }
+
+    [Fact]
+    public async Task ACompanyCanCrossIntoANeighbouringRegion_ArrivingByItsRoad()
+    {
+        // Until marching between regions is walked on the map (phase 4), a crossing is a minute of
+        // travel and then the company is seen coming in by the road facing home.
+        var instance = await _db.AddInstanceAsync();
+        var home = TestWorld.OwnedBy(TestIds.Player, "r1");
+        home.IsCapital = true;
+        var next = TestWorld.Region("r2", q: 1, r: 0);
+        await _db.AddWorldAsync(instance.Id, TestWorld.Blob(home, next));
+        var save = TestSave.Roster(TestSave.Character("hero-1"));
+        save.ActiveCharacterIds = new List<string> { "hero-1" };
+        await _db.AddPlayerSaveAsync(instance.Id, TestIds.Player, TestSave.ToJson(save));
+        var first = await FirstAsync(instance.Id);
+        var target = TestWorld.DungeonIn(next);
+
+        var (outcome, response) = await Service.TravelAsync(instance.Id, TestIds.Player, first.Id, Travel(target));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var dto = response!.Parties[0];
+        Assert.Equal("r2", dto.RegionId);
+        Assert.Equal(target, dto.Journey!.ToSiteId);
+        Assert.True(dto.Journey.Seconds[0] > 0, "the crossing comes before the first cell");
+        Assert.InRange((dto.Journey.ArrivesAt - dto.Journey.DepartedAt).TotalMinutes, 0.99, 5.01);
+
+        // r2 lies east of r1, so the company comes in from r2's west side.
+        Assert.Equal(RegionSide.West, TravelRules.SideFacing(next.Hex, home.Hex));
+    }
+
+    [Fact]
+    public async Task ACompanyIsAlreadyWhereItStands()
+    {
+        var (instance, keep) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+
+        var (outcome, _) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(keep));
+
+        Assert.Equal(PartyError.AlreadyThere, outcome.Error);
+    }
+
+    // -----------------------------------------------------------------
+    // Who fights a run: the company standing there
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task YouFightWhereYouStand()
+    {
+        // The company stands at the keep; the dungeon is down the road.
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(first.Id));
+
+        Assert.Equal(PveError.NoCompanyThere, outcome.Error);
+        Assert.Empty(await _db.PveRuns.ToListAsync());
+    }
+
+    [Fact]
+    public async Task ACompanyStillOnTheRoadCannotFight()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(first.Id));
+
+        Assert.Equal(PveError.NoCompanyThere, outcome.Error);
+    }
+
+    [Fact]
+    public async Task ACompanyThatHasArrivedFights_AndTheRunRecordsWhoWentIn()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+        await BackdateJourneyAsync(first.Id);
+
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(first.Id));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var run = await _db.PveRuns.SingleAsync();
+        Assert.Equal(new[] { "hero-1", "hero-2", "hero-3" }, MarchingArmy.ReadIds(run.FighterIdsJson));
+    }
+
+    [Fact]
+    public async Task ARunNeedsACompany()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player,
+            new PveBeginRequest(DungeonId, Contract, new List<string> { "hero-1" }));
+
+        Assert.Equal(PveError.NoCompanyThere, outcome.Error);
+    }
 
     [Fact]
     public async Task ASiegeArmyCannotSlipOffToRunADungeon()
     {
         // Before 1.32.0 a run asked nothing about who was in it, so an army locked into a siege could
-        // clear dungeons in the meantime.
+        // clear dungeons in the meantime - and a company is no way round that.
         var (instance, _) = await SeedWithDungeonAsync();
+        var first = await StandAtDungeonAsync(instance);
         _db.Sieges.Add(new Siege
         {
             GameInstanceId = instance, AttackerUserId = TestIds.Player, DefenderUserId = TestIds.Rival,
@@ -304,48 +464,100 @@ public class PartyServiceTests : IDisposable
         });
         await _db.SaveChangesAsync();
 
-        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player,
-            new PveBeginRequest(DungeonId, Contract, new List<string> { "hero-1", "hero-2" }));
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(first.Id));
 
         Assert.Equal(PveError.FightersUnavailable, outcome.Error);
         Assert.Empty(await _db.PveRuns.ToListAsync());
     }
 
     [Fact]
-    public async Task AGarrisonCannotRunADungeon()
+    public async Task AGarrisonedHeroStaysBehindWhenTheirCompanyFights()
     {
+        // Stationing takes a hero out of their company, so the company fights without them.
         var (instance, keep) = await SeedWithDungeonAsync();
         var (_, _, world) = await Garrison.SetAsync(instance, TestIds.Player,
             new GarrisonRequest(keep, new List<string> { "hero-2" }, Contract));
         await PersistAsync(instance, world);
+        var first = await StandAtDungeonAsync(instance);
 
-        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player,
-            new PveBeginRequest(DungeonId, Contract, new List<string> { "hero-2" }));
-
-        Assert.Equal(PveError.FightersUnavailable, outcome.Error);
-    }
-
-    [Fact]
-    public async Task NobodyGoesInWithNobody()
-    {
-        var (instance, _) = await SeedWithDungeonAsync();
-
-        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, new PveBeginRequest(DungeonId, Contract));
-
-        Assert.Equal(PveError.FightersUnavailable, outcome.Error);
-    }
-
-    [Fact]
-    public async Task ARunRecordsWhoFoughtIt()
-    {
-        var (instance, _) = await SeedWithDungeonAsync();
-
-        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player,
-            new PveBeginRequest(DungeonId, Contract, new List<string> { "hero-1", "hero-3" }));
+        var (outcome, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(first.Id));
 
         Assert.True(outcome.Succeeded, outcome.Message);
         var run = await _db.PveRuns.SingleAsync();
         Assert.Equal(new[] { "hero-1", "hero-3" }, MarchingArmy.ReadIds(run.FighterIdsJson));
+    }
+
+    // -----------------------------------------------------------------
+    // The rules on their own
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void ARouteKeepsToTheRoads_AndProgressFollowsTheClock()
+    {
+        var region = TestWorld.OwnedBy(TestIds.Player, "r1");
+        var layout = RegionGenerator.Generate(region);
+        var roads = RegionRoadNetwork.Build(layout, region.Seed);
+        var keep = layout.FindSite(TestWorld.KeepIn(region))!.Cell;
+        var dungeon = layout.FindSite(TestWorld.DungeonIn(region))!.Cell;
+
+        var journey = TravelRules.Plan(roads, keep, dungeon);
+
+        Assert.NotNull(journey);
+        int onRoad = journey!.Cells.Count(roads.IsRoad);
+        Assert.True(onRoad >= journey.Cells.Count * 0.6, $"only {onRoad} of {journey.Cells.Count} cells on the road");
+
+        var departed = new DateTime(2026, 9, 27, 12, 0, 0, DateTimeKind.Utc);
+        double last = journey.Cells.Count - 1;
+        Assert.Equal(0, TravelRules.Progress(journey.CumulativeSeconds, departed, departed));
+        Assert.Equal(last, TravelRules.Progress(journey.CumulativeSeconds, departed, departed + journey.Duration), 3);
+        double mid = TravelRules.Progress(journey.CumulativeSeconds, departed, departed + journey.Duration / 2);
+        Assert.InRange(mid, 0.5, last - 0.5);
+    }
+
+    [Fact]
+    public void EverySiteIsJoinedToTheRoads_AcrossManyRegions()
+    {
+        for (int i = 0; i < 40; i++)
+        {
+            var region = TestWorld.Region($"r{i}", tier: 1 + i % 4);
+            var layout = RegionGenerator.Generate(region);
+            var roads = RegionRoadNetwork.Build(layout, region.Seed);
+            foreach (var site in layout.Sites)
+                Assert.True(roads.IsRoad(site.Cell) || layout.Sites.Count == 1,
+                    $"{site.SiteId} ({site.Type}) is not on a road in region {region.RegionId}");
+        }
+    }
+
+    // -----------------------------------------------------------------
+
+    private static PartyTravelRequest Travel(string siteId) => new(siteId, Contract);
+
+    private PveBeginRequest Enter(Guid partyId) => new(DungeonId, Contract, null, partyId);
+
+    private async Task<PartyDto> FirstAsync(Guid instance)
+    {
+        var (_, response) = await Service.ListAsync(instance, TestIds.Player);
+        return response!.Parties[0];
+    }
+
+    /// <summary>Puts the journey in the past, as if its minutes had been walked.</summary>
+    private async Task BackdateJourneyAsync(Guid partyId)
+    {
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == partyId);
+        var took = party.ArrivesAt!.Value - party.DepartedAt!.Value;
+        party.DepartedAt = DateTime.UtcNow - took - TimeSpan.FromSeconds(1);
+        party.ArrivesAt = DateTime.UtcNow - TimeSpan.FromSeconds(1);
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Sends the first company to the dungeon and lets it arrive.</summary>
+    private async Task<PartyDto> StandAtDungeonAsync(Guid instance)
+    {
+        var first = await FirstAsync(instance);
+        var (sent, _) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+        Assert.True(sent.Succeeded, sent.Message);
+        await BackdateJourneyAsync(first.Id);
+        return first;
     }
 
     // -----------------------------------------------------------------

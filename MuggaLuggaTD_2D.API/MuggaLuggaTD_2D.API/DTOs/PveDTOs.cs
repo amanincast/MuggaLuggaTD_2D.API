@@ -16,7 +16,12 @@ public record PveBeginRequest(
     /// The characters going in (1.32.0). The server refuses the run if any is not the player's, or is
     /// garrisoned, held prisoner or marching with a siege army.
     /// </summary>
-    List<string>? CharacterIds = null
+    List<string>? CharacterIds = null,
+    /// <summary>
+    /// The company going in (1.33.0). It must be standing at the site - you fight where you stand - and
+    /// its members are the fighters; <see cref="CharacterIds"/> is then ignored.
+    /// </summary>
+    Guid? PartyId = null
 );
 
 public record PveBeginResponse(Guid RunId);

@@ -19,7 +19,8 @@ public enum PveError
     RunTooFast,
     ContractMismatch,
     NoConquestEffect,
-    FightersUnavailable
+    FightersUnavailable,
+    NoCompanyThere
 }
 
 public record PveOutcome(PveError Error, string? Message = null)
@@ -106,9 +107,16 @@ public class WorldPveService
         if (!check.Succeeded)
             return (check, Guid.Empty);
 
+        // You fight where you stand (1.33.0): a company must have walked there, and it is who goes in.
+        if (request.PartyId == null)
+            return (new PveOutcome(PveError.NoCompanyThere, "Send a company there first."), Guid.Empty);
+        var company = await PartyService.CompanyAtAsync(_context, gameInstanceId, userId, request.PartyId.Value, request.SiteId);
+        if (company == null)
+            return (new PveOutcome(PveError.NoCompanyThere, "That company is not standing there. Send it, and fight when it arrives."), Guid.Empty);
+
         // Who is going in. A garrisoned, captive or sieging character cannot also be in a dungeon;
         // the server used to take the client's word for the party entirely.
-        var fighters = (request.CharacterIds ?? new List<string>())
+        var fighters = MarchingArmy.ReadIds(company.CharacterIdsJson)
             .Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
         var why = await PartyService.WhyCannotFightAsync(_context, _logger, world, gameInstanceId, userId, fighters);
         if (why != null)

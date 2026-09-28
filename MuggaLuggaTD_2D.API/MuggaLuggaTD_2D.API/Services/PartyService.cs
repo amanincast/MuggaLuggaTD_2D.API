@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared;
@@ -25,6 +26,11 @@ public enum PartyError
     BadBanner,
     LastCompany,
     Busy,
+    SiteNotFound,
+    NotInThisRegion,
+    AlreadyThere,
+    NoRoute,
+    Empty,
 }
 
 public record PartyOutcome(PartyError Error, string? Message = null)
@@ -122,6 +128,10 @@ public class PartyService
         var party = parties.FirstOrDefault(p => p.Id == partyId);
         if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
 
+        // A company on the road keeps who it set out with; its name and colours may still change.
+        if (request.CharacterIds != null && party.State != CompanyState.Idle)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is away. Change who marches with it when it is at rest."), null);
+
         var check = await ApplyAsync(party, request.Name, request.Banner, request.CharacterIds, parties, world, gameInstanceId, userId);
         if (!check.Succeeded) return (check, null);
 
@@ -152,6 +162,135 @@ public class PartyService
         await _context.SaveChangesAsync();
         _sessionLog.Log("PARTY-DISBAND", $"user={userId} party={party.Id} name=\"{party.Name}\"");
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+    }
+
+    /// <summary>
+    /// Sends a company to a site in the region it stands in (§3). The server finds the route on the
+    /// region's roads (<see cref="RegionRoadNetwork"/>, the one the client paints), times it
+    /// (<see cref="TravelRules"/>: one to five minutes) and stamps it. Nothing ticks: the company is
+    /// noticed to have arrived by the first read after it does.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> TravelAsync(
+        Guid gameInstanceId, string userId, Guid partyId, PartyTravelRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version)
+            return (Mismatch, null);
+
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.State != CompanyState.Idle)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is already on the move."), null);
+
+        var members = MarchingArmy.ReadIds(party.CharacterIdsJson);
+        if (members.Count == 0) return (new PartyOutcome(PartyError.Empty, $"{party.Name} has nobody in it to send."), null);
+
+        // Anyone tied up since they joined stays behind as far as the rules go: a company does not
+        // march half-garrisoned.
+        var commitments = await CommitmentsAsync(_context, world, gameInstanceId, userId);
+        var committed = members.FirstOrDefault(commitments.ContainsKey);
+        if (committed != null)
+            return (new PartyOutcome(PartyError.CharacterCommitted,
+                $"{committed} is {Describe(commitments[committed])}; take them out of {party.Name} first."), null);
+
+        var regionId = SiteSpec.RegionIdOf(request.SiteId);
+        if (string.IsNullOrEmpty(party.RegionId) || string.IsNullOrEmpty(party.SiteId))
+            return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
+        if (string.Equals(request.SiteId, party.SiteId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.AlreadyThere, $"{party.Name} is already there."), null);
+
+        var regions = WorldRegionBlob.ReadAllRegions(world).ToList();
+        var region = regions.FirstOrDefault(r => r.RegionId == regionId);
+        var home = regions.FirstOrDefault(r => r.RegionId == party.RegionId);
+        if (region == null || home == null) return (new PartyOutcome(PartyError.SiteNotFound, "That region is not in this world."), null);
+
+        var layout = RegionGenerator.Generate(region);
+        var to = layout.FindSite(request.SiteId);
+        if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null);
+        var roads = RegionRoadNetwork.Build(layout, region.Seed);
+
+        Journey? journey;
+        if (region.RegionId == home.RegionId)
+        {
+            var from = layout.FindSite(party.SiteId);
+            if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
+            journey = TravelRules.Plan(roads, from.Cell, to.Cell);
+        }
+        else
+        {
+            // Into another region: across the border, then in by the road facing home (§6; the
+            // crossing itself is walked on no map until phase 4).
+            journey = TravelRules.PlanArrival(roads, home.Hex, region.Hex, to.Cell);
+        }
+        if (journey == null)
+            return (new PartyOutcome(PartyError.NoRoute, "No road or open ground leads there from where the company stands."), null);
+
+        var now = DateTime.UtcNow;
+        party.State = CompanyState.Travelling;
+        party.FromSiteId = party.SiteId;
+        party.RegionId = region.RegionId;   // where it will be; the view shows it on the far side of the border
+        party.ToSiteId = to.SiteId;
+        party.SiteId = null;
+        party.DepartedAt = now;
+        party.ArrivesAt = now + journey.Duration;
+        party.RouteJson = JsonSerializer.Serialize(new JourneyRoute(
+            journey.Cells.Select(c => new[] { c.X, c.Y }).ToList(),
+            journey.CumulativeSeconds.Select(s => Math.Round(s, 2)).ToList()));
+        party.UpdatedAt = now;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("PARTY-TRAVEL",
+            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} cells={journey.Cells.Count} secs={journey.Duration.TotalSeconds:F0}");
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+    }
+
+    /// <summary>
+    /// The company of this player's standing at <paramref name="siteId"/>, at rest, or null. PvE begin
+    /// asks this: you fight where you stand. Settles arrivals first.
+    /// </summary>
+    public static async Task<PlayerParty?> CompanyAtAsync(ApplicationDbContext context, Guid gameInstanceId,
+        string userId, Guid partyId, string siteId)
+    {
+        var party = await context.PlayerParties
+            .FirstOrDefaultAsync(p => p.Id == partyId && p.GameInstanceId == gameInstanceId && p.UserId == userId);
+        if (party == null) return null;
+        if (SettleArrival(party, DateTime.UtcNow)) await context.SaveChangesAsync();
+        return party.State == CompanyState.Idle && string.Equals(party.SiteId, siteId, StringComparison.Ordinal)
+            ? party
+            : null;
+    }
+
+    /// <summary>Lands a company whose journey is over. Returns whether anything changed.</summary>
+    private static bool SettleArrival(PlayerParty party, DateTime now)
+    {
+        if (party.State != CompanyState.Travelling || party.ArrivesAt == null || party.ArrivesAt > now) return false;
+
+        party.State = CompanyState.Idle;
+        party.SiteId = party.ToSiteId;
+        party.FromSiteId = null;
+        party.ToSiteId = null;
+        party.DepartedAt = null;
+        party.ArrivesAt = null;
+        party.RouteJson = null;
+        party.UpdatedAt = now;
+        return true;
+    }
+
+    /// <summary>A journey's route as stored: cells as [x, y], and the seconds after departure each is reached.</summary>
+    private sealed record JourneyRoute(List<int[]> Cells, List<double> Seconds);
+
+    private static JourneyDto? JourneyOf(PlayerParty p)
+    {
+        if (p.State != CompanyState.Travelling || p.DepartedAt == null || p.ArrivesAt == null || p.RouteJson == null)
+            return null;
+        var route = JsonSerializer.Deserialize<JourneyRoute>(p.RouteJson);
+        if (route == null) return null;
+        return new JourneyDto(p.FromSiteId ?? "", p.ToSiteId ?? "",
+            DateTime.SpecifyKind(p.DepartedAt.Value, DateTimeKind.Utc), DateTime.SpecifyKind(p.ArrivesAt.Value, DateTimeKind.Utc),
+            route.Cells, route.Seconds);
     }
 
     private static PartyOutcome Mismatch => new(PartyError.ContractMismatch, "Your game is running different rules from the server.");
@@ -302,7 +441,15 @@ public class PartyService
             .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId)
             .OrderBy(p => p.SortOrder).ThenBy(p => p.CreatedAt)
             .ToListAsync();
-        if (parties.Count > 0) return parties;
+        if (parties.Count > 0)
+        {
+            // Arrival is noticed by the first read after it, like a season's end.
+            var now = DateTime.UtcNow;
+            bool landed = false;
+            foreach (var p in parties) landed |= SettleArrival(p, now);
+            if (landed) await _context.SaveChangesAsync();
+            return parties;
+        }
 
         var save = await MarchingArmy.LoadPlayerSaveAsync(_context, _logger, gameInstanceId, userId);
         var owned = save?.Characters?.Where(c => c?.Id != null).Select(c => c.Id).ToHashSet(StringComparer.Ordinal)
@@ -352,11 +499,12 @@ public class PartyService
 
         return new PartiesResponse(
             parties.Select(p => new PartyDto(p.Id, p.Name, p.Banner, MarchingArmy.ReadIds(p.CharacterIdsJson),
-                p.SortOrder, p.State, p.RegionId, p.SiteId)).ToList(),
+                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p))).ToList(),
             CompanyRules.MaxCompanies(standing.Cap),
             CompanyRules.MaxSize,
             standing.Cap,
-            commitments.Select(c => new CharacterCommitmentDto(c.Key, c.Value.Reason, c.Value.SiteId)).ToList());
+            commitments.Select(c => new CharacterCommitmentDto(c.Key, c.Value.Reason, c.Value.SiteId)).ToList(),
+            DateTime.UtcNow);
     }
 
     private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId)

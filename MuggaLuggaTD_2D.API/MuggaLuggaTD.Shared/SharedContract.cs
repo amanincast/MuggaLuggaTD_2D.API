@@ -158,6 +158,9 @@ namespace MuggaLuggaTD.Shared
         //   player may form roster cap / 4. PvE begin names the characters who fight, and the server
         //   refuses one that is garrisoned, held prisoner or locked into a siege - it checked none of
         //   those before, so a sieging army could slip off and run dungeons.
-        public const string Version = "1.32.0";
+        // 1.33.0 - travel (parties-and-travel.md §3). The road network moved into the shared assembly
+        //   (RegionRoadNetwork) so the server times a journey on the road the client paints; TravelRules
+        //   times it (1-5 minutes). PvE begin names a company, which must be standing at the site.
+        public const string Version = "1.33.0";
     }
 }
