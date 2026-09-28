@@ -161,6 +161,9 @@ namespace MuggaLuggaTD.Shared
         // 1.33.0 - travel (parties-and-travel.md §3). The road network moved into the shared assembly
         //   (RegionRoadNetwork) so the server times a journey on the road the client paints; TravelRules
         //   times it (1-5 minutes). PvE begin names a company, which must be standing at the site.
-        public const string Version = "1.33.0";
+        // 1.34.0 - ambushes (parties-and-travel.md §4). AmbushRules: the server rolls a journey when it
+        //   sets out; a company that reaches its ambush halts until its player fights (a tier-1 skirmish
+        //   at the land's level, paying half) or flees (walking back the way it came).
+        public const string Version = "1.34.0";
     }
 }

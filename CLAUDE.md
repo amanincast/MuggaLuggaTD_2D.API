@@ -113,6 +113,24 @@ business, so nothing here is broadcast.
 - **You fight where you stand:** PvE begin takes `PartyId`; the company must be at rest **at that
   site**, and its members are the fighters (`PveError.NoCompanyThere` otherwise). A company on
   the road can be renamed but not re-manned.
+- **Ambushes** (phase 3, shared 1.34.0, `AmbushRules`): rolled **once, when the travel order is
+  accepted** — by the tier of the land it ends in, whether the player holds it (×1.75 if not) and
+  its length, capped at 35% — and stored as `AmbushAt` (a share of the journey's time, 0.25–0.75).
+  **It is never sent to the client**; the first read after that moment halts the company
+  (`Ambushed`, `HaltedAt`), and only then does the DTO carry `Journey.HaltedAt` and an
+  `AmbushDto` (the destination's level, tier 1, 3 waves).
+  - `POST parties/{id}/ambush/fight` opens a `PveRun` (`LocationId = "ambush:{partyId}"`,
+    type -1, so a PvE claim naming it finds no site and closes it) and stores `AmbushRunId`.
+  - `POST .../ambush/claim { runId, won }`: **won** (≥ `MinimumRunDuration`) pays **half** of a
+    tier-1 run at that level (XP, gold from that XP, each item and material unit at a coin-flip) and
+    the company **marches on** — its departure and arrival are shifted by the halt, and it cannot be
+    ambushed twice on one road. **Lost** pays nothing and turns it back. No conquest, recruit,
+    resolve or season points either way.
+  - `POST .../ambush/flee`: **Returning** — the cells it walked, reversed and timed as they took
+    (`AmbushRules.RouteBack`), plus the crossing if it came from another region. Arrival lands it
+    at `ToSiteId` (the origin) in that site's region.
+  - A halted company **waits**: there is no auto-resolve (Mike 2026-09-27 — the design's auto-fight,
+    morale and fatigue were not asked for). `PartyService.Dice` is the ambush entropy; tests fix it.
 
 ## Development URLs
 

@@ -14,8 +14,10 @@ public record PartyDto(
     string? RegionId,
     /// <summary>The site it stands at; null while on the road.</summary>
     string? SiteId,
-    /// <summary>Its journey while travelling, else null.</summary>
-    JourneyDto? Journey = null
+    /// <summary>Its journey while travelling, returning or ambushed, else null.</summary>
+    JourneyDto? Journey = null,
+    /// <summary>What has it halted, while ambushed.</summary>
+    AmbushDto? Ambush = null
 );
 
 /// <summary>
@@ -29,7 +31,49 @@ public record JourneyDto(
     DateTime DepartedAt,
     DateTime ArrivesAt,
     List<int[]> Cells,
-    List<double> Seconds
+    List<double> Seconds,
+    /// <summary>When an ambush stopped it on this road, else null. It stands where it was at that moment.</summary>
+    DateTime? HaltedAt = null
+);
+
+/// <summary>
+/// The warband that has a company halted, and the fight it offers: a tier-1 clearing's waves at the
+/// level of the land (<see cref="AmbushRules"/>). Sent when the company is ambushed, so the prompt can
+/// say what it faces before the player chooses.
+/// </summary>
+public record AmbushDto(
+    string SiteId,
+    int Level,
+    int Tier,
+    int Waves
+);
+
+/// <summary>An ambush run opened: the id its claim names, and the fight to load.</summary>
+public record AmbushFightResponse(
+    Guid RunId,
+    AmbushDto Ambush,
+    PartiesResponse Parties
+);
+
+public record AmbushClaimRequest(
+    [Required] Guid RunId,
+    bool Won,
+    [Required] string SharedContractVersion
+);
+
+/// <summary>What fighting an ambush came to. A loss pays nothing and turns the company back.</summary>
+public record AmbushClaimResponse(
+    bool Won,
+    long Experience,
+    List<StateManagement.Models.ItemSaveData> Items,
+    List<MaterialGrant> Materials,
+    long Gold,
+    long GoldBalance,
+    PartiesResponse Parties
+);
+
+public record AmbushOrderRequest(
+    [Required] string SharedContractVersion
 );
 
 /// <summary>Sends a company to a site in the region it stands in.</summary>

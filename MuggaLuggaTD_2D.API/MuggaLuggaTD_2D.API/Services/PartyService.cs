@@ -31,6 +31,9 @@ public enum PartyError
     AlreadyThere,
     NoRoute,
     Empty,
+    NotAmbushed,
+    RunNotFound,
+    RunTooFast,
 }
 
 public record PartyOutcome(PartyError Error, string? Message = null)
@@ -56,13 +59,23 @@ public class PartyService
 {
     private readonly ApplicationDbContext _context;
     private readonly TavernService _tavern;
+    private readonly IGameContentProvider _content;
+    private readonly MaterialWalletService _wallet;
+    private readonly GoldService _gold;
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<PartyService> _logger;
 
-    public PartyService(ApplicationDbContext context, TavernService tavern, ISessionLog sessionLog, ILogger<PartyService> logger)
+    /// <summary>Where ambushes and a won ambush's spoils are rolled from. Tests fix it.</summary>
+    public Random Dice { get; set; } = Random.Shared;
+
+    public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
+        MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger)
     {
         _context = context;
         _tavern = tavern;
+        _content = content;
+        _wallet = wallet;
+        _gold = gold;
         _sessionLog = sessionLog;
         _logger = logger;
     }
@@ -240,10 +253,19 @@ public class PartyService
             journey.Cells.Select(c => new[] { c.X, c.Y }).ToList(),
             journey.CumulativeSeconds.Select(s => Math.Round(s, 2)).ToList()));
         party.UpdatedAt = now;
+
+        // The road is rolled now, once (§4): re-reading the journey cannot re-roll it, and the client
+        // is not told until it strikes.
+        double chance = AmbushRules.ChanceFor(region.Tier, region.IsOwnedByPlayer(userId), journey.Duration);
+        party.AmbushAt = AmbushRules.Roll(chance, Dice);
+        party.HaltedAt = null;
+        party.AmbushRunId = null;
+        party.AmbushRunStartedAt = null;
         await _context.SaveChangesAsync();
 
         _sessionLog.Log("PARTY-TRAVEL",
-            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} cells={journey.Cells.Count} secs={journey.Duration.TotalSeconds:F0}");
+            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} cells={journey.Cells.Count} secs={journey.Duration.TotalSeconds:F0} " +
+            $"ambush-chance={chance:F2} ambush={(party.AmbushAt.HasValue ? party.AmbushAt.Value.ToString("F2") : "none")}");
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
 
@@ -263,13 +285,37 @@ public class PartyService
             : null;
     }
 
-    /// <summary>Lands a company whose journey is over. Returns whether anything changed.</summary>
+    /// <summary>
+    /// Settles a company on the road by the clock: halts it where its ambush strikes, or lands it where
+    /// it was going (or back where it set out, if it turned round). Returns whether anything changed.
+    /// </summary>
     private static bool SettleArrival(PlayerParty party, DateTime now)
     {
-        if (party.State != CompanyState.Travelling || party.ArrivesAt == null || party.ArrivesAt > now) return false;
+        if (party.State is not (CompanyState.Travelling or CompanyState.Returning)
+            || party.DepartedAt == null || party.ArrivesAt == null)
+            return false;
+
+        if (party.State == CompanyState.Travelling && party.AmbushAt is double share)
+        {
+            var strikes = party.DepartedAt.Value + TimeSpan.FromTicks((long)((party.ArrivesAt.Value - party.DepartedAt.Value).Ticks * share));
+            if (strikes <= now)
+            {
+                party.State = CompanyState.Ambushed;
+                party.HaltedAt = strikes;
+                party.UpdatedAt = now;
+                return true;
+            }
+        }
+
+        if (party.ArrivesAt > now) return false;
 
         party.State = CompanyState.Idle;
         party.SiteId = party.ToSiteId;
+        if (!string.IsNullOrEmpty(party.ToSiteId)) party.RegionId = SiteSpec.RegionIdOf(party.ToSiteId);
+        party.AmbushAt = null;
+        party.HaltedAt = null;
+        party.AmbushRunId = null;
+        party.AmbushRunStartedAt = null;
         party.FromSiteId = null;
         party.ToSiteId = null;
         party.DepartedAt = null;
@@ -284,14 +330,215 @@ public class PartyService
 
     private static JourneyDto? JourneyOf(PlayerParty p)
     {
-        if (p.State != CompanyState.Travelling || p.DepartedAt == null || p.ArrivesAt == null || p.RouteJson == null)
+        if (p.State is not (CompanyState.Travelling or CompanyState.Returning or CompanyState.Ambushed)
+            || p.DepartedAt == null || p.ArrivesAt == null || p.RouteJson == null)
             return null;
         var route = JsonSerializer.Deserialize<JourneyRoute>(p.RouteJson);
         if (route == null) return null;
         return new JourneyDto(p.FromSiteId ?? "", p.ToSiteId ?? "",
             DateTime.SpecifyKind(p.DepartedAt.Value, DateTimeKind.Utc), DateTime.SpecifyKind(p.ArrivesAt.Value, DateTimeKind.Utc),
-            route.Cells, route.Seconds);
+            route.Cells, route.Seconds,
+            p.HaltedAt is DateTime halted ? DateTime.SpecifyKind(halted, DateTimeKind.Utc) : null);
     }
+
+    // -----------------------------------------------------------------
+    // Ambushes (§4, phase 3)
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Opens a run against the warband that has halted a company. The company stays halted - if the
+    /// player never finishes the fight they can open it again, or flee.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, AmbushFightResponse? Response)> FightAmbushAsync(
+        Guid gameInstanceId, string userId, Guid partyId, AmbushOrderRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version) return (Mismatch, null);
+
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.State != CompanyState.Ambushed)
+            return (new PartyOutcome(PartyError.NotAmbushed, $"Nobody has {party.Name} halted."), null);
+
+        var ambush = AmbushOf(party, world);
+        if (ambush == null) return (new PartyOutcome(PartyError.SiteNotFound, "The road it was on is no longer in this world."), null);
+
+        var fighters = MarchingArmy.ReadIds(party.CharacterIdsJson);
+        var why = await WhyCannotFightAsync(_context, _logger, world, gameInstanceId, userId, fighters);
+        if (why != null) return (new PartyOutcome(PartyError.CharacterCommitted, why), null);
+
+        var now = DateTime.UtcNow;
+        var run = new PveRun
+        {
+            GameInstanceId = gameInstanceId,
+            UserId = userId,
+            // Not a site: nothing is conquered, and a PvE claim naming it finds no site and closes it.
+            LocationId = $"ambush:{party.Id}",
+            LocationType = -1,
+            FighterIdsJson = MarchingArmy.WriteIds(fighters),
+            StartedAt = now,
+        };
+        _context.PveRuns.Add(run);
+
+        party.AmbushRunId = run.Id;
+        party.AmbushRunStartedAt = now;
+        party.UpdatedAt = now;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("AMBUSH-FIGHT", $"user={userId} party={party.Id} run={run.Id} level={ambush.Level} waves={ambush.Waves}");
+        return (new PartyOutcome(PartyError.None),
+            new AmbushFightResponse(run.Id, ambush, await ResponseAsync(gameInstanceId, userId, world)));
+    }
+
+    /// <summary>Turns a halted company back the way it came (Mike: fight or flee).</summary>
+    public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> FleeAmbushAsync(
+        Guid gameInstanceId, string userId, Guid partyId, AmbushOrderRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version) return (Mismatch, null);
+
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.State != CompanyState.Ambushed)
+            return (new PartyOutcome(PartyError.NotAmbushed, $"Nobody has {party.Name} halted."), null);
+
+        TurnBack(party, DateTime.UtcNow);
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("AMBUSH-FLEE", $"user={userId} party={party.Id} back-to={party.ToSiteId}");
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+    }
+
+    /// <summary>
+    /// Settles an ambush fight. Won: half of a tier-1 run at the land's level, and the company marches
+    /// on. Lost: nothing, and the company turns back. Neither conquers, recruits or restores anything.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, AmbushClaimResponse? Response)> ClaimAmbushAsync(
+        Guid gameInstanceId, string userId, Guid partyId, AmbushClaimRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version) return (Mismatch, null);
+
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.State != CompanyState.Ambushed || party.AmbushRunId != request.RunId)
+            return (new PartyOutcome(PartyError.RunNotFound, "That fight is not this company's."), null);
+
+        var run = await _context.PveRuns.FirstOrDefaultAsync(r =>
+            r.Id == request.RunId && r.GameInstanceId == gameInstanceId && r.UserId == userId && r.ClaimedAt == null);
+        if (run == null) return (new PartyOutcome(PartyError.RunNotFound, "That fight has already been settled."), null);
+
+        var now = DateTime.UtcNow;
+        var elapsed = now - run.StartedAt;
+        if (request.Won && elapsed < WorldPveService.MinimumRunDuration)
+            return (new PartyOutcome(PartyError.RunTooFast, "That fight ended implausibly fast."), null);
+
+        var ambush = AmbushOf(party, world);
+        run.ClaimedAt = now;
+        party.AmbushRunId = null;
+        party.AmbushRunStartedAt = null;
+
+        long experience = 0, gold = 0, balance = 0;
+        var items = new List<StateManagement.Models.ItemSaveData>();
+        var materials = new List<MaterialGrant>();
+        bool won = request.Won && elapsed <= WorldPveService.RunExpiry && ambush != null;
+
+        if (won)
+        {
+            // Priced as the smallest run there is, at the land's level, and paid at a share: a road
+            // skirmish is not a dungeon.
+            var full = RunRewardCalculator.Calculate(ambush!.Level, AmbushRules.SkirmishTier,
+                _content.RunTuning, _content.DroppableItems, Dice);
+            experience = (long)Math.Round(full.Experience * AmbushRules.RewardShare);
+            gold = GoldRules.GoldForClear(experience);
+            items = full.Items.Where(_ => Dice.NextDouble() < AmbushRules.RewardShare).ToList();
+            materials = MaterialRewardCalculator.Calculate(ambush.Level, AmbushRules.SkirmishTier,
+                    _content.RunTuning, _content.Materials, Dice)
+                .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = AmbushRules.Share(m.Quantity, Dice) })
+                .Where(m => m.Quantity > 0)
+                .ToList();
+
+            await _wallet.GrantAsync(gameInstanceId, userId, materials, $"ambush run={run.Id}");
+            balance = await _gold.GrantAsync(gameInstanceId, userId, gold, $"ambush run={run.Id}");
+
+            // On it goes, from where it stood. It will not be stopped twice on one road.
+            var shift = now - (party.HaltedAt ?? now);
+            party.DepartedAt += shift;
+            party.ArrivesAt += shift;
+            party.AmbushAt = null;
+            party.HaltedAt = null;
+            party.State = CompanyState.Travelling;
+        }
+        else
+        {
+            TurnBack(party, now);
+        }
+
+        party.UpdatedAt = now;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("AMBUSH-CLAIM",
+            $"user={userId} party={party.Id} run={run.Id} won={won} xp={experience} gold={gold} items={items.Count} materials={materials.Sum(m => m.Quantity)}");
+        return (new PartyOutcome(PartyError.None), new AmbushClaimResponse(
+            won, experience, items, materials, gold, balance, await ResponseAsync(gameInstanceId, userId, world)));
+    }
+
+    /// <summary>
+    /// Sends a halted company back where it set out, over the cells it walked, as fast as it came. Out
+    /// of another region, the crossing is walked again at the end.
+    /// </summary>
+    private static void TurnBack(PlayerParty party, DateTime now)
+    {
+        var route = party.RouteJson == null ? null : JsonSerializer.Deserialize<JourneyRoute>(party.RouteJson);
+        double index = 0;
+        if (route != null && party.DepartedAt != null)
+            index = TravelRules.Progress(route.Seconds, party.DepartedAt.Value, party.HaltedAt ?? now);
+
+        var (cells, seconds) = route == null
+            ? (new List<int[]>(), new List<double>())
+            : AmbushRules.RouteBack(route.Cells, route.Seconds, index);
+
+        double walk = seconds.Count > 0 ? seconds[^1] : 0;
+        bool crossed = !string.IsNullOrEmpty(party.FromSiteId) && !string.IsNullOrEmpty(party.ToSiteId)
+                       && SiteSpec.RegionIdOf(party.FromSiteId) != SiteSpec.RegionIdOf(party.ToSiteId);
+        if (crossed) walk += TravelRules.CrossingSeconds;
+
+        var origin = party.FromSiteId;
+        party.State = CompanyState.Returning;
+        party.FromSiteId = party.ToSiteId;   // turned back from the road to here
+        party.ToSiteId = origin;
+        party.DepartedAt = now;
+        party.ArrivesAt = now + TimeSpan.FromSeconds(Math.Max(5, walk));
+        party.RouteJson = JsonSerializer.Serialize(new JourneyRoute(cells, seconds));
+        party.AmbushAt = null;
+        party.HaltedAt = null;
+        party.AmbushRunId = null;
+        party.AmbushRunStartedAt = null;
+    }
+
+    /// <summary>The warband that has a company halted, or null when it is not ambushed.</summary>
+    private static AmbushDto? AmbushOf(PlayerParty p, JsonNode world)
+    {
+        if (p.State != CompanyState.Ambushed || string.IsNullOrEmpty(p.ToSiteId)) return null;
+        var resolved = WorldRegionBlob.ResolveSite(world, p.ToSiteId);
+        if (resolved == null) return null;
+
+        // Fought at the level of the land it happened in, as the smallest run there is: a tier-1
+        // site's waves, no boss.
+        return new AmbushDto(p.ToSiteId, Math.Max(1, resolved.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+    }
+
+    /// <summary>The waves a tier-1 site is fought with (SurvivalData's WavesRequiredTier1).</summary>
+    private const int SkirmishWaves = 3;
 
     private static PartyOutcome Mismatch => new(PartyError.ContractMismatch, "Your game is running different rules from the server.");
 
@@ -499,7 +746,7 @@ public class PartyService
 
         return new PartiesResponse(
             parties.Select(p => new PartyDto(p.Id, p.Name, p.Banner, MarchingArmy.ReadIds(p.CharacterIdsJson),
-                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p))).ToList(),
+                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world))).ToList(),
             CompanyRules.MaxCompanies(standing.Cap),
             CompanyRules.MaxSize,
             standing.Cap,

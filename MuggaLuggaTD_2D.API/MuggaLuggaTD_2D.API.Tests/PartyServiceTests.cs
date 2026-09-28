@@ -32,7 +32,7 @@ public class PartyServiceTests : IDisposable
         new(_db, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
 
     private PartyService Service =>
-        new(_db, Tavern, new FakeSessionLog(), NullLogger<PartyService>.Instance);
+        new(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<PartyService>.Instance) { Dice = _dice };
 
     private WorldGarrisonService Garrison => new(
         _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance);
@@ -485,6 +485,224 @@ public class PartyServiceTests : IDisposable
         Assert.True(outcome.Succeeded, outcome.Message);
         var run = await _db.PveRuns.SingleAsync();
         Assert.Equal(new[] { "hero-1", "hero-3" }, MarchingArmy.ReadIds(run.FighterIdsJson));
+    }
+
+    // -----------------------------------------------------------------
+    // Ambushes (1.34.0)
+    // -----------------------------------------------------------------
+
+    /// <summary>A Random that always rolls the same: 0 ambushes every road (at its earliest), 0.999 none.</summary>
+    private sealed class FixedDice : Random
+    {
+        private readonly double _value;
+        public FixedDice(double value) => _value = value;
+        public override double NextDouble() => _value;
+        protected override double Sample() => _value;
+        public override int Next(int maxValue) => 0;
+        public override int Next(int minValue, int maxValue) => minValue;
+    }
+
+    private Random _dice = new FixedDice(0.999);
+
+    private async Task<(Guid Instance, string Keep, PartyDto Company)> AmbushedAsync()
+    {
+        _dice = new FixedDice(0.0);
+        var (instance, keep) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        // Half-way along: past the ambush, which strikes a quarter of the way.
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == first.Id);
+        var took = party.ArrivesAt!.Value - party.DepartedAt!.Value;
+        party.DepartedAt = DateTime.UtcNow - took / 2;
+        party.ArrivesAt = party.DepartedAt + took;
+        await _db.SaveChangesAsync();
+
+        var (_, response) = await Service.ListAsync(instance, TestIds.Player);
+        return (instance, keep, response!.Parties[0]);
+    }
+
+    private static AmbushOrderRequest Order => new(Contract);
+
+    private async Task BackdateAmbushRunAsync(Guid runId)
+    {
+        var run = await _db.PveRuns.SingleAsync(r => r.Id == runId);
+        run.StartedAt = DateTime.UtcNow - TimeSpan.FromMinutes(2);
+        await _db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task AnAmbushHaltsTheCompanyPartWayAlongItsRoad()
+    {
+        var (_, _, company) = await AmbushedAsync();
+
+        Assert.Equal(CompanyState.Ambushed, company.State);
+        Assert.NotNull(company.Journey);
+        Assert.NotNull(company.Journey!.HaltedAt);
+        Assert.NotNull(company.Ambush);
+        Assert.Equal(AmbushRules.SkirmishTier, company.Ambush!.Tier);
+        Assert.True(company.Ambush.Waves > 0);
+    }
+
+    [Fact]
+    public async Task AnAmbushIsRolledOnDeparture_AndNobodyIsToldAheadOfTime()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        _dice = new FixedDice(0.0);
+
+        var (_, response) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        // Rolled, stored - and not sent: the client learns of an ambush when it strikes.
+        var stored = await _db.PlayerParties.SingleAsync(p => p.Id == first.Id);
+        Assert.NotNull(stored.AmbushAt);
+        var dto = response!.Parties[0];
+        Assert.Equal(CompanyState.Travelling, dto.State);
+        Assert.Null(dto.Journey!.HaltedAt);
+        Assert.Null(dto.Ambush);
+    }
+
+    [Fact]
+    public async Task AQuietRollLeavesTheRoadQuiet()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        Assert.Null((await _db.PlayerParties.SingleAsync(p => p.Id == first.Id)).AmbushAt);
+    }
+
+    [Fact]
+    public async Task AnAmbushedCompanyCannotBeSentOnOrFightAtASite()
+    {
+        var (instance, _, company) = await AmbushedAsync();
+
+        var (sent, _) = await Service.TravelAsync(instance, TestIds.Player, company.Id, Travel(DungeonId));
+        var (entered, _) = await Pve.BeginAsync(instance, TestIds.Player, Enter(company.Id));
+
+        Assert.Equal(PartyError.Busy, sent.Error);
+        Assert.Equal(PveError.NoCompanyThere, entered.Error);
+    }
+
+    [Fact]
+    public async Task FleeingWalksTheCompanyBackToWhereItSetOut()
+    {
+        var (instance, keep, company) = await AmbushedAsync();
+
+        var (outcome, response) = await Service.FleeAmbushAsync(instance, TestIds.Player, company.Id, Order);
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var dto = response!.Parties[0];
+        Assert.Equal(CompanyState.Returning, dto.State);
+        Assert.Equal(keep, dto.Journey!.ToSiteId);
+        Assert.Equal(0, dto.Journey.Seconds[0]);
+        Assert.True(dto.Journey.ArrivesAt > DateTime.UtcNow);
+
+        await BackdateJourneyAsync(company.Id);
+        var (_, after) = await Service.ListAsync(instance, TestIds.Player);
+        Assert.Equal(CompanyState.Idle, after!.Parties[0].State);
+        Assert.Equal(keep, after.Parties[0].SiteId);
+    }
+
+    [Fact]
+    public async Task WinningAnAmbushPays_AndTheCompanyMarchesOnWithoutBeingStoppedTwice()
+    {
+        var (instance, _, company) = await AmbushedAsync();
+        var (fought, opened) = await Service.FightAmbushAsync(instance, TestIds.Player, company.Id, Order);
+        Assert.True(fought.Succeeded, fought.Message);
+        await BackdateAmbushRunAsync(opened!.RunId);
+
+        var (outcome, claim) = await Service.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(opened.RunId, true, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.True(claim!.Won);
+        Assert.True(claim.Experience > 0);
+        Assert.Equal(GoldRules.GoldForClear(claim.Experience), claim.Gold);
+        Assert.Equal(CompanyState.Travelling, claim.Parties.Parties[0].State);
+
+        var stored = await _db.PlayerParties.SingleAsync(p => p.Id == company.Id);
+        Assert.Null(stored.AmbushAt);
+        Assert.True(stored.ArrivesAt > DateTime.UtcNow, "the halt is added to the journey");
+
+        await BackdateJourneyAsync(company.Id);
+        var (_, after) = await Service.ListAsync(instance, TestIds.Player);
+        Assert.Equal(CompanyState.Idle, after!.Parties[0].State);
+        Assert.Equal(DungeonId, after.Parties[0].SiteId);
+
+        // The run is spent.
+        var (again, _) = await Service.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(opened.RunId, true, Contract));
+        Assert.False(again.Succeeded);
+    }
+
+    [Fact]
+    public async Task LosingAnAmbushPaysNothing_AndTurnsTheCompanyBack()
+    {
+        var (instance, keep, company) = await AmbushedAsync();
+        var (_, opened) = await Service.FightAmbushAsync(instance, TestIds.Player, company.Id, Order);
+
+        var (outcome, claim) = await Service.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(opened!.RunId, false, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.False(claim!.Won);
+        Assert.Equal(0, claim.Experience);
+        Assert.Equal(0, claim.Gold);
+        Assert.Equal(CompanyState.Returning, claim.Parties.Parties[0].State);
+        Assert.Equal(keep, claim.Parties.Parties[0].Journey!.ToSiteId);
+    }
+
+    [Fact]
+    public async Task AnAmbushWonImplausiblyFastIsRefused()
+    {
+        var (instance, _, company) = await AmbushedAsync();
+        var (_, opened) = await Service.FightAmbushAsync(instance, TestIds.Player, company.Id, Order);
+
+        var (outcome, _) = await Service.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(opened!.RunId, true, Contract));
+
+        Assert.Equal(PartyError.RunTooFast, outcome.Error);
+        Assert.Equal(CompanyState.Ambushed, (await _db.PlayerParties.SingleAsync(p => p.Id == company.Id)).State);
+    }
+
+    [Fact]
+    public async Task OnlyAnAmbushedCompanyCanFightOrFlee()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+
+        var (fight, _) = await Service.FightAmbushAsync(instance, TestIds.Player, first.Id, Order);
+        var (flee, _) = await Service.FleeAmbushAsync(instance, TestIds.Player, first.Id, Order);
+
+        Assert.Equal(PartyError.NotAmbushed, fight.Error);
+        Assert.Equal(PartyError.NotAmbushed, flee.Error);
+    }
+
+    [Fact]
+    public void AmbushOddsRiseWithTierUnheldLandAndLength_AndAreCapped()
+    {
+        var minute = TimeSpan.FromMinutes(1);
+        double home = AmbushRules.ChanceFor(1, true, minute);
+        Assert.True(AmbushRules.ChanceFor(3, true, minute) > home);
+        Assert.True(AmbushRules.ChanceFor(1, false, minute) > home);
+        Assert.True(AmbushRules.ChanceFor(1, true, TimeSpan.FromMinutes(5)) > home);
+        Assert.Equal(AmbushRules.MaximumChance, AmbushRules.ChanceFor(4, false, TimeSpan.FromMinutes(5)));
+        Assert.Equal(AmbushRisk.Low, AmbushRules.RiskOf(home));
+        Assert.Equal(AmbushRisk.High, AmbushRules.RiskOf(AmbushRules.MaximumChance));
+    }
+
+    [Fact]
+    public void TheRoadBackIsTheRoadWalked_Reversed()
+    {
+        var cells = new List<int[]> { new[] { 0, 0 }, new[] { 1, 0 }, new[] { 2, 0 }, new[] { 3, 0 } };
+        var seconds = new List<double> { 0, 10, 25, 40 };
+
+        var (back, times) = AmbushRules.RouteBack(cells, seconds, 2.4);
+
+        Assert.Equal(new[] { 2, 1, 0 }, back.Select(c => c[0]));
+        Assert.Equal(new double[] { 0, 15, 25 }, times);
     }
 
     // -----------------------------------------------------------------
