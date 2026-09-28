@@ -18,7 +18,8 @@ public enum PveError
     RunAlreadyClaimed,
     RunTooFast,
     ContractMismatch,
-    NoConquestEffect
+    NoConquestEffect,
+    FightersUnavailable
 }
 
 public record PveOutcome(PveError Error, string? Message = null)
@@ -105,6 +106,14 @@ public class WorldPveService
         if (!check.Succeeded)
             return (check, Guid.Empty);
 
+        // Who is going in. A garrisoned, captive or sieging character cannot also be in a dungeon;
+        // the server used to take the client's word for the party entirely.
+        var fighters = (request.CharacterIds ?? new List<string>())
+            .Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
+        var why = await PartyService.WhyCannotFightAsync(_context, _logger, world, gameInstanceId, userId, fighters);
+        if (why != null)
+            return (new PveOutcome(PveError.FightersUnavailable, why), Guid.Empty);
+
         // One open run per player per site: re-entering replaces the previous attempt rather
         // than accumulating claimable runs.
         var existing = await _context.PveRuns
@@ -120,6 +129,7 @@ public class WorldPveService
             UserId = userId,
             LocationId = request.SiteId,
             LocationType = (int)resolved.Site.Type,
+            FighterIdsJson = MarchingArmy.WriteIds(fighters),
             StartedAt = DateTime.UtcNow
         };
 

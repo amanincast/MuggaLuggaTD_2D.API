@@ -80,6 +80,29 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 - **Sieges are not built.** The gate is displayed and nothing acts on it; it is blocked behind the
   win condition (design §8).
 
+## Companies (phase 1 of `docs/design/parties-and-travel.md`, Unity repo)
+
+`PartyService` + `PartyController` (`api/gameinstance/{id}/parties`: GET, POST, PUT/DELETE
+`{partyId}`), stored as `PlayerParty` rows (per player per realm). Companies are the player's own
+business, so nothing here is broadcast.
+
+- **How many: roster cap ÷ 4** (`CompanyRules.MaxCompanies`, shared), at most 4 characters each. The
+  cap can fall; like the roster, a company is **never** taken away. A player over the limit just
+  cannot form another.
+- **The first company is the party the player already had.** The first read forms "The Vanguard"
+  from the save's `ActiveCharacterIds`, standing at the capital's keep.
+- **Commitments win over membership.** `PartyService.CommitmentsAsync` is the single answer to "is
+  this character free": garrisoned, held (`WorldRegionBlob.CollectCommitments`) or locked into a
+  siege army. A committed character cannot join a company, and stationing a garrison **takes its
+  members out of their company** (`ReleaseAsync`, from `WorldGarrisonService.SetAsync`). Mike's call:
+  a company can be what's assigned to a garrison's defence, but an idle company defends nothing.
+- **PvE begin names its fighters** (`PveBeginRequest.CharacterIds`, 1.32.0) and refuses any who are
+  not the player's own or are committed (`PveError.FightersUnavailable`). Before this a run asked
+  nothing, so a siege army could slip off and run dungeons. Who fought is kept in
+  `PveRun.FighterIdsJson`. An empty list is refused.
+- `CompanyState` (Idle/Travelling/Returning/Ambushed/InRun/Stationed) and the company's
+  `RegionId`/`SiteId` exist for the travel phases; only Idle is set today.
+
 ## Development URLs
 
 - HTTP: http://localhost:5081

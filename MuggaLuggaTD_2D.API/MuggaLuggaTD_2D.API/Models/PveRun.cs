@@ -42,6 +42,12 @@ public class PveRun
 
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// The characters who fought it, as a JSON array, checked when the run opened: none garrisoned,
+    /// held prisoner or locked into a siege. Null on runs opened before 1.32.0.
+    /// </summary>
+    public string? FighterIdsJson { get; set; }
+
     /// <summary>Null while the run is open. Set once a conquest has been claimed against it.</summary>
     public DateTime? ClaimedAt { get; set; }
 }

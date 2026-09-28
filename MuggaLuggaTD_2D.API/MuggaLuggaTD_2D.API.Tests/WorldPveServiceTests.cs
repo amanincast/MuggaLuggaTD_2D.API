@@ -44,6 +44,10 @@ public class WorldPveServiceTests : IDisposable
 
     private static string Contract => SharedContract.Version;
 
+    /// <summary>Who goes in: every seeded player has one hero, free of any commitment.</summary>
+    private static List<string> Fighters => new() { Hero };
+    private const string Hero = "hero";
+
     public void Dispose() => _db.Dispose();
 
     // -----------------------------------------------------------------
@@ -71,7 +75,7 @@ public class WorldPveServiceTests : IDisposable
         var instance = await _db.AddInstanceAsync();
 
         var (outcome, _) = await Service.BeginAsync(
-            instance.Id, TestIds.Player, new PveBeginRequest("r0:1", Contract));
+            instance.Id, TestIds.Player, new PveBeginRequest("r0:1", Contract, Fighters));
 
         Assert.Equal(PveError.WorldNotFound, outcome.Error);
     }
@@ -84,7 +88,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(TestWorld.Region());
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest("r0:999", Contract));
+            instanceId, TestIds.Player, new PveBeginRequest("r0:999", Contract, Fighters));
 
         Assert.Equal(PveError.LocationNotFound, outcome.Error);
         Assert.Empty(await _db.PveRuns.ToListAsync());
@@ -98,7 +102,7 @@ public class WorldPveServiceTests : IDisposable
         var siteId = TestWorld.DungeonIn(region);
 
         var (outcome, runId) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
 
         Assert.True(outcome.Succeeded);
         Assert.NotEqual(Guid.Empty, runId);
@@ -120,7 +124,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -133,7 +137,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
     }
@@ -147,7 +151,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
         Assert.Contains("siege", outcome.Message, StringComparison.OrdinalIgnoreCase);
@@ -160,7 +164,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
     }
@@ -173,7 +177,7 @@ public class WorldPveServiceTests : IDisposable
         var instanceId = await SeedWorldAsync(region);
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(TestWorld.KeepIn(region), Contract, Fighters));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -188,7 +192,7 @@ public class WorldPveServiceTests : IDisposable
         foreach (var type in new[] { LocationType.NeutralHome, LocationType.ResourceNode })
         {
             var (outcome, _) = await Service.BeginAsync(
-                instanceId, TestIds.Player, new PveBeginRequest(TestWorld.SiteOfType(region, type).SiteId, Contract));
+                instanceId, TestIds.Player, new PveBeginRequest(TestWorld.SiteOfType(region, type).SiteId, Contract, Fighters));
 
             Assert.Equal(PveError.NotPveTarget, outcome.Error);
         }
@@ -206,7 +210,7 @@ public class WorldPveServiceTests : IDisposable
             WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId));
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
 
         Assert.Equal(PveError.NotPveTarget, outcome.Error);
         Assert.Contains("spent", outcome.Message, StringComparison.OrdinalIgnoreCase);
@@ -231,7 +235,7 @@ public class WorldPveServiceTests : IDisposable
         });
 
         var (outcome, _) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
 
         Assert.True(outcome.Succeeded, outcome.Message);
     }
@@ -283,7 +287,7 @@ public class WorldPveServiceTests : IDisposable
         // spend them all on one clear.
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
-        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract);
+        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters);
 
         var (_, first) = await Service.BeginAsync(instanceId, TestIds.Player, request);
         var (_, second) = await Service.BeginAsync(instanceId, TestIds.Player, request);
@@ -299,7 +303,7 @@ public class WorldPveServiceTests : IDisposable
     {
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
-        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract);
+        var request = new PveBeginRequest(TestWorld.DungeonIn(region), Contract, Fighters);
 
         await Service.BeginAsync(instanceId, TestIds.Player, request);
         await Service.BeginAsync(instanceId, TestIds.Rival, request);
@@ -563,7 +567,7 @@ public class WorldPveServiceTests : IDisposable
         var siteId = TestWorld.DungeonIn(region);
 
         var (beginOutcome, runId) = await Service.BeginAsync(
-            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract));
+            instanceId, TestIds.Player, new PveBeginRequest(siteId, Contract, Fighters));
         Assert.True(beginOutcome.Succeeded, beginOutcome.Message);
 
         await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
@@ -700,6 +704,8 @@ public class WorldPveServiceTests : IDisposable
     {
         var instance = await _db.AddInstanceAsync(ownerId, ownerId);
         await _db.AddWorldAsync(instance.Id, TestWorld.Blob(regions));
+        foreach (var user in new[] { TestIds.Player, TestIds.Rival })
+            await _db.AddPlayerSaveAsync(instance.Id, user, TestSave.ToJson(TestSave.Roster(TestSave.Character(Hero))));
         return instance.Id;
     }
 
@@ -709,7 +715,7 @@ public class WorldPveServiceTests : IDisposable
     /// <summary>Opens a run the way the service does, so a claim has something legitimate to find.</summary>
     private async Task<Guid> OpenRunAsync(Guid instanceId, string userId, string siteId)
     {
-        var (outcome, runId) = await Service.BeginAsync(instanceId, userId, new PveBeginRequest(siteId, Contract));
+        var (outcome, runId) = await Service.BeginAsync(instanceId, userId, new PveBeginRequest(siteId, Contract, Fighters));
         Assert.True(outcome.Succeeded, outcome.Message);
         return runId;
     }

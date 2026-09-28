@@ -312,22 +312,33 @@ public static class WorldRegionBlob
     /// per location — garrisons now live in each site's override.</para>
     /// </summary>
     public static HashSet<string> CollectCommittedCharacterIds(JsonNode? world, string userId)
+        => new HashSet<string>(CollectCommitments(world, userId).Keys, StringComparer.Ordinal);
+
+    /// <summary>What ties a character up in the world: stationed in a garrison, or held prisoner.</summary>
+    public enum Commitment { Garrisoned, Held }
+
+    /// <summary>
+    /// The same ids as <see cref="CollectCommittedCharacterIds"/>, each with what ties it up and the
+    /// site it is at - what a player needs to be told when a character they asked for is refused.
+    /// </summary>
+    public static Dictionary<string, (Commitment Why, string SiteId)> CollectCommitments(JsonNode? world, string userId)
     {
-        var committed = new HashSet<string>(StringComparer.Ordinal);
+        var committed = new Dictionary<string, (Commitment, string)>(StringComparer.Ordinal);
 
         foreach (var region in ReadAllRegions(world))
         {
             bool mine = region.IsOwnedByPlayer(userId);
 
-            foreach (var over in region.SiteOverrides.Values)
+            foreach (var pair in region.SiteOverrides)
             {
+                var over = pair.Value;
                 if (over == null) continue;
 
                 // Only your own garrisons tie your champions up; another player's garrison is made
                 // of their characters, not yours.
                 if (mine && over.GarrisonCharacterIds != null)
                 {
-                    foreach (var id in over.GarrisonCharacterIds) committed.Add(id);
+                    foreach (var id in over.GarrisonCharacterIds) committed[id] = (Commitment.Garrisoned, pair.Key);
                 }
 
                 // Prisoners are held wherever they were taken, whoever owns it now - but only while
@@ -336,7 +347,7 @@ public static class WorldRegionBlob
                 // what stops a freed character being locked out of their own party for good.
                 if (CaptivityRules.IsHolding(over, DateTime.UtcNow))
                 {
-                    foreach (var id in over.CapturedCharacterIds) committed.Add(id);
+                    foreach (var id in over.CapturedCharacterIds) committed[id] = (Commitment.Held, pair.Key);
                 }
             }
         }

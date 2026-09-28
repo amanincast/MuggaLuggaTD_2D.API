@@ -31,6 +31,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
     public DbSet<TavernState> TavernStates => Set<TavernState>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
+    public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -146,6 +147,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerGold>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // Configure PlayerParty (a player's companies in a realm, always read as a set by that key)
+        builder.Entity<PlayerParty>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId });
         });
 
         // Configure TavernState (one row per player per realm; it is read and written on every

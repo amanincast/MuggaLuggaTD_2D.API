@@ -11,7 +11,12 @@ namespace MuggaLuggaTD_2D.API.DTOs;
 /// </summary>
 public record PveBeginRequest(
     [Required] string SiteId,
-    [Required] string SharedContractVersion
+    [Required] string SharedContractVersion,
+    /// <summary>
+    /// The characters going in (1.32.0). The server refuses the run if any is not the player's, or is
+    /// garrisoned, held prisoner or marching with a siege army.
+    /// </summary>
+    List<string>? CharacterIds = null
 );
 
 public record PveBeginResponse(Guid RunId);
