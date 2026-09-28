@@ -17,6 +17,11 @@ namespace MuggaLuggaTD.Shared.World
     /// are found over the region's cells, eight ways: open land cheap, woods dearer, water and
     /// mountains closed, a road already laid cheapest of all.</para>
     ///
+    /// <para><b>A road to every neighbour</b> (phase 4, §6). Roads leave by the side facing each hex
+    /// neighbour - east and west by those edges, the two northern neighbours by the left and right
+    /// halves of the top edge, the southern two by the bottom - so the road that leaves a region's
+    /// east side arrives in the region to its east. That is what lets a journey cross the map.</para>
+    ///
     /// <para>Computed from the layout and the seed; nothing is stored. The generator is untouched.</para>
     /// </summary>
     public sealed class RegionRoadNetwork
@@ -27,8 +32,6 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>Stepping onto a road already laid costs this much of a fresh step, so roads share trunks.</summary>
         public const float RoadReuseCost = 0.35f;
 
-        /// <summary>How many roads leave the region, at most.</summary>
-        public const int MaxExits = 3;
 
         private readonly HashSet<GridCell> _cells = new HashSet<GridCell>();
         private readonly List<List<GridCell>> _sitePaths = new List<List<GridCell>>();
@@ -52,12 +55,26 @@ namespace MuggaLuggaTD.Shared.World
             Layout = layout;
         }
 
-        public static RegionRoadNetwork Build(RegionLayout layout, int seed)
+        /// <summary>
+        /// A region's roads, with a road out toward each neighbour the world has
+        /// (<paramref name="regionAt"/> says whether a region stands at a hex).
+        /// </summary>
+        public static RegionRoadNetwork For(WorldRegionData region, Func<HexCoord, bool> regionAt)
+        {
+            if (region == null) return new RegionRoadNetwork(null);
+            var layout = RegionGenerator.Generate(region);
+            return Build(layout, region.Seed,
+                regionAt == null ? (Func<int, bool>)null : d => regionAt(region.Hex.Neighbour(d)));
+        }
+
+        /// <summary>
+        /// Lays the roads. <paramref name="leadsToward"/> says which hex directions (0-5, as
+        /// <see cref="HexCoord.Direction"/>) have a neighbour to lead to; null means all six.
+        /// </summary>
+        public static RegionRoadNetwork Build(RegionLayout layout, int seed, Func<int, bool> leadsToward = null)
         {
             var net = new RegionRoadNetwork(layout);
             if (layout == null || layout.Sites == null || layout.Sites.Count == 0) return net;
-
-            var rng = new DeterministicRandom(unchecked((ulong)(uint)seed * 53UL + 0x40ADUL));
 
             SiteSpec hub = null;
             foreach (var site in layout.Sites)
@@ -78,22 +95,39 @@ namespace MuggaLuggaTD.Shared.World
                 net._sitePaths.Add(path);
             }
 
-            // A few roads out of the region, each from a different side.
-            var sides = new List<int> { 0, 1, 2, 3 };
-            rng.Shuffle(sides);
-            int exits = 2 + rng.Next(MaxExits - 1);
-            foreach (int side in sides)
+            // A road out toward each neighbour, on the side that faces it. Each is rolled from its own
+            // stream, so whether one neighbour exists never moves another's road.
+            for (int direction = 0; direction < 6; direction++)
             {
-                if (exits == 0) break;
-                var gate = EdgeCell(layout, side, ref rng);
-                if (gate == null) continue;
+                if (leadsToward != null && !leadsToward(direction)) continue;
+                var rng = new DeterministicRandom(unchecked((ulong)(uint)seed * 53UL + 0x40ADUL + (ulong)direction * 7919UL));
+                var gate = EdgeCell(layout, direction, ref rng);
+                if (gate == null) continue;   // water or rock the whole length of that edge
                 var path = net.Join(gate.Value);
                 if (path == null) continue;
                 foreach (var cell in path) net._cells.Add(cell);
-                net._exits.Add(new RoadExit((RegionSide)side, path));
-                exits--;
+                net._exits.Add(new RoadExit(direction, SideOf(direction), path));
             }
             return net;
+        }
+
+        /// <summary>The road out toward hex direction <paramref name="direction"/>, or null.</summary>
+        public RoadExit ExitToward(int direction)
+        {
+            foreach (var exit in _exits) if (exit.Direction == direction) return exit;
+            return null;
+        }
+
+        /// <summary>The edge a hex direction leaves by (pointy-top hexes; +r runs south-east).</summary>
+        public static RegionSide SideOf(int direction)
+        {
+            switch (((direction % 6) + 6) % 6)
+            {
+                case 0: return RegionSide.East;
+                case 1: case 2: return RegionSide.North;
+                case 3: return RegionSide.West;
+                default: return RegionSide.South;
+            }
         }
 
         private static int DistanceSq(GridCell a, GridCell b)
@@ -186,20 +220,25 @@ namespace MuggaLuggaTD.Shared.World
             return path;
         }
 
-        /// <summary>An open cell on one edge of the region, away from the corners.</summary>
-        private static GridCell? EdgeCell(RegionLayout layout, int side, ref DeterministicRandom rng)
+        /// <summary>
+        /// An open cell on the stretch of edge that faces hex direction <paramref name="direction"/>:
+        /// the middle of the east or west edge, or the right or left half of the top or bottom.
+        /// </summary>
+        private static GridCell? EdgeCell(RegionLayout layout, int direction, ref DeterministicRandom rng)
         {
             int w = layout.Width, h = layout.Height;
-            for (int tries = 0; tries < 12; tries++)
+            int half = w / 2;
+            for (int tries = 0; tries < 16; tries++)
             {
-                int along = side < 2 ? 3 + rng.Next(h - 6) : 4 + rng.Next(w - 8);
                 GridCell cell;
-                switch (side)
+                switch (direction)
                 {
-                    case 0: cell = new GridCell(0, along); break;
-                    case 1: cell = new GridCell(w - 1, along); break;
-                    case 2: cell = new GridCell(along, 0); break;
-                    default: cell = new GridCell(along, h - 1); break;
+                    case 0: cell = new GridCell(w - 1, h / 4 + rng.Next(Math.Max(1, h / 2))); break;
+                    case 3: cell = new GridCell(0, h / 4 + rng.Next(Math.Max(1, h / 2))); break;
+                    case 1: cell = new GridCell(half + 2 + rng.Next(Math.Max(1, half - 6)), h - 1); break;
+                    case 2: cell = new GridCell(4 + rng.Next(Math.Max(1, half - 6)), h - 1); break;
+                    case 4: cell = new GridCell(4 + rng.Next(Math.Max(1, half - 6)), 0); break;
+                    default: cell = new GridCell(half + 2 + rng.Next(Math.Max(1, half - 6)), 0); break;
                 }
                 var t = layout.TerrainAt(cell);
                 if (t == TerrainClass.Land || t == TerrainClass.Forest) return cell;
@@ -217,14 +256,17 @@ namespace MuggaLuggaTD.Shared.World
         North = 3,
     }
 
-    /// <summary>A road leaving the region: which side, and its cells from the edge inward.</summary>
+    /// <summary>A road leaving the region: toward which neighbour, by which side, and its cells from the edge inward.</summary>
     public sealed class RoadExit
     {
+        /// <summary>The hex direction (0-5, <see cref="HexCoord.Direction"/>) of the region it leads to.</summary>
+        public int Direction { get; }
         public RegionSide Side { get; }
         public List<GridCell> Path { get; }
 
-        public RoadExit(RegionSide side, List<GridCell> path)
+        public RoadExit(int direction, RegionSide side, List<GridCell> path)
         {
+            Direction = direction;
             Side = side;
             Path = path;
         }

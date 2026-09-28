@@ -83,41 +83,46 @@ namespace MuggaLuggaTD.Shared.Gameplay
         }
 
         /// <summary>
-        /// Where a journey stands at a share of its time, as a fractional index into its cells - the
-        /// point at which an ambush halts it. The same walk <see cref="TravelRules.Progress"/> does.
+        /// The chance a journey across several regions is ambushed: each region's walk is a chance of
+        /// its own (by its tier, whether it is held, and how long it takes there), and the road is
+        /// quiet only if every one of them is. Still capped at <see cref="MaximumChance"/>.
         /// </summary>
-        public static double IndexAt(IReadOnlyList<double> cumulativeSeconds, double timeShare)
+        public static double ChanceForRoute(IEnumerable<(int Tier, bool Held, TimeSpan Walk)> legs)
         {
-            if (cumulativeSeconds == null || cumulativeSeconds.Count == 0) return 0;
-            double total = cumulativeSeconds[cumulativeSeconds.Count - 1];
-            var start = DateTime.MinValue;
-            return TravelRules.Progress(cumulativeSeconds, start, start.AddSeconds(total * timeShare));
+            double quiet = 1;
+            if (legs != null)
+                foreach (var leg in legs) quiet *= 1 - ChanceFor(leg.Tier, leg.Held, leg.Walk);
+            return Math.Min(MaximumChance, 1 - quiet);
         }
 
         /// <summary>
-        /// The road back from where an ambush halted a company to where it set out: the cells walked so
-        /// far, reversed, timed by the same seconds they took on the way out.
+        /// The road back from where an ambush halted a company (<paramref name="haltedSeconds"/> after
+        /// it set out) to where it set out: every cell walked so far, reversed, timed by the seconds
+        /// they took on the way out - border crossings included - and starting at zero.
         /// </summary>
-        public static (List<int[]> Cells, List<double> Seconds) RouteBack(
-            IReadOnlyList<int[]> cells, IReadOnlyList<double> cumulativeSeconds, double haltedIndex)
+        public static List<RouteLeg> RouteBack(IReadOnlyList<RouteLeg> legs, double haltedSeconds)
         {
-            var backCells = new List<int[]>();
-            var backSeconds = new List<double>();
-            if (cells == null || cumulativeSeconds == null || cells.Count == 0) return (backCells, backSeconds);
+            var walked = new List<(string Region, int[] Cell, double At)>();
+            if (legs != null)
+                foreach (var leg in legs)
+                    for (int i = 0; i < leg.Cells.Count && i < leg.Seconds.Count; i++)
+                        if (leg.Seconds[i] <= haltedSeconds || walked.Count == 0)
+                            walked.Add((leg.RegionId, leg.Cells[i], leg.Seconds[i]));
 
-            int last = Math.Max(0, Math.Min(cells.Count - 1, (int)Math.Floor(haltedIndex)));
-            double origin = cumulativeSeconds[last];
-            for (int i = last; i >= 0; i--)
+            var back = new List<RouteLeg>();
+            if (walked.Count == 0) return back;
+
+            double from = walked[walked.Count - 1].At;
+            for (int i = walked.Count - 1; i >= 0; i--)
             {
-                backCells.Add(cells[i]);
-                backSeconds.Add(Math.Round(origin - cumulativeSeconds[i], 2));
+                var point = walked[i];
+                if (back.Count == 0 || back[back.Count - 1].RegionId != point.Region)
+                    back.Add(new RouteLeg { RegionId = point.Region });
+                var current = back[back.Count - 1];
+                current.Cells.Add(point.Cell);
+                current.Seconds.Add(Math.Round(from - point.At, 2));
             }
-
-            // The first cell of an outbound route may itself sit a crossing's time after departure; the
-            // walk back begins where the company stands, at zero.
-            double shift = backSeconds[0];
-            for (int i = 0; i < backSeconds.Count; i++) backSeconds[i] -= shift;
-            return (backCells, backSeconds);
+            return back;
         }
 
         /// <summary>

@@ -106,19 +106,24 @@ business, so nothing here is broadcast.
   Mike's call). The company is stamped `Travelling` with `DepartedAt`/`ArrivesAt` and the route
   (cells + cumulative seconds, `RouteJson`); **nothing ticks** — the first read after `ArrivesAt`
   lands it (`SettleArrival`). The response carries `ServerNow` so the client walks it by server time.
-- **Into another region** a company crosses for `CrossingSeconds` (60) and enters by the exit road
-  on the side facing home (`TravelRules.SideFacing` from the hex positions), then walks to the
-  site. A stop-gap for §6 until multi-leg crossings (phase 4): without it "fight where you stand"
-  would have confined every company to its capital.
+- **Between regions** (1.35.0, phase 4): `TravelRules.PlanRoute` finds the regions by BFS over the
+  world's hexes (a gap in the map is `NoRoute`) and plans each region's **leg** gate to gate, each
+  clamped to 1–5 minutes, with `CrossingSeconds` (**20**) at each border. `RouteJson` holds the
+  legs (`RouteLeg`: region, cells, **absolute** seconds after departure); a pre-1.35 route reads
+  as empty. `RegionId` is settled per leg on every read (`RegionAlong`), so a marching company
+  is in the region its road has reached. Every region has **a road toward each neighbouring hex**
+  on the facing side (`RegionRoadNetwork.For`: E/W edges, NE/NW top, SE/SW bottom, each on its
+  half), so a leg enters by the gate facing where it came from.
 - **You fight where you stand:** PvE begin takes `PartyId`; the company must be at rest **at that
   site**, and its members are the fighters (`PveError.NoCompanyThere` otherwise). A company on
   the road can be renamed but not re-manned.
 - **Ambushes** (phase 3, shared 1.34.0, `AmbushRules`): rolled **once, when the travel order is
-  accepted** — by the tier of the land it ends in, whether the player holds it (×1.75 if not) and
-  its length, capped at 35% — and stored as `AmbushAt` (a share of the journey's time, 0.25–0.75).
+  accepted** — per leg by that land's tier, whether the player holds it (×1.75 if not) and the
+  leg's length, combined as 1 − Π(1 − c) (`ChanceForRoute`), capped at 35% — and stored as `AmbushAt` (a share of the journey's time, 0.25–0.75).
   **It is never sent to the client**; the first read after that moment halts the company
   (`Ambushed`, `HaltedAt`), and only then does the DTO carry `Journey.HaltedAt` and an
-  `AmbushDto` (the destination's level, tier 1, 3 waves).
+  `AmbushDto` (tier 1, 3 waves; the destination's level if halted in its region, else that
+  region's average site level, fought at its keep's site id so the arena takes that land's biome).
   - `POST parties/{id}/ambush/fight` opens a `PveRun` (`LocationId = "ambush:{partyId}"`,
     type -1, so a PvE claim naming it finds no site and closes it) and stores `AmbushRunId`.
   - `POST .../ambush/claim { runId, won }`: **won** (≥ `MinimumRunDuration`) pays **half** of a
@@ -127,7 +132,7 @@ business, so nothing here is broadcast.
     ambushed twice on one road. **Lost** pays nothing and turns it back. No conquest, recruit,
     resolve or season points either way.
   - `POST .../ambush/flee`: **Returning** — the cells it walked, reversed and timed as they took
-    (`AmbushRules.RouteBack`), plus the crossing if it came from another region. Arrival lands it
+    (`AmbushRules.RouteBack`: every walked leg reversed, crossings included). Arrival lands it
     at `ToSiteId` (the origin) in that site's region.
   - A halted company **waits**: there is no auto-resolve (Mike 2026-09-27 — the design's auto-fight,
     morale and fatigue were not asked for). `PartyService.Dice` is the ambush entropy; tests fix it.

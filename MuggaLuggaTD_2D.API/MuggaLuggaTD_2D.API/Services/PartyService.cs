@@ -220,43 +220,38 @@ public class PartyService
         var home = regions.FirstOrDefault(r => r.RegionId == party.RegionId);
         if (region == null || home == null) return (new PartyOutcome(PartyError.SiteNotFound, "That region is not in this world."), null);
 
-        var layout = RegionGenerator.Generate(region);
-        var to = layout.FindSite(request.SiteId);
+        var to = RegionGenerator.Generate(region).FindSite(request.SiteId);
         if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null);
-        var roads = RegionRoadNetwork.Build(layout, region.Seed);
+        var from = RegionGenerator.Generate(home).FindSite(party.SiteId);
+        if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
 
-        Journey? journey;
-        if (region.RegionId == home.RegionId)
-        {
-            var from = layout.FindSite(party.SiteId);
-            if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
-            journey = TravelRules.Plan(roads, from.Cell, to.Cell);
-        }
-        else
-        {
-            // Into another region: across the border, then in by the road facing home (§6; the
-            // crossing itself is walked on no map until phase 4).
-            journey = TravelRules.PlanArrival(roads, home.Hex, region.Hex, to.Cell);
-        }
-        if (journey == null)
+        // Across the world, region by region, each walked on its own roads (§6, phase 4).
+        var byHex = regions.GroupBy(r => r.Hex).ToDictionary(g => g.Key, g => g.First());
+        WorldRegionData? RegionAt(HexCoord hex) => byHex.TryGetValue(hex, out var r) ? r : null;
+        var route = TravelRules.PlanRoute(RegionAt, home, from.Cell, region, to.Cell);
+        if (route == null)
             return (new PartyOutcome(PartyError.NoRoute, "No road or open ground leads there from where the company stands."), null);
 
         var now = DateTime.UtcNow;
         party.State = CompanyState.Travelling;
         party.FromSiteId = party.SiteId;
-        party.RegionId = region.RegionId;   // where it will be; the view shows it on the far side of the border
+        party.RegionId = home.RegionId;   // where it is now; settled forward leg by leg as it walks
         party.ToSiteId = to.SiteId;
         party.SiteId = null;
         party.DepartedAt = now;
-        party.ArrivesAt = now + journey.Duration;
-        party.RouteJson = JsonSerializer.Serialize(new JourneyRoute(
-            journey.Cells.Select(c => new[] { c.X, c.Y }).ToList(),
-            journey.CumulativeSeconds.Select(s => Math.Round(s, 2)).ToList()));
+        party.ArrivesAt = now + route.Duration;
+        party.RouteJson = JsonSerializer.Serialize(route.Legs);
         party.UpdatedAt = now;
 
         // The road is rolled now, once (§4): re-reading the journey cannot re-roll it, and the client
-        // is not told until it strikes.
-        double chance = AmbushRules.ChanceFor(region.Tier, region.IsOwnedByPlayer(userId), journey.Duration);
+        // is not told until it strikes. Every region walked is a chance of its own.
+        var byId = regions.ToDictionary(r => r.RegionId);
+        double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
+        {
+            var land = byId[leg.RegionId];
+            var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
+            return (land.Tier, land.IsOwnedByPlayer(userId), walk);
+        }));
         party.AmbushAt = AmbushRules.Roll(chance, Dice);
         party.HaltedAt = null;
         party.AmbushRunId = null;
@@ -264,7 +259,7 @@ public class PartyService
         await _context.SaveChangesAsync();
 
         _sessionLog.Log("PARTY-TRAVEL",
-            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} cells={journey.Cells.Count} secs={journey.Duration.TotalSeconds:F0} " +
+            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} regions={route.Legs.Count} secs={route.Duration.TotalSeconds:F0} " +
             $"ambush-chance={chance:F2} ambush={(party.AmbushAt.HasValue ? party.AmbushAt.Value.ToString("F2") : "none")}");
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
@@ -302,12 +297,21 @@ public class PartyService
             {
                 party.State = CompanyState.Ambushed;
                 party.HaltedAt = strikes;
+                party.RegionId = RegionAlong(party, strikes) ?? party.RegionId;
                 party.UpdatedAt = now;
                 return true;
             }
         }
 
-        if (party.ArrivesAt > now) return false;
+        if (party.ArrivesAt > now)
+        {
+            // Still walking: it is in whichever region it has reached, which the view lists it under.
+            var along = RegionAlong(party, now);
+            if (along == null || along == party.RegionId) return false;
+            party.RegionId = along;
+            party.UpdatedAt = now;
+            return true;
+        }
 
         party.State = CompanyState.Idle;
         party.SiteId = party.ToSiteId;
@@ -325,19 +329,34 @@ public class PartyService
         return true;
     }
 
-    /// <summary>A journey's route as stored: cells as [x, y], and the seconds after departure each is reached.</summary>
-    private sealed record JourneyRoute(List<int[]> Cells, List<double> Seconds);
+    /// <summary>
+    /// A journey's route as stored: its legs, region by region (<see cref="RouteLeg"/>). A route written
+    /// before 1.35.0 (one region's cells, no legs) reads as none; the company still lands on time.
+    /// </summary>
+    private static List<RouteLeg> LegsOf(PlayerParty p)
+    {
+        if (string.IsNullOrEmpty(p.RouteJson) || !p.RouteJson.TrimStart().StartsWith("[")) return new List<RouteLeg>();
+        try { return JsonSerializer.Deserialize<List<RouteLeg>>(p.RouteJson) ?? new List<RouteLeg>(); }
+        catch (JsonException) { return new List<RouteLeg>(); }
+    }
+
+    /// <summary>The region a company on the road is in at <paramref name="at"/>, or null if its route is unknown.</summary>
+    private static string? RegionAlong(PlayerParty p, DateTime at)
+    {
+        if (p.DepartedAt == null) return null;
+        var legs = LegsOf(p);
+        int leg = RoutePlan.LegAt(legs, (at - p.DepartedAt.Value).TotalSeconds);
+        return leg < 0 ? null : legs[leg].RegionId;
+    }
 
     private static JourneyDto? JourneyOf(PlayerParty p)
     {
         if (p.State is not (CompanyState.Travelling or CompanyState.Returning or CompanyState.Ambushed)
             || p.DepartedAt == null || p.ArrivesAt == null || p.RouteJson == null)
             return null;
-        var route = JsonSerializer.Deserialize<JourneyRoute>(p.RouteJson);
-        if (route == null) return null;
         return new JourneyDto(p.FromSiteId ?? "", p.ToSiteId ?? "",
             DateTime.SpecifyKind(p.DepartedAt.Value, DateTimeKind.Utc), DateTime.SpecifyKind(p.ArrivesAt.Value, DateTimeKind.Utc),
-            route.Cells, route.Seconds,
+            LegsOf(p),
             p.HaltedAt is DateTime halted ? DateTime.SpecifyKind(halted, DateTimeKind.Utc) : null);
     }
 
@@ -493,24 +512,15 @@ public class PartyService
     }
 
     /// <summary>
-    /// Sends a halted company back where it set out, over the cells it walked, as fast as it came. Out
-    /// of another region, the crossing is walked again at the end.
+    /// Sends a halted company back where it set out, over every cell it walked - across each border it
+    /// crossed - as fast as it came.
     /// </summary>
     private static void TurnBack(PlayerParty party, DateTime now)
     {
-        var route = party.RouteJson == null ? null : JsonSerializer.Deserialize<JourneyRoute>(party.RouteJson);
-        double index = 0;
-        if (route != null && party.DepartedAt != null)
-            index = TravelRules.Progress(route.Seconds, party.DepartedAt.Value, party.HaltedAt ?? now);
-
-        var (cells, seconds) = route == null
-            ? (new List<int[]>(), new List<double>())
-            : AmbushRules.RouteBack(route.Cells, route.Seconds, index);
-
-        double walk = seconds.Count > 0 ? seconds[^1] : 0;
-        bool crossed = !string.IsNullOrEmpty(party.FromSiteId) && !string.IsNullOrEmpty(party.ToSiteId)
-                       && SiteSpec.RegionIdOf(party.FromSiteId) != SiteSpec.RegionIdOf(party.ToSiteId);
-        if (crossed) walk += TravelRules.CrossingSeconds;
+        double halted = party.DepartedAt == null ? 0 : ((party.HaltedAt ?? now) - party.DepartedAt.Value).TotalSeconds;
+        var back = AmbushRules.RouteBack(LegsOf(party), halted);
+        var lastLeg = back.Count > 0 ? back[^1] : null;
+        double walk = lastLeg != null && lastLeg.Seconds.Count > 0 ? lastLeg.Seconds[^1] : 0;
 
         var origin = party.FromSiteId;
         party.State = CompanyState.Returning;
@@ -518,23 +528,39 @@ public class PartyService
         party.ToSiteId = origin;
         party.DepartedAt = now;
         party.ArrivesAt = now + TimeSpan.FromSeconds(Math.Max(5, walk));
-        party.RouteJson = JsonSerializer.Serialize(new JourneyRoute(cells, seconds));
+        party.RouteJson = JsonSerializer.Serialize(back);
+        if (back.Count > 0) party.RegionId = back[0].RegionId;
         party.AmbushAt = null;
         party.HaltedAt = null;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
     }
 
-    /// <summary>The warband that has a company halted, or null when it is not ambushed.</summary>
+    /// <summary>
+    /// The warband that has a company halted, or null when it is not ambushed. Fought at the level of
+    /// the land it happened in, as the smallest run there is: a tier-1 site's waves, no boss. In the
+    /// region it was bound for, that is its destination's level; in a region it was passing through,
+    /// the level of that region's sites. The site named is one in that region, which is what gives
+    /// the fight its biome and brings the player back there after.
+    /// </summary>
     private static AmbushDto? AmbushOf(PlayerParty p, JsonNode world)
     {
         if (p.State != CompanyState.Ambushed || string.IsNullOrEmpty(p.ToSiteId)) return null;
-        var resolved = WorldRegionBlob.ResolveSite(world, p.ToSiteId);
-        if (resolved == null) return null;
+        var destination = WorldRegionBlob.ResolveSite(world, p.ToSiteId);
+        if (destination == null) return null;
 
-        // Fought at the level of the land it happened in, as the smallest run there is: a tier-1
-        // site's waves, no boss.
-        return new AmbushDto(p.ToSiteId, Math.Max(1, resolved.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+        var regionId = p.HaltedAt is DateTime halted ? RegionAlong(p, halted) : null;
+        if (regionId == null || regionId == destination.Region.RegionId)
+            return new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+
+        var region = WorldRegionBlob.ReadAllRegions(world).FirstOrDefault(r => r.RegionId == regionId);
+        var sites = region == null ? null : RegionGenerator.Generate(region).Sites;
+        if (sites == null || sites.Count == 0)
+            return new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+
+        var keep = sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? sites[0];
+        int level = (int)Math.Round(sites.Average(s => Math.Max(1, s.Level)));
+        return new AmbushDto(keep.SiteId, Math.Max(1, level), AmbushRules.SkirmishTier, SkirmishWaves);
     }
 
     /// <summary>The waves a tier-1 site is fought with (SurvivalData's WavesRequiredTier1).</summary>

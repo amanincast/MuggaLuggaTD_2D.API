@@ -315,10 +315,12 @@ public class PartyServiceTests : IDisposable
         var layout = RegionGenerator.Generate(region);
         var from = layout.FindSite(keep)!.Cell;
         var to = layout.FindSite(DungeonId)!.Cell;
-        Assert.Equal(new[] { from.X, from.Y }, dto.Journey.Cells[0]);
-        Assert.Equal(new[] { to.X, to.Y }, dto.Journey.Cells[^1]);
-        Assert.Equal(dto.Journey.Cells.Count, dto.Journey.Seconds.Count);
-        Assert.InRange(dto.Journey.Seconds[^1], took.TotalSeconds - 1, took.TotalSeconds + 1);
+        var leg = Assert.Single(dto.Journey.Legs);
+        Assert.Equal("r1", leg.RegionId);
+        Assert.Equal(new[] { from.X, from.Y }, leg.Cells[0]);
+        Assert.Equal(new[] { to.X, to.Y }, leg.Cells[^1]);
+        Assert.Equal(leg.Cells.Count, leg.Seconds.Count);
+        Assert.InRange(leg.Seconds[^1], took.TotalSeconds - 1, took.TotalSeconds + 1);
     }
 
     [Fact]
@@ -354,33 +356,140 @@ public class PartyServiceTests : IDisposable
         Assert.True(rename.Succeeded, rename.Message);
     }
 
-    [Fact]
-    public async Task ACompanyCanCrossIntoANeighbouringRegion_ArrivingByItsRoad()
+    /// <summary>A realm of regions in a row, west to east from the player's capital at (0, 0).</summary>
+    private async Task<(Guid Instance, List<WorldRegionData> Regions)> SeedRowAsync(params int[] qs)
     {
-        // Until marching between regions is walked on the map (phase 4), a crossing is a minute of
-        // travel and then the company is seen coming in by the road facing home.
         var instance = await _db.AddInstanceAsync();
-        var home = TestWorld.OwnedBy(TestIds.Player, "r1");
-        home.IsCapital = true;
-        var next = TestWorld.Region("r2", q: 1, r: 0);
-        await _db.AddWorldAsync(instance.Id, TestWorld.Blob(home, next));
+        var regions = new List<WorldRegionData>();
+        foreach (int q in qs)
+        {
+            var region = q == 0 ? TestWorld.OwnedBy(TestIds.Player, "r" + q) : TestWorld.Region("r" + q, q: q, r: 0);
+            if (q == 0) region.IsCapital = true;
+            regions.Add(region);
+        }
+        await _db.AddWorldAsync(instance.Id, TestWorld.Blob(regions.ToArray()));
         var save = TestSave.Roster(TestSave.Character("hero-1"));
         save.ActiveCharacterIds = new List<string> { "hero-1" };
         await _db.AddPlayerSaveAsync(instance.Id, TestIds.Player, TestSave.ToJson(save));
-        var first = await FirstAsync(instance.Id);
-        var target = TestWorld.DungeonIn(next);
+        return (instance.Id, regions);
+    }
 
-        var (outcome, response) = await Service.TravelAsync(instance.Id, TestIds.Player, first.Id, Travel(target));
+    [Fact]
+    public async Task ACompanyMarchesAcrossTheMap_RegionByRegion()
+    {
+        var (instance, regions) = await SeedRowAsync(0, 1, 2);
+        var first = await FirstAsync(instance);
+        var target = TestWorld.DungeonIn(regions[2]);
+
+        var (outcome, response) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(target));
 
         Assert.True(outcome.Succeeded, outcome.Message);
         var dto = response!.Parties[0];
-        Assert.Equal("r2", dto.RegionId);
-        Assert.Equal(target, dto.Journey!.ToSiteId);
-        Assert.True(dto.Journey.Seconds[0] > 0, "the crossing comes before the first cell");
-        Assert.InRange((dto.Journey.ArrivesAt - dto.Journey.DepartedAt).TotalMinutes, 0.99, 5.01);
+        Assert.Equal("r0", dto.RegionId);   // it sets out from home
+        var legs = dto.Journey!.Legs;
+        Assert.Equal(new[] { "r0", "r1", "r2" }, legs.Select(l => l.RegionId));
 
-        // r2 lies east of r1, so the company comes in from r2's west side.
-        Assert.Equal(RegionSide.West, TravelRules.SideFacing(next.Hex, home.Hex));
+        // Out by the east road, in by the west one, a crossing between; every region walked in 1-5 minutes.
+        for (int i = 1; i < legs.Count; i++)
+            Assert.InRange(legs[i].Seconds[0] - legs[i - 1].Seconds[^1], TravelRules.CrossingSeconds - 0.01, TravelRules.CrossingSeconds + 0.01);
+        Assert.Equal(RegionGenerator.Width - 1, legs[0].Cells[^1][0]);
+        Assert.Equal(0, legs[1].Cells[0][0]);
+        Assert.Equal(RegionGenerator.Width - 1, legs[1].Cells[^1][0]);
+        Assert.Equal(0, legs[2].Cells[0][0]);
+        foreach (var leg in legs)
+            Assert.InRange(leg.Seconds[^1] - leg.Seconds[0], TravelRules.MinimumJourney.TotalSeconds - 1, TravelRules.MaximumJourney.TotalSeconds + 1);
+
+        // Half-way, it is in the middle region; at the end, at the dungeon three regions east.
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == first.Id);
+        double middle = (legs[1].Seconds[0] + legs[1].Seconds[^1]) / 2;
+        party.DepartedAt = DateTime.UtcNow - TimeSpan.FromSeconds(middle);
+        party.ArrivesAt = party.DepartedAt + (dto.Journey.ArrivesAt - dto.Journey.DepartedAt);
+        await _db.SaveChangesAsync();
+        var (_, midway) = await Service.ListAsync(instance, TestIds.Player);
+        Assert.Equal("r1", midway!.Parties[0].RegionId);
+
+        await BackdateJourneyAsync(first.Id);
+        var (_, after) = await Service.ListAsync(instance, TestIds.Player);
+        Assert.Equal(CompanyState.Idle, after!.Parties[0].State);
+        Assert.Equal("r2", after.Parties[0].RegionId);
+        Assert.Equal(target, after.Parties[0].SiteId);
+    }
+
+    [Fact]
+    public async Task AnAmbushOnTheWayThrough_IsFoughtInThatLand_AndFleeingCrossesBackHome()
+    {
+        var (instance, regions) = await SeedRowAsync(0, 1, 2);
+        var first = await FirstAsync(instance);
+        var keep = first.SiteId;
+        _dice = new FixedDice(0.0);
+        var (_, sent) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(TestWorld.DungeonIn(regions[2])));
+        var legs = sent!.Parties[0].Journey!.Legs;
+
+        // Strike in the middle of the middle region.
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == first.Id);
+        var total = party.ArrivesAt!.Value - party.DepartedAt!.Value;
+        double middle = (legs[1].Seconds[0] + legs[1].Seconds[^1]) / 2;
+        party.AmbushAt = middle / total.TotalSeconds;
+        party.DepartedAt = DateTime.UtcNow - TimeSpan.FromSeconds(middle + 1);
+        party.ArrivesAt = party.DepartedAt + total;
+        await _db.SaveChangesAsync();
+
+        var (_, list) = await Service.ListAsync(instance, TestIds.Player);
+        var halted = list!.Parties[0];
+        Assert.Equal(CompanyState.Ambushed, halted.State);
+        Assert.Equal("r1", halted.RegionId);
+        Assert.Equal("r1", SiteSpec.RegionIdOf(halted.Ambush!.SiteId));
+
+        var (fled, response) = await Service.FleeAmbushAsync(instance, TestIds.Player, first.Id, Order);
+        Assert.True(fled.Succeeded, fled.Message);
+        var back = response!.Parties[0].Journey!.Legs;
+        Assert.Equal(new[] { "r1", "r0" }, back.Select(l => l.RegionId));
+        Assert.Equal(keep, response.Parties[0].Journey!.ToSiteId);
+
+        await BackdateJourneyAsync(first.Id);
+        var (_, home) = await Service.ListAsync(instance, TestIds.Player);
+        Assert.Equal("r0", home!.Parties[0].RegionId);
+        Assert.Equal(keep, home.Parties[0].SiteId);
+    }
+
+    [Fact]
+    public async Task AGapInTheMapCannotBeMarchedAcross()
+    {
+        var (instance, regions) = await SeedRowAsync(0, 2);
+        var first = await FirstAsync(instance);
+
+        var (outcome, _) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(TestWorld.DungeonIn(regions[1])));
+
+        Assert.Equal(PartyError.NoRoute, outcome.Error);
+    }
+
+    [Fact]
+    public void EveryRoadOutFacesItsNeighbour()
+    {
+        for (int i = 0; i < 30; i++)
+        {
+            var region = TestWorld.Region($"region-{i * 37}");
+            var roads = RegionRoadNetwork.For(region, _ => true);
+            var layout = roads.Layout;
+            Assert.True(roads.Exits.Count >= 3, $"seed {region.Seed}: only {roads.Exits.Count} roads out");
+            foreach (var exit in roads.Exits)
+            {
+                var gate = exit.Path[0];
+                switch (exit.Direction)
+                {
+                    case 0: Assert.Equal(layout.Width - 1, gate.X); break;
+                    case 3: Assert.Equal(0, gate.X); break;
+                    case 1: Assert.Equal(layout.Height - 1, gate.Y); Assert.True(gate.X >= layout.Width / 2); break;
+                    case 2: Assert.Equal(layout.Height - 1, gate.Y); Assert.True(gate.X < layout.Width / 2); break;
+                    case 4: Assert.Equal(0, gate.Y); Assert.True(gate.X < layout.Width / 2); break;
+                    default: Assert.Equal(0, gate.Y); Assert.True(gate.X >= layout.Width / 2); break;
+                }
+            }
+
+            // Only toward regions that are there.
+            var west = RegionRoadNetwork.For(region, hex => hex == region.Hex.Neighbour(3));
+            Assert.All(west.Exits, e => Assert.Equal(3, e.Direction));
+        }
     }
 
     [Fact]
@@ -596,7 +705,7 @@ public class PartyServiceTests : IDisposable
         var dto = response!.Parties[0];
         Assert.Equal(CompanyState.Returning, dto.State);
         Assert.Equal(keep, dto.Journey!.ToSiteId);
-        Assert.Equal(0, dto.Journey.Seconds[0]);
+        Assert.Equal(0, dto.Journey.Legs[0].Seconds[0]);
         Assert.True(dto.Journey.ArrivesAt > DateTime.UtcNow);
 
         await BackdateJourneyAsync(company.Id);
@@ -694,15 +803,21 @@ public class PartyServiceTests : IDisposable
     }
 
     [Fact]
-    public void TheRoadBackIsTheRoadWalked_Reversed()
+    public void TheRoadBackIsTheRoadWalked_Reversed_AcrossTheBorder()
     {
-        var cells = new List<int[]> { new[] { 0, 0 }, new[] { 1, 0 }, new[] { 2, 0 }, new[] { 3, 0 } };
-        var seconds = new List<double> { 0, 10, 25, 40 };
+        var legs = new List<RouteLeg>
+        {
+            new() { RegionId = "a", Cells = { new[] { 0, 0 }, new[] { 1, 0 } }, Seconds = { 0, 10 } },
+            new() { RegionId = "b", Cells = { new[] { 5, 5 }, new[] { 6, 5 }, new[] { 7, 5 } }, Seconds = { 30, 45, 60 } },
+        };
 
-        var (back, times) = AmbushRules.RouteBack(cells, seconds, 2.4);
+        var back = AmbushRules.RouteBack(legs, 50);
 
-        Assert.Equal(new[] { 2, 1, 0 }, back.Select(c => c[0]));
-        Assert.Equal(new double[] { 0, 15, 25 }, times);
+        Assert.Equal(new[] { "b", "a" }, back.Select(l => l.RegionId));
+        Assert.Equal(new[] { 6, 5 }, back[0].Cells.Select(c => c[0]));
+        Assert.Equal(new double[] { 0, 15 }, back[0].Seconds);
+        Assert.Equal(new double[] { 35, 45 }, back[1].Seconds);   // the crossing is walked again
+        Assert.Equal(new[] { 1, 0 }, back[1].Cells.Select(c => c[0]));
     }
 
     // -----------------------------------------------------------------

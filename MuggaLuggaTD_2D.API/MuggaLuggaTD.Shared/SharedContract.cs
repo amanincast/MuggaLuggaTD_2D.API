@@ -164,6 +164,10 @@ namespace MuggaLuggaTD.Shared
         // 1.34.0 - ambushes (parties-and-travel.md §4). AmbushRules: the server rolls a journey when it
         //   sets out; a company that reaches its ambush halts until its player fights (a tier-1 skirmish
         //   at the land's level, paying half) or flees (walking back the way it came).
-        public const string Version = "1.34.0";
+        // 1.35.0 - travel between regions (parties-and-travel.md §6, phase 4). Every region has a road out
+        //   toward each hex neighbour, on the side facing it; a journey is planned region by region
+        //   (TravelRules.PlanRoute) and stored as legs, each walked on its own roads with a 20s crossing
+        //   between. Ambush odds combine over the legs; fleeing walks every leg back.
+        public const string Version = "1.35.0";
     }
 }
