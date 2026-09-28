@@ -26,8 +26,10 @@ public record PartyDto(
 /// client walks the company along it by the clock (<see cref="TravelRules.Progress"/>).
 /// </summary>
 public record JourneyDto(
-    string FromSiteId,
-    string ToSiteId,
+    /// <summary>Where it set out from; null on another player's company when that site is out of sight.</summary>
+    string? FromSiteId,
+    /// <summary>Where it is bound; null on another player's company when that site is out of sight.</summary>
+    string? ToSiteId,
     DateTime DepartedAt,
     DateTime ArrivesAt,
     /// <summary>Its road, region by region: each leg's cells and the seconds after departure at which each is reached.</summary>
@@ -87,6 +89,38 @@ public record PartyTravelRequest(
 /// character in another of the player's companies is not listed here - the companies themselves say so.
 /// </summary>
 public record CharacterCommitmentDto(string CharacterId, string Reason, string? SiteId);
+
+/// <summary>
+/// Another player's company, as a rival sees it (phase 5): who leads it, how it looks and where it is -
+/// and of its road only the stretches in regions the viewer can see. Never why it stopped: an ambush
+/// is the owner's business.
+/// </summary>
+public record RivalCompanyDto(
+    Guid Id,
+    string Name,
+    string Banner,
+    CompanyState State,
+    string? RegionId,
+    string? SiteId,
+    JourneyDto? Journey,
+    string OwnerUserId,
+    string OwnerName,
+    /// <summary>Each member's character sheet (sprite library), leader first.</summary>
+    List<string> Sheets
+);
+
+/// <summary>The other players' companies the viewer can see now.</summary>
+public record RivalCompaniesResponse(
+    List<RivalCompanyDto> Companies,
+    DateTime ServerNow
+);
+
+/// <summary>
+/// Broadcast when a player's companies change (an order given, a company formed, re-manned or
+/// disbanded). It says only <i>who</i>: each client asks again, and the server decides what that
+/// client may see. The fog is never trusted to a broadcast.
+/// </summary>
+public record PartyMovedNotification(Guid GameInstanceId, string UserId);
 
 /// <summary>A player's companies in a realm, and what bounds them.</summary>
 public record PartiesResponse(

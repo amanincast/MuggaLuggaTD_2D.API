@@ -1,17 +1,20 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
+using MuggaLuggaTD_2D.API.Hubs;
 using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
 /// <summary>
 /// A player's companies in a realm: list, form, rename and re-man, disband
-/// (<c>docs/design/parties-and-travel.md</c>, Unity repo). Companies are the player's own business, so
-/// nothing here is broadcast; the world is only read, never written.
+/// (<c>docs/design/parties-and-travel.md</c>, Unity repo). The world is only read, never written.
+/// Every change a player makes to their companies is broadcast as <c>PartyMoved</c>, carrying only
+/// who moved: other players then ask <c>GET others</c>, which shows each of them only what they can see.
 /// </summary>
 [ApiController]
 [Route("api/gameinstance/{gameInstanceId:guid}/parties")]
@@ -21,12 +24,27 @@ public class PartyController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly PartyService _parties;
     private readonly ISessionLog _sessionLog;
+    private readonly IHubContext<GameHub> _hub;
 
-    public PartyController(ApplicationDbContext context, PartyService parties, ISessionLog sessionLog)
+    public PartyController(ApplicationDbContext context, PartyService parties, ISessionLog sessionLog, IHubContext<GameHub> hub)
     {
         _context = context;
         _parties = parties;
         _sessionLog = sessionLog;
+        _hub = hub;
+    }
+
+    /// <summary>Other players' companies in the regions this player can see (phase 5).</summary>
+    [HttpGet("others")]
+    public async Task<ActionResult<RivalCompaniesResponse>> Others(Guid gameInstanceId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.OthersAsync(gameInstanceId, userId);
+        if (outcome.Succeeded && response != null) return Ok(response);
+        return Refuse(outcome, userId, "others");
     }
 
     [HttpGet]
@@ -48,7 +66,7 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.CreateAsync(gameInstanceId, userId, request);
-        return Respond(outcome, response, userId, "form");
+        return await MovedAsync(gameInstanceId, outcome, response, userId, "form");
     }
 
     [HttpPut("{partyId:guid}")]
@@ -59,7 +77,7 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.UpdateAsync(gameInstanceId, userId, partyId, request);
-        return Respond(outcome, response, userId, $"set {partyId}");
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"set {partyId}");
     }
 
     [HttpPost("{partyId:guid}/travel")]
@@ -70,7 +88,7 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.TravelAsync(gameInstanceId, userId, partyId, request);
-        return Respond(outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
     }
 
     /// <summary>Fights the warband that has a company halted: opens the run its claim will name.</summary>
@@ -95,7 +113,7 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.FleeAmbushAsync(gameInstanceId, userId, partyId, request);
-        return Respond(outcome, response, userId, $"ambush-flee {partyId}");
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"ambush-flee {partyId}");
     }
 
     /// <summary>Settles an ambush fight, won or lost.</summary>
@@ -107,7 +125,12 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.ClaimAmbushAsync(gameInstanceId, userId, partyId, request);
-        if (outcome.Succeeded && response != null) return Ok(response);
+        if (outcome.Succeeded && response != null)
+        {
+            // Won, it marches on; lost, it turns back. Either way it has moved.
+            await BroadcastMovedAsync(gameInstanceId, userId);
+            return Ok(response);
+        }
         return Refuse(outcome, userId, $"ambush-claim {partyId} won={request.Won}");
     }
 
@@ -119,8 +142,20 @@ public class PartyController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, response) = await _parties.DisbandAsync(gameInstanceId, userId, partyId);
-        return Respond(outcome, response, userId, $"disband {partyId}");
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"disband {partyId}");
     }
+
+    private async Task<ActionResult<PartiesResponse>> MovedAsync(Guid gameInstanceId, PartyOutcome outcome,
+        PartiesResponse? response, string userId, string what)
+    {
+        if (outcome.Succeeded && response != null) await BroadcastMovedAsync(gameInstanceId, userId);
+        return Respond(outcome, response, userId, what);
+    }
+
+    /// <summary>Tells the realm that this player's companies changed; each client asks again what it can see.</summary>
+    private Task BroadcastMovedAsync(Guid gameInstanceId, string userId) =>
+        _hub.Clients.Group(gameInstanceId.ToString())
+            .SendAsync("PartyMoved", new PartyMovedNotification(gameInstanceId, userId));
 
     private ActionResult<PartiesResponse> Respond(PartyOutcome outcome, PartiesResponse? response, string userId, string what)
     {

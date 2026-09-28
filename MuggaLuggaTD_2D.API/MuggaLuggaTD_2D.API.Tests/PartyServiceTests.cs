@@ -415,6 +415,126 @@ public class PartyServiceTests : IDisposable
         Assert.Equal(target, after.Parties[0].SiteId);
     }
 
+    // -----------------------------------------------------------------
+    // Other players' companies (phase 5)
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Five regions in a row: the player's capital at the west end (r0), a rival's at the east (r4),
+    /// open land between. Each has one character; the rival's wears <c>sheet/foe</c>.
+    /// </summary>
+    private async Task<(Guid Instance, List<WorldRegionData> Regions)> SeedRivalsAsync()
+    {
+        var (instance, regions) = await SeedRowAsync(0, 1, 2, 3);
+        var rivalSeat = TestWorld.Region("r4", q: 4, r: 0, ownership: LocationOwnership.Player, ownerUserId: TestIds.Rival);
+        rivalSeat.IsCapital = true;
+        regions.Add(rivalSeat);
+        var row = await _db.WorldViewGameData.SingleAsync(w => w.GameInstanceId == instance);
+        row.GameData = TestWorld.Blob(regions.ToArray()).ToJsonString();
+        await _db.SaveChangesAsync();
+
+        var foe = TestSave.Character("foe-1");
+        foe.SpriteLibraryAssetLocation = "sheet/foe";
+        var save = TestSave.Roster(foe);
+        save.ActiveCharacterIds = new List<string> { "foe-1" };
+        await _db.AddPlayerSaveAsync(instance, TestIds.Rival, TestSave.ToJson(save));
+        return (instance, regions);
+    }
+
+    /// <summary>Puts a company <paramref name="secondsIn"/> into its journey.</summary>
+    private async Task WalkedAsync(Guid partyId, double secondsIn)
+    {
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == partyId);
+        var took = party.ArrivesAt!.Value - party.DepartedAt!.Value;
+        party.DepartedAt = DateTime.UtcNow - TimeSpan.FromSeconds(secondsIn);
+        party.ArrivesAt = party.DepartedAt + took;
+        await _db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ARivalsCompany_IsSeenOnlyInTheLandTheViewerCanSee()
+    {
+        var (instance, regions) = await SeedRivalsAsync();
+        await FirstAsync(instance);
+        var (_, theirs) = await Service.ListAsync(instance, TestIds.Rival);
+        var foe = theirs!.Parties[0];
+
+        // At home four regions away, it is out of sight.
+        var (_, before) = await Service.OthersAsync(instance, TestIds.Player);
+        Assert.Empty(before!.Companies);
+
+        // Marching west to a dungeon on the player's border.
+        var target = TestWorld.DungeonIn(regions[1]);
+        var (sent, response) = await Service.TravelAsync(instance, TestIds.Rival, foe.Id, Travel(target));
+        Assert.True(sent.Succeeded, sent.Message);
+        var legs = response!.Parties[0].Journey!.Legs;
+        Assert.Equal(new[] { "r4", "r3", "r2", "r1" }, legs.Select(l => l.RegionId));
+
+        // Still in r2, it is not news yet.
+        await WalkedAsync(foe.Id, (legs[2].Seconds[0] + legs[2].Seconds[^1]) / 2);
+        var (_, far) = await Service.OthersAsync(instance, TestIds.Player);
+        Assert.Empty(far!.Companies);
+
+        // Over the border into r1, it is: its leader's look, and only the road in sight.
+        await WalkedAsync(foe.Id, legs[3].Seconds[0] + 5);
+        var (_, near) = await Service.OthersAsync(instance, TestIds.Player);
+        var seen = Assert.Single(near!.Companies);
+        Assert.Equal(TestIds.Rival, seen.OwnerUserId);
+        Assert.Equal("r1", seen.RegionId);
+        Assert.Equal(new[] { "sheet/foe" }, seen.Sheets);
+        Assert.Equal(new[] { "r1" }, seen.Journey!.Legs.Select(l => l.RegionId));
+        Assert.Null(seen.Journey.FromSiteId);          // its home keep is in the fog
+        Assert.Equal(target, seen.Journey.ToSiteId);   // where it is bound is in plain view
+    }
+
+    [Fact]
+    public async Task ACompanyOutInTheField_SeesWhoElseIsThere()
+    {
+        var (instance, regions) = await SeedRivalsAsync();
+        var mine = await FirstAsync(instance);
+        var (_, theirs) = await Service.ListAsync(instance, TestIds.Rival);
+        var foe = theirs!.Parties[0];
+
+        // Both march to r2: two regions from the player's land, two from the rival's.
+        var dungeon = TestWorld.DungeonIn(regions[2]);
+        Assert.True((await Service.TravelAsync(instance, TestIds.Player, mine.Id, Travel(dungeon))).Outcome.Succeeded);
+        Assert.True((await Service.TravelAsync(instance, TestIds.Rival, foe.Id, Travel(dungeon))).Outcome.Succeeded);
+        await BackdateJourneyAsync(mine.Id);
+        await BackdateJourneyAsync(foe.Id);
+
+        var (_, seenByMe) = await Service.OthersAsync(instance, TestIds.Player);
+        var theirCompany = Assert.Single(seenByMe!.Companies);
+        Assert.Equal(CompanyState.Idle, theirCompany.State);
+        Assert.Equal(dungeon, theirCompany.SiteId);
+
+        var (_, seenByThem) = await Service.OthersAsync(instance, TestIds.Rival);
+        Assert.Equal(mine.Id, Assert.Single(seenByThem!.Companies).Id);
+    }
+
+    [Fact]
+    public async Task ARivalsAmbush_IsNotTheViewersBusiness()
+    {
+        var (instance, regions) = await SeedRivalsAsync();
+        await FirstAsync(instance);
+        var (_, theirs) = await Service.ListAsync(instance, TestIds.Rival);
+        var foe = theirs!.Parties[0];
+
+        _dice = new FixedDice(0.0);
+        var (sent, response) = await Service.TravelAsync(instance, TestIds.Rival, foe.Id, Travel(TestWorld.DungeonIn(regions[1])));
+        Assert.True(sent.Succeeded, sent.Message);
+        await BackdateJourneyAsync(foe.Id);
+
+        var (_, owner) = await Service.ListAsync(instance, TestIds.Rival);
+        Assert.Equal(CompanyState.Ambushed, owner!.Parties[0].State);
+        Assert.NotNull(owner.Parties[0].Ambush);
+
+        // Seen, halted - and nothing about the warband, which the DTO has no room for.
+        var (_, seen) = await Service.OthersAsync(instance, TestIds.Player);
+        var halted = seen!.Companies.SingleOrDefault();
+        if (halted != null) Assert.Equal(CompanyState.Ambushed, halted.State);
+        Assert.DoesNotContain(typeof(RivalCompanyDto).GetProperties(), p => p.Name.Contains("Ambush"));
+    }
+
     [Fact]
     public async Task AnAmbushOnTheWayThrough_IsFoughtInThatLand_AndFleeingCrossesBackHome()
     {
