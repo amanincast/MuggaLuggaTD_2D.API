@@ -154,6 +154,10 @@ namespace MuggaLuggaTD.Shared
         //   reachable by upgrades. PartyPowerCalculator prices healing 1:1 with damage, so a Cleric's
         //   garrison, raid and siege strength include what it mends; a 1.30.0 client would price one
         //   on its damage alone.
-        public const string Version = "1.31.0";
+        // 1.32.0 - companies (docs/design/parties-and-travel.md). CompanyRules: a company is four, a
+        //   player may form roster cap / 4. PvE begin names the characters who fight, and the server
+        //   refuses one that is garrisoned, held prisoner or locked into a siege - it checked none of
+        //   those before, so a sieging army could slip off and run dungeons.
+        public const string Version = "1.32.0";
     }
 }

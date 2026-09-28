@@ -117,6 +117,11 @@ public class WorldGarrisonService
 
         WorldRegionBlob.SetGarrison(resolved.RegionNode, request.SiteId, muster.CharacterIds, muster.Power);
 
+        // Stationed is stationed: a garrison takes its characters out of whichever company they
+        // marched with. (Assigning a whole company as a garrison is the travel phase's; this is the
+        // rule that keeps a character from being in both places meanwhile.)
+        await PartyService.ReleaseAsync(_context, gameInstanceId, userId, muster.CharacterIds);
+
         // Re-read, so the hold reported back is the hold that was just written rather than the one
         // before it. Marching power of zero: this is a defence being assessed, not an attack.
         var assessment = RegionHoldCalculator.AssessRegion(
