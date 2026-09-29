@@ -766,8 +766,9 @@ public class PartyService
 
     private static string NameOf(StateManagement.Models.UserSaveData? save, string id)
     {
-        var name = save?.Characters?.FirstOrDefault(c => c?.Id == id)?.CharacterName;
-        return string.IsNullOrWhiteSpace(name) ? id : name!;
+        // A starter nobody named is called what the client calls it, so a refusal names a person.
+        var character = save?.Characters?.FirstOrDefault(c => c?.Id == id);
+        return MuggaLuggaTD.Shared.World.Naming.ForCharacter(character?.CharacterName, character?.LinkName, id) ?? id;
     }
 
     /// <summary>

@@ -53,19 +53,6 @@ namespace MuggaLuggaTD.Shared.Gameplay
     public static class RecruitRoller
     {
         /// <summary>
-        /// Recruit names. One flat table rather than doc 05's per-race ones, because races are not
-        /// modelled yet - the sheet is the only thing that says what a character looks like.
-        /// </summary>
-        private static readonly string[] Names =
-        {
-            "Aldric", "Brenna", "Corvin", "Dessa", "Eamon", "Fenna", "Garrick", "Hesper",
-            "Ivo", "Jorunn", "Kestrel", "Lisbet", "Maerwen", "Nolan", "Orla", "Perrin",
-            "Quill", "Rook", "Silvi", "Torvald", "Ulla", "Varek", "Wynn", "Yorath",
-            "Anselm", "Bryn", "Cael", "Delwyn", "Edda", "Finlay", "Grimm", "Halla",
-            "Isen", "Juno", "Kiran", "Lark", "Merrow", "Nessa", "Osric", "Prue"
-        };
-
-        /// <summary>
         /// A whole board. Slots are rolled independently, so duplicates are possible and are not a
         /// bug: six slots is a small enough sample that forcing them apart would misrepresent the
         /// odds the player is told.
@@ -132,10 +119,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             var signature = classSignatures[random.Next(classSignatures.Count)];
 
+            // One draw for the name, where the old flat table's draw was, so every later roll on the
+            // board (sheet, signature, affinity, rarity) comes out as it always did. The name itself
+            // is Naming's, in the voice of the sheet's race.
+            int nameRoll = random.Next(int.MaxValue);
+            string sheet = classSheets[random.Next(classSheets.Count)].Sheet;
+
             return new RecruitRoll
             {
-                Name = Names[random.Next(Names.Length)],
-                Sheet = classSheets[random.Next(classSheets.Count)].Sheet,
+                Name = Naming.ForHero(sheet, (ulong)nameRoll),
+                Sheet = sheet,
                 Class = className,
                 SignatureId = signature.SignatureId,
                 Affinity = RollAffinity(signature, biome, random, luredAffinity, luredTarget),
