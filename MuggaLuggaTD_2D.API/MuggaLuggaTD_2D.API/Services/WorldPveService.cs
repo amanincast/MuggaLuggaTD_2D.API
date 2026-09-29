@@ -63,14 +63,18 @@ public class WorldPveService
     private readonly TavernService _tavern;
     private readonly ILogger<WorldPveService> _logger;
 
+    private readonly ItemLedgerService _items;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
         MaterialWalletService wallet,
         GoldService gold,
         TavernService tavern,
-        ILogger<WorldPveService> logger)
+        ILogger<WorldPveService> logger,
+        ItemLedgerService items)
     {
+        _items = items;
         _context = context;
         _content = content;
         _wallet = wallet;
@@ -255,6 +259,10 @@ public class WorldPveService
             Random.Shared);
 
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
+
+        // Every item rolled is recorded, so the save that carries it home is believed - and a save
+        // carrying anything else is not (ItemLedgerService).
+        await _items.GrantAsync(gameInstanceId, userId, rewards.Items, $"pve-claim run={run.Id}");
 
         // Gold is paid as one figure at the end rather than dropped during the fight, so the client
         // never holds a coin it could have minted. GrantAsync settles the purse first, which means

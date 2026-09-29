@@ -113,8 +113,9 @@ public class PlayerSaveValidator
     {
         int removed = 0, quantity = 0;
 
-        if (save is not JsonObject root || root["ItemInventory"] is not JsonObject inventory
-            || inventory["Items"] is not JsonArray items)
+        // InventoryItems is what the client writes (UserSaveData). This read ItemInventory.Items
+        // alone until 2026-09-28 - a shape no client writes - so it never stripped a thing.
+        if (ItemLedgerService.SaveItems(save) is not JsonArray items)
             return new MaterialStripResult(0, 0);
 
         // Backwards, so removing one does not shift the indices still to be checked.

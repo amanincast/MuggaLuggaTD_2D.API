@@ -275,7 +275,7 @@ public class PlayerSaveValidatorTests
 
         Assert.Equal(2, result.Removed);
         Assert.Equal(43, result.TotalQuantity);
-        Assert.Empty((JsonArray)save["ItemInventory"]!["Items"]!);
+        Assert.Empty((JsonArray)save["InventoryItems"]!);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public class PlayerSaveValidatorTests
         var result = ValidatorOfferingTheUsualPool().StripMaterials(save);
 
         Assert.Equal(1, result.Removed);
-        var remaining = (JsonArray)save["ItemInventory"]!["Items"]!;
+        var remaining = (JsonArray)save["InventoryItems"]!;
         Assert.Equal("Iron Helm", (string)remaining.Single()!["ItemName"]!);
     }
 
@@ -313,7 +313,9 @@ public class PlayerSaveValidatorTests
             });
         }
 
-        return new JsonObject { ["ItemInventory"] = new JsonObject { ["Items"] = array } };
+        // The shape the client writes (UserSaveData.InventoryItems). These tests once built
+        // ItemInventory.Items instead, which no client writes, and so passed while the strip never ran.
+        return new JsonObject { ["InventoryItems"] = array };
     }
 
 
