@@ -68,9 +68,13 @@ public class PartyService
     /// <summary>Where ambushes and a won ambush's spoils are rolled from. Tests fix it.</summary>
     public Random Dice { get; set; } = Random.Shared;
 
+    private readonly ItemLedgerService _items;
+
     public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
-        MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger)
+        MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger,
+        ItemLedgerService items)
     {
+        _items = items;
         _context = context;
         _tavern = tavern;
         _content = content;
@@ -553,6 +557,7 @@ public class PartyService
                 .ToList();
 
             await _wallet.GrantAsync(gameInstanceId, userId, materials, $"ambush run={run.Id}");
+            await _items.GrantAsync(gameInstanceId, userId, items, $"ambush run={run.Id}");
             balance = await _gold.GrantAsync(gameInstanceId, userId, gold, $"ambush run={run.Id}");
 
             // On it goes, from where it stood. It will not be stopped twice on one road.

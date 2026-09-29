@@ -84,6 +84,7 @@ builder.Services.AddScoped<WorldProvisioningService>();
 builder.Services.AddScoped<SeasonScoreService>();
 builder.Services.AddScoped<WarLogService>();
 builder.Services.AddScoped<MaterialWalletService>();
+builder.Services.AddScoped<ItemLedgerService>();
 builder.Services.AddScoped<GoldService>();
 builder.Services.AddScoped<TavernService>();
 builder.Services.AddScoped<PartyService>();

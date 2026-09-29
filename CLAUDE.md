@@ -145,6 +145,29 @@ business, so nothing here is broadcast.
   - A halted company **waits**: there is no auto-resolve (Mike 2026-09-27 — the design's auto-fight,
     morale and fatigue were not asked for). `PartyService.Dice` is the ambush entropy; tests fix it.
 
+## The equipment ledger (`ItemLedgerService`, `ItemGrant`)
+
+Equipment lives in the client's save, and until 2026-09-28 every item there was taken at face
+value. Now **the save decides who wears an item; the ledger decides what the item is and whether it
+exists.**
+- Every item the server rolls is recorded as an `ItemGrant` (the `ItemSaveData` as granted, less
+  `EquippedByCharacterId`): PvE claims (`WorldPveService`) and won ambushes (`PartyService`).
+- Every save is reconciled on `POST playerdata/me` after materials are stripped: a granted item is
+  rewritten to its grant (a save cannot raise a stat or rarity), an item with no grant is dropped, a
+  duplicated id keeps one copy. Compared in one form (read as `ItemSaveData`, written by
+  System.Text.Json), because the client writes Newtonsoft and 12.0 must equal 12.
+- **Adoption**: the first time the ledger meets a player it adopts what their **stored** save holds
+  (never the arriving one, which could launder anything) and writes an `ItemLedgerState` so it
+  happens once. A claim adopts before it grants, so a first claim after deploy loses nothing.
+- **Marketplace**: a listing sells the ledger's copy of an item the seller holds (the request's
+  `ItemData` only names it by `Id`); while listed it is out of the seller's inventory; a sale moves
+  the grant to the buyer, a cancel returns it. **No price is charged yet** — the marketplace's
+  economy waits on its design (`PurchaseConditions` is stored, not enforced).
+- **The save's inventory is `InventoryItems`** (top level, `UserSaveData`). `StripMaterials` read
+  `ItemInventory.Items` until this change — a shape no client writes — so it never stripped anything;
+  its tests had been built in the same wrong shape. `ItemLedgerService.SaveItems` reads both.
+- Not covered: **experience/level** is still client-written (bounded by `ClampLevels` only).
+
 ## Development URLs
 
 - HTTP: http://localhost:5081

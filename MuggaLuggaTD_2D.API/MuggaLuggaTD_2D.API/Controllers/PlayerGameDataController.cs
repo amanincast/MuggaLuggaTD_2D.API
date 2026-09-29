@@ -21,10 +21,13 @@ public class PlayerGameDataController : ControllerBase
     private readonly ISessionLog _sessionLog;
 
     private readonly TavernService _tavern;
+    private readonly ItemLedgerService _itemLedger;
 
     public PlayerGameDataController(
-        ApplicationDbContext context, PlayerSaveValidator saveValidator, TavernService tavern, ISessionLog sessionLog)
+        ApplicationDbContext context, PlayerSaveValidator saveValidator, TavernService tavern, ISessionLog sessionLog,
+        ItemLedgerService itemLedger)
     {
+        _itemLedger = itemLedger;
         _context = context;
         _saveValidator = saveValidator;
         _tavern = tavern;
@@ -140,6 +143,15 @@ public class PlayerGameDataController : ControllerBase
         {
             _sessionLog.Log("SAVE-MATERIALS",
                 $"user={userId} dropped={materials.Removed} stack(s) quantity={materials.TotalQuantity}");
+        }
+
+        // Equipment is held to the ledger: an item is what the server granted, or it is not kept.
+        var items = await _itemLedger.ReconcileSaveAsync(gameInstanceId, userId, saveNode);
+        if (items.Changed)
+        {
+            _sessionLog.Log("SAVE-ITEMS",
+                $"user={userId} kept={items.Kept} corrected={items.Corrected} dropped={items.Dropped} " +
+                $"[{string.Join(", ", items.Details.Take(20))}]");
         }
 
         // Level is worth power, and the experience curve now has a cap to hold it to.

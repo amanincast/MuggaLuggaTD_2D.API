@@ -40,7 +40,9 @@ public class WorldPveServiceTests : IDisposable
         new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
 
     private WorldPveService Service =>
-        new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance);
+        new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance, Items);
+
+    private ItemLedgerService Items => new(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance);
 
     private static string Contract => SharedContract.Version;
 

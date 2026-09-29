@@ -1,3 +1,4 @@
+using MuggaLuggaTD_2D.API.Services;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -16,9 +17,20 @@ public class MarketplaceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
 
-    public MarketplaceController(ApplicationDbContext context)
+    private readonly ItemLedgerService _items;
+
+    public MarketplaceController(ApplicationDbContext context, ItemLedgerService items)
     {
         _context = context;
+        _items = items;
+    }
+
+    /// <summary>The item id a listing request names, whatever shape the client sent the item in.</summary>
+    private static string? ItemIdOf(object? itemData)
+    {
+        if (itemData == null) return null;
+        var node = JsonSerializer.SerializeToNode(itemData);
+        return node?["Id"]?.GetValue<string>() ?? node?["id"]?.GetValue<string>();
     }
 
     [HttpGet]
@@ -150,13 +162,20 @@ public class MarketplaceController : ControllerBase
             return Forbid();
         }
 
-        var itemDataJson = JsonSerializer.Serialize(request.ItemData);
         var purchaseConditionsJson = request.PurchaseConditions != null
             ? JsonSerializer.Serialize(request.PurchaseConditions)
             : "{}";
 
+        // The item is the ledger's, not the request's: a listing can only sell something the seller
+        // was granted, and it sells it exactly as granted. It leaves their inventory while listed.
+        var listingId = Guid.NewGuid();
+        var itemDataJson = await _items.EscrowAsync(gameInstanceId, userId, ItemIdOf(request.ItemData), listingId);
+        if (itemDataJson == null)
+            return BadRequest(new { message = "You do not hold that item, or it is already listed." });
+
         var listing = new MarketplaceListing
         {
+            Id = listingId,
             GameInstanceId = gameInstanceId,
             SellerId = userId,
             ItemData = itemDataJson,
@@ -169,7 +188,7 @@ public class MarketplaceController : ControllerBase
         _context.MarketplaceListings.Add(listing);
         await _context.SaveChangesAsync();
 
-        var responseItemData = request.ItemData;
+        var responseItemData = JsonSerializer.Deserialize<object>(itemDataJson) ?? new { };
         var responsePurchaseConditions = request.PurchaseConditions ?? new { };
 
         return CreatedAtAction(
@@ -216,10 +235,8 @@ public class MarketplaceController : ControllerBase
             return BadRequest(new { message = "Can only update active listings" });
         }
 
-        if (request.ItemData != null)
-        {
-            listing.ItemData = JsonSerializer.Serialize(request.ItemData);
-        }
+        // The item on a listing is not the seller's to edit: it is the ledger's copy. Only the terms
+        // change; to sell something else, cancel and list it.
 
         if (request.PurchaseConditions != null)
         {
@@ -272,6 +289,7 @@ public class MarketplaceController : ControllerBase
         listing.Status = ListingStatus.Cancelled;
         listing.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await _items.ReleaseAsync(gameInstanceId, listing.Id);
 
         var itemData = JsonSerializer.Deserialize<object>(listing.ItemData) ?? new { };
         var purchaseConditions = JsonSerializer.Deserialize<object>(listing.PurchaseConditions) ?? new { };
@@ -316,6 +334,11 @@ public class MarketplaceController : ControllerBase
         {
             return BadRequest(new { message = "Cannot purchase your own listing" });
         }
+
+        // No price is charged yet: the marketplace's economy is waiting on its design. What is enforced
+        // is that the item moves - out of the seller's hands, into the buyer's.
+        if (!await _items.TransferAsync(gameInstanceId, listing.Id, userId))
+            return BadRequest(new { message = "That item is no longer for sale." });
 
         listing.BuyerId = userId;
         listing.Status = ListingStatus.Sold;

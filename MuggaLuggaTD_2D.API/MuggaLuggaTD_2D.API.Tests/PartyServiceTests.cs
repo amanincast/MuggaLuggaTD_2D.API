@@ -32,13 +32,15 @@ public class PartyServiceTests : IDisposable
         new(_db, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
 
     private PartyService Service =>
-        new(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<PartyService>.Instance) { Dice = _dice };
+        new(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<PartyService>.Instance, Items) { Dice = _dice };
+
+    private ItemLedgerService Items => new(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance);
 
     private WorldGarrisonService Garrison => new(
         _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance);
 
     private WorldPveService Pve =>
-        new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance);
+        new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance, Items);
 
     private static string Contract => SharedContract.Version;
 

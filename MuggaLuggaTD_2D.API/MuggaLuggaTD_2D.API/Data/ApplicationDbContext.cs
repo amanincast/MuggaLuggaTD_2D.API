@@ -26,6 +26,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
     public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
+    public DbSet<ItemGrant> ItemGrants => Set<ItemGrant>();
+    public DbSet<ItemLedgerState> ItemLedgerStates => Set<ItemLedgerState>();
     public DbSet<PlayerGold> PlayerGold => Set<PlayerGold>();
     public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
@@ -140,6 +142,21 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerMaterial>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.MaterialName }).IsUnique();
+        });
+
+        // The item ledger: an item's id is unique in its realm (it is how a save names it), and it is
+        // read by holder and by listing.
+        builder.Entity<ItemGrant>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.ItemId }).IsUnique();
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId });
+            entity.HasIndex(e => e.ListingId);
+        });
+
+        // One adoption per player per realm.
+        builder.Entity<ItemLedgerState>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
         });
 
         // Configure PlayerGold (one purse per player per realm; every read and write is by that
