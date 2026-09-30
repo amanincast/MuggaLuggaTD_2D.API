@@ -35,12 +35,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Sums the power of the characters whose ids are in <paramref name="characterIds"/>, resolved
         /// against <paramref name="save"/>. Ids with no matching character are ignored — a party that
         /// references a character the player no longer owns simply contributes nothing for it.
+        /// <paramref name="onAGarrison"/> prices them standing on walls, where Hold the Line counts.
         /// </summary>
         public static float CalculatePartyPower(
             UserSaveData save,
             IEnumerable<string> characterIds,
             IReadOnlyCollection<GameAbility> abilityTemplates,
-            IReadOnlyCollection<SignatureDefinition> signatures = null)
+            IReadOnlyCollection<SignatureDefinition> signatures = null,
+            bool onAGarrison = false)
         {
             if (save?.Characters == null || characterIds == null)
                 return 0f;
@@ -51,7 +53,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             return save.Characters
                 .Where(c => c != null && ids.Contains(c.Id))
-                .Sum(c => CalculateCharacterPower(c, save.InventoryItems, abilityTemplates, signatures));
+                .Sum(c => CalculateCharacterPower(c, save.InventoryItems, abilityTemplates, signatures)
+                          * (onAGarrison ? TalentRules.GarrisonPowerFactor(c.Talents) : 1f));
         }
 
         /// <summary>
@@ -74,6 +77,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             power += CalculateAbilityPower(character, abilityTemplates, signatures);
             power += CalculateEquipmentPower(character, inventory);
+
+            // The Trainer's talents: the design's flat 25 a point, whatever the point bought.
+            power += TalentRules.PowerFor(character.Talents);
 
             return power;
         }

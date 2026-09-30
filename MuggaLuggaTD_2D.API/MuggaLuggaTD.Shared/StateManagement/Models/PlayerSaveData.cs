@@ -89,6 +89,12 @@ namespace StateManagement.Models
 
         // Level scaling configuration
         public CharacterLevelScalingSaveData LevelScaling { get; set; }
+
+        /// <summary>
+        /// Trainer talents learnt, rank by node id (TalentRules). Written only by the server: every
+        /// save is put back to the server's record, so a client cannot teach itself.
+        /// </summary>
+        public Dictionary<string, int> Talents { get; set; } = new Dictionary<string, int>();
     }
 
     /// <summary>

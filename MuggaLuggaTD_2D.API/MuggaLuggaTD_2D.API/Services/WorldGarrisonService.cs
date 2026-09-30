@@ -113,7 +113,7 @@ public class WorldGarrisonService
         WorldRegionBlob.SetGarrison(resolved.RegionNode, request.SiteId, Array.Empty<string>(), 0);
 
         var muster = await MarchingArmy.MusterAsync(
-            _context, _content, _logger, gameInstanceId, userId, world, request.CharacterIds);
+            _context, _content, _logger, gameInstanceId, userId, world, request.CharacterIds, onAGarrison: true);
 
         WorldRegionBlob.SetGarrison(resolved.RegionNode, request.SiteId, muster.CharacterIds, muster.Power);
 

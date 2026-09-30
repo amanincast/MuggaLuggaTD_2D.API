@@ -175,6 +175,12 @@ public class PlayerGameDataController : ControllerBase
                 $"[{string.Join(", ", roster.Details)}]");
         }
 
+        // Talents are the Trainer's to write (TalentService): each character keeps what the stored
+        // save held, whatever this one claims. They are worth power, like the roll above.
+        int talents = TalentService.ReconcileTalents(saveNode, existingData?.GameData);
+        if (talents > 0)
+            _sessionLog.Log("SAVE-TALENTS", $"user={userId} corrected={talents}");
+
         var gameDataJson = saveNode?.ToJsonString() ?? JsonSerializer.Serialize(request.GameData);
 
         if (existingData != null)

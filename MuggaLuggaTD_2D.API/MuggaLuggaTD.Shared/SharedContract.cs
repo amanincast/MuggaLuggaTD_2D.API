@@ -168,6 +168,9 @@ namespace MuggaLuggaTD.Shared
         //   toward each hex neighbour, on the side facing it; a journey is planned region by region
         //   (TravelRules.PlanRoute) and stored as legs, each walked on its own roads with a 20s crossing
         //   between. Ambush odds combine over the legs; fleeing walks every leg back.
-        public const string Version = "1.35.0";
+        // 1.36.0 - the Trainer (design 6c): permanent talents, a point a level plus one at 10, 20 and 30,
+        //   spent on one stat tree for every class (TalentRules). A character's talents are priced at 25
+        //   power a point, and Hold the Line raises what it is worth on a garrison.
+        public const string Version = "1.36.0";
     }
 }

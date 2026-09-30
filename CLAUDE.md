@@ -168,6 +168,24 @@ exists.**
   its tests had been built in the same wrong shape. `ItemLedgerService.SaveItems` reads both.
 - Not covered: **experience/level** is still client-written (bounded by `ClampLevels` only).
 
+## Run picks and Trainer talents (`PlayerSaveValidator.StripRunPicks`, `TalentService`)
+
+- **A save carries no ability upgrades.** A run's level-up picks end with the run (Mike,
+  2026-09-29), so `StripRunPicks` drops every applied upgrade a save holds. It used to keep those
+  found in the content pool.
+- **Trainer talents** (design 6c) live on each saved character as `Talents` (rank by node id,
+  `TalentRules` in the shared assembly), and **only `TalentService` writes them**:
+  - `POST .../talents/learn` adds one rank, checked with `TalentRules.WhyNot` against the stored level.
+  - `POST .../talents/respec` clears them all for `RespecCost` gold, in one write with the spend.
+  - Both edit the stored `PlayerGameData` blob in place.
+  - Every `POST playerdata/me` puts each character's talents back to what the stored save held
+    (`ReconcileTalents`, run on the pre-merge blob). So power pricing reads them straight from the
+    roster, and no table or migration was needed.
+- **Power:** 25 a point (`PartyPowerCalculator`). Hold the Line multiplies a character on a
+  garrison (`MarchingArmy.MusterAsync(..., onAGarrison: true)` from `WorldGarrisonService`).
+- Points come from the saved level, which is client-written and only clamped: the same gap as
+  awakening.
+
 ## Development URLs
 
 - HTTP: http://localhost:5081

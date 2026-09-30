@@ -87,6 +87,7 @@ builder.Services.AddScoped<MaterialWalletService>();
 builder.Services.AddScoped<ItemLedgerService>();
 builder.Services.AddScoped<GoldService>();
 builder.Services.AddScoped<TavernService>();
+builder.Services.AddScoped<TalentService>();
 builder.Services.AddScoped<PartyService>();
 builder.Services.AddScoped<WorldSiegeService>();
 builder.Services.AddSingleton(TimeProvider.System);

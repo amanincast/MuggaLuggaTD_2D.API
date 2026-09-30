@@ -30,7 +30,8 @@ public static class MarchingArmy
         Guid gameInstanceId,
         string userId,
         JsonNode? world,
-        IEnumerable<string>? requestedIds)
+        IEnumerable<string>? requestedIds,
+        bool onAGarrison = false)
     {
         var save = await LoadPlayerSaveAsync(context, logger, gameInstanceId, userId);
 
@@ -48,7 +49,7 @@ public static class MarchingArmy
 
         double power = marching.Count == 0
             ? 0
-            : PartyPowerCalculator.CalculatePartyPower(save, marching, content.AbilityTemplates, content.Signatures);
+            : PartyPowerCalculator.CalculatePartyPower(save, marching, content.AbilityTemplates, content.Signatures, onAGarrison);
 
         return new Muster(marching, power, save);
     }
