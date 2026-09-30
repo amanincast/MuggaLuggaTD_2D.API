@@ -10,9 +10,9 @@ namespace MuggaLuggaTD_2D.API.Tests;
 /// The gate on what a player may persist.
 ///
 /// <para>Ability upgrades drive ability damage, ability damage drives party power, and party power
-/// decides PvP. So an upgrade the game never offered is not a cosmetic lie in a save file — it is a
-/// PvP exploit that the server would then compute with. This is the only thing standing between a
-/// hand-edited save and an unbeatable garrison.</para>
+/// decides PvP. A run's level-up picks end with the run (Mike, 2026-09-29), so a save carries none:
+/// any upgrade in one is an old build or a forgery, and it would be a PvP exploit the server then
+/// computed with. So every one goes, legal-looking or not.</para>
 /// </summary>
 public class PlayerSaveValidatorTests
 {
@@ -28,40 +28,24 @@ public class PlayerSaveValidatorTests
     }
 
     // -----------------------------------------------------------------
-    // What survives
+    // Nothing survives
     // -----------------------------------------------------------------
 
     [Fact]
-    public void AnUpgradeTheGameOffers_IsKept()
+    public void AnUpgradeTheGameOffers_IsStrippedToo()
     {
+        // A pick the game really offered was kept until picks became the run's alone. A save
+        // that still carries one is an old build, and its pick would price PvP from a run long over.
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             Ability, TestSave.Applied("Scorching", AbilityUpgradeModifierTypes.FlatIncrease, 5)));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
-        Assert.Equal(1, result.Accepted);
-        Assert.Equal(0, result.Rejected);
-        Assert.False(result.Changed);
-        Assert.Single(AppliedUpgrades(save));
+        Assert.Equal(0, result.Accepted);
+        Assert.Equal(1, result.Rejected);
+        Assert.True(result.Changed);
+        Assert.Empty(AppliedUpgrades(save));
     }
-
-    [Fact]
-    public void AnUpgradeRenamedButOtherwiseIdentical_IsStillKept()
-    {
-        // Legality is judged on the effect, not the label: matching on names would break the moment
-        // an upgrade was re-worded in content, wiping legitimate saves.
-        var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
-            Ability, TestSave.Applied("Renamed In Content", AbilityUpgradeModifierTypes.FlatIncrease, 5)));
-
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
-
-        Assert.Equal(1, result.Accepted);
-        Assert.Equal(0, result.Rejected);
-    }
-
-    // -----------------------------------------------------------------
-    // What does not
-    // -----------------------------------------------------------------
 
     [Fact]
     public void AnUpgradeTheGameDoesNotOffer_IsStripped()
@@ -69,7 +53,7 @@ public class PlayerSaveValidatorTests
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             Ability, TestSave.Applied("Invented", AbilityUpgradeModifierTypes.FlatIncrease, 9999)));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(0, result.Accepted);
         Assert.Equal(1, result.Rejected);
@@ -87,7 +71,7 @@ public class PlayerSaveValidatorTests
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             Ability, TestSave.Applied("Scorching", AbilityUpgradeModifierTypes.FlatIncrease, 500)));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(1, result.Rejected);
         Assert.Empty(AppliedUpgrades(save));
@@ -101,7 +85,7 @@ public class PlayerSaveValidatorTests
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             Ability, TestSave.Applied("Scorching", AbilityUpgradeModifierTypes.FlatIncrease, 5, property: "Range")));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(1, result.Rejected);
     }
@@ -114,7 +98,7 @@ public class PlayerSaveValidatorTests
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             "AbilityThatDoesNotExist", TestSave.Applied("Scorching", AbilityUpgradeModifierTypes.FlatIncrease, 5)));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(1, result.Rejected);
         Assert.Equal(0, result.Accepted);
@@ -127,7 +111,7 @@ public class PlayerSaveValidatorTests
         empty.Modifiers.Clear();
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(Ability, empty));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(1, result.Rejected);
         Assert.Empty(AppliedUpgrades(save));
@@ -138,10 +122,8 @@ public class PlayerSaveValidatorTests
     // -----------------------------------------------------------------
 
     [Fact]
-    public void TheLegalUpgradesSurviveEvenWhenSurroundedByIllegalOnes()
+    public void EveryUpgradeInTheListGoes()
     {
-        // The validator walks the list backwards precisely so removals do not shift the entries it
-        // has yet to check. Illegal-legal-illegal is the arrangement that catches getting that wrong.
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(
             Ability,
             TestSave.Applied("Invented A", AbilityUpgradeModifierTypes.FlatIncrease, 1000),
@@ -149,13 +131,11 @@ public class PlayerSaveValidatorTests
             TestSave.Applied("Invented B", AbilityUpgradeModifierTypes.FlatIncrease, 2000),
             TestSave.Applied("Blazing", AbilityUpgradeModifierTypes.MultiplierIncrease, 1.5)));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
-        Assert.Equal(2, result.Accepted);
-        Assert.Equal(2, result.Rejected);
-
-        var survivors = AppliedUpgrades(save).Select(u => u!["Name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "Scorching", "Blazing" }, survivors);
+        Assert.Equal(0, result.Accepted);
+        Assert.Equal(4, result.Rejected);
+        Assert.Empty(AppliedUpgrades(save));
     }
 
     [Fact]
@@ -172,7 +152,7 @@ public class PlayerSaveValidatorTests
         save["SomeFieldOnlyTheClientKnowsAbout"] = "keep me";
         save["Characters"]![0]!["AnotherClientOnlyField"] = 42;
 
-        ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal("keep me", save["SomeFieldOnlyTheClientKnowsAbout"]!.GetValue<string>());
         Assert.Equal(42, save["Characters"]![0]!["AnotherClientOnlyField"]!.GetValue<int>());
@@ -181,7 +161,7 @@ public class PlayerSaveValidatorTests
     }
 
     [Fact]
-    public void UpgradesAreCheckedOnEveryCharacterAndEveryAbility()
+    public void UpgradesAreStrippedFromEveryCharacterAndEveryAbility()
     {
         var first = TestSave.Character("hero-1");
         first.Abilities = new List<StateManagement.Models.AbilitySaveData>
@@ -198,10 +178,11 @@ public class PlayerSaveValidatorTests
 
         var save = TestSave.AsNode(TestSave.Roster(first, second));
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
-        Assert.Equal(1, result.Accepted);
-        Assert.Equal(2, result.Rejected);
+        Assert.Equal(0, result.Accepted);
+        Assert.Equal(3, result.Rejected);
+        Assert.Equal(3, result.RejectedDetails.Count);
     }
 
     // -----------------------------------------------------------------
@@ -213,7 +194,7 @@ public class PlayerSaveValidatorTests
     {
         var save = TestSave.AsNode(TestSave.Roster());
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(0, result.Accepted);
         Assert.Equal(0, result.Rejected);
@@ -233,7 +214,7 @@ public class PlayerSaveValidatorTests
         // The endpoint binds the save body as `object` and the merger hands a non-object straight
         // through, so any of these can reach here from a client. Indexing a JsonNode by name throws
         // unless it is an object — which turned a malformed body into a 500 on the save path.
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(JsonNode.Parse(json));
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(JsonNode.Parse(json));
 
         Assert.Equal(0, result.Accepted);
         Assert.Equal(0, result.Rejected);
@@ -243,7 +224,7 @@ public class PlayerSaveValidatorTests
     [Fact]
     public void ASaveThatIsMissingEntirely_IsLeftAlone()
     {
-        Assert.Equal(0, ValidatorOfferingTheUsualPool().StripIllegalUpgrades(null).Rejected);
+        Assert.Equal(0, ValidatorOfferingTheUsualPool().StripRunPicks(null).Rejected);
     }
 
     [Fact]
@@ -254,7 +235,7 @@ public class PlayerSaveValidatorTests
         var save = TestSave.AsNode(TestSave.WithAppliedUpgrades(Ability));
         ((JsonArray)save["Characters"]![0]!["Abilities"]![0]!["AppliedUpgrades"]!).Add("not an upgrade at all");
 
-        var result = ValidatorOfferingTheUsualPool().StripIllegalUpgrades(save);
+        var result = ValidatorOfferingTheUsualPool().StripRunPicks(save);
 
         Assert.Equal(1, result.Rejected);
         Assert.Empty(AppliedUpgrades(save));
