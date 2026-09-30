@@ -31,12 +31,9 @@ public record MaterialStripResult(int Removed, int TotalQuantity)
 }
 
 /// <summary>
-/// Validates a player save on the way in, stripping applied ability upgrades that aren't in the
-/// game's content pool. Illegal upgrades would otherwise persist and inflate ability damage, and PvP
-/// power is recomputed from this same roster — so an unchecked save is a PvP-power exploit.
-///
-/// The blob is edited as a JsonNode so only the offending upgrade nodes are removed and everything
-/// else the client wrote survives untouched — the same surgical approach the world blob uses.
+/// Validates a player save on the way in. Every step edits the blob as a JsonNode, so only what it
+/// objects to is removed and everything else the client wrote survives untouched — the same surgical
+/// approach the world blob uses.
 /// </summary>
 public class PlayerSaveValidator
 {
@@ -48,18 +45,25 @@ public class PlayerSaveValidator
     }
 
     /// <summary>
-    /// Removes illegal applied upgrades from <paramref name="save"/> in place. Returns what was
-    /// accepted and rejected. A save that fails to parse is left untouched (Accepted/Rejected 0).
+    /// Removes every applied ability upgrade from <paramref name="save"/> in place.
+    ///
+    /// <para><b>A save carries no upgrades at all</b> (Mike, 2026-09-29). The picks made at a run's
+    /// level-ups belong to that run and end with it, won or lost; the client no longer writes them.
+    /// So an upgrade in a save is an old build or a forged one, and both are answered by dropping it.
+    /// This used to keep upgrades found in the ability's content pool, because a won run's picks were
+    /// kept for good — and every one of them raised the PvP power this roster is priced at.</para>
+    ///
+    /// <para>A save stored before this still carries its picks until its owner next saves.</para>
     /// </summary>
-    public UpgradeValidationResult StripIllegalUpgrades(JsonNode? save)
+    public UpgradeValidationResult StripRunPicks(JsonNode? save)
     {
         var rejectedDetails = new List<string>();
-        int accepted = 0, rejected = 0;
+        int rejected = 0;
 
         // Indexing a JsonNode by name throws unless it is an object, and the save arrives as whatever
         // the client sent — the endpoint binds it as `object` and the merger passes a non-object
         // straight through. So every step down the document is matched as an object first rather
-        // than indexed on faith; a save shaped wrongly carries no upgrades to judge, not a 500.
+        // than indexed on faith; a save shaped wrongly carries no upgrades to strip, not a 500.
         if (save is not JsonObject root || root["Characters"] is not JsonArray characters)
             return new UpgradeValidationResult(0, 0, rejectedDetails);
 
@@ -71,32 +75,21 @@ public class PlayerSaveValidator
 
             foreach (var ability in abilities)
             {
-                if (ability is not JsonObject abilityObject) continue;
-
-                var linkName = ReadString(abilityObject["AbilityLinkName"]);
-                if (abilityObject["AppliedUpgrades"] is not JsonArray appliedUpgrades)
+                if (ability is not JsonObject abilityObject
+                    || abilityObject["AppliedUpgrades"] is not JsonArray appliedUpgrades)
                     continue;
 
-                _content.AbilityUpgradePools.TryGetValue(linkName ?? string.Empty, out var pool);
-
-                // Walk backwards so removals don't shift the indices still to be checked.
-                for (int i = appliedUpgrades.Count - 1; i >= 0; i--)
+                var linkName = ReadString(abilityObject["AbilityLinkName"]);
+                foreach (var upgrade in appliedUpgrades)
                 {
-                    var applied = Deserialize(appliedUpgrades[i]);
-                    if (applied != null && pool != null && AbilityUpgradeValidator.IsLegal(applied, pool))
-                    {
-                        accepted++;
-                        continue;
-                    }
-
                     rejected++;
-                    rejectedDetails.Add($"{linkName ?? "?"}:\"{applied?.Name ?? "?"}\"");
-                    appliedUpgrades.RemoveAt(i);
+                    rejectedDetails.Add($"{linkName ?? "?"}:\"{Deserialize(upgrade)?.Name ?? "?"}\"");
                 }
+                appliedUpgrades.Clear();
             }
         }
 
-        return new UpgradeValidationResult(accepted, rejected, rejectedDetails);
+        return new UpgradeValidationResult(0, rejected, rejectedDetails);
     }
 
     /// <summary>

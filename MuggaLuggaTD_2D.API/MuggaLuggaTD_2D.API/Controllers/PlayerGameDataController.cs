@@ -119,11 +119,10 @@ public class PlayerGameDataController : ControllerBase
         var saveNode = PlayerDataMerger.Merge(existingData?.GameData,
             JsonSerializer.SerializeToNode(request.GameData));
 
-        // Strip any applied ability upgrade that isn't in the content pool before persisting. This is
-        // an anti-cheat gate: illegal upgrades inflate ability damage, and PvP power is recomputed
-        // from this saved roster. It runs on the merged document, so it always sees the full roster.
-        // Editing the blob as a JsonNode keeps every other field intact.
-        var validation = _saveValidator.StripIllegalUpgrades(saveNode);
+        // A save carries no ability upgrades: a run's picks end with the run. Any it holds is an old
+        // build or a forgery, and upgrades raise the PvP power priced from this roster, so they go.
+        // It runs on the merged document, so it always sees the full roster.
+        var validation = _saveValidator.StripRunPicks(saveNode);
         if (validation.Rejected > 0)
         {
             _sessionLog.Log("SAVE-REJECT",
