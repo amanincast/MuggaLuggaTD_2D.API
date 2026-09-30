@@ -37,7 +37,8 @@ public class PartyServiceTests : IDisposable
     private ItemLedgerService Items => new(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance);
 
     private WorldGarrisonService Garrison => new(
-        _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance);
+        _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance,
+        new WarLogService(_db, new FakeHubContext(), NullLogger<WarLogService>.Instance, new FakeClock()));
 
     private WorldPveService Pve =>
         new(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance, Items);

@@ -1,3 +1,4 @@
+using MuggaLuggaTD_2D.API.Models;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,7 +31,8 @@ public class WorldGarrisonServiceTests : IDisposable
     private GoldService Gold => new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
 
     private WorldGarrisonService Service => new(
-        _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance);
+        _db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance,
+        new WarLogService(_db, new FakeHubContext(), NullLogger<WarLogService>.Instance, new FakeClock()));
 
     public void Dispose() => _db.Dispose();
 
@@ -214,6 +216,27 @@ public class WorldGarrisonServiceTests : IDisposable
         Assert.Equal(2, response!.CharacterIds.Count);
         Assert.Equal(CaptivityRules.RansomCostGold(2), before - await Gold.BalanceAsync(instance, TestIds.Player));
         Assert.NotNull(world);
+    }
+
+    [Fact]
+    public async Task TheRansomIsPaidToTheCaptor()
+    {
+        // The rival holds the region and the player's heroes in its keep.
+        var (instance, _, keep) = await SeedAsync(TestIds.Rival, "rival-hero");
+        await _db.AddPlayerSaveAsync(instance, TestIds.Player,
+            TestSave.ToJson(TestSave.Roster(TestSave.Character("hero-1"), TestSave.Character("hero-2"))));
+        await ImprisonAsync(instance, keep, DateTime.UtcNow, "hero-1", "hero-2");
+        await Gold.GrantAsync(instance, TestIds.Player, 100_000, "test");
+
+        long captorBefore = await Gold.BalanceAsync(instance, TestIds.Rival);
+        var (outcome, _, _) = await Service.RansomAsync(instance, TestIds.Player, AskRansom(keep));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(CaptivityRules.RansomCostGold(2), await Gold.BalanceAsync(instance, TestIds.Rival) - captorBefore);
+
+        var line = Assert.Single(_db.WarLog.Where(e => e.Kind == nameof(WarLogKind.RansomPaid)));
+        Assert.Equal(TestIds.Player, line.ActorUserId);
+        Assert.Equal(TestIds.Rival, line.SubjectUserId);
     }
 
     [Fact]
