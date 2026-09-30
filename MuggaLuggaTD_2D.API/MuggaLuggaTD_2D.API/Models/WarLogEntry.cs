@@ -20,7 +20,13 @@ public enum WarLogKind
     SiegeWon,
     SiegeRepelled,
     SiegeLapsed,
-    SiegeCancelled
+    SiegeCancelled,
+
+    /// <summary>
+    /// A player bought prisoners back. The actor paid, the subject is the captor who was paid;
+    /// <c>Detail</c> is "{prisoners}:{gold}".
+    /// </summary>
+    RansomPaid
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using MuggaLuggaTD_2D.API.Models;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
@@ -53,19 +54,22 @@ public class WorldGarrisonService
     private readonly GoldService _gold;
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<WorldGarrisonService> _logger;
+    private readonly WarLogService _warLog;
 
     public WorldGarrisonService(
         ApplicationDbContext context,
         IGameContentProvider content,
         GoldService gold,
         ISessionLog sessionLog,
-        ILogger<WorldGarrisonService> logger)
+        ILogger<WorldGarrisonService> logger,
+        WarLogService warLog)
     {
         _context = context;
         _content = content;
         _gold = gold;
         _sessionLog = sessionLog;
         _logger = logger;
+        _warLog = warLog;
     }
 
     /// <summary>
@@ -145,6 +149,11 @@ public class WorldGarrisonService
     /// minute after they walked home on their own would be a charge for nothing. The gold is taken
     /// after the prisoners are known and before the world is written, so a payment that fails leaves
     /// nobody freed and a free that fails leaves nobody charged.</para>
+    ///
+    /// <para><b>The gold goes to the captor</b> (Mike, 2026-09-29): the region's holder, who took them.
+    /// A ransom that vanished would make holding prisoners worth nothing to the side that won the
+    /// siege. Nobody is paid when the region is a faction's or unowned, or somehow the payer's own.
+    /// The war log records it, so the captor learns they were paid.</para>
     /// </summary>
     public async Task<(GarrisonOutcome Outcome, RansomResponse? Response, JsonNode? UpdatedWorld)> RansomAsync(
         Guid gameInstanceId, string userId, RansomRequest request)
@@ -195,12 +204,26 @@ public class WorldGarrisonService
 
         long balance = await _gold.BalanceAsync(gameInstanceId, userId);
 
+        string? captor = CaptorOf(resolved.RegionNode, userId);
+        if (captor != null)
+            await _gold.GrantAsync(gameInstanceId, captor, cost, $"ransom-received site={request.SiteId} from={userId}");
+
+        await _warLog.RecordAsync(gameInstanceId, WarLogKind.RansomPaid, userId, captor,
+            resolved.RegionNode["RegionId"]?.GetValue<string>(), $"{freed}:{cost}");
+
         _sessionLog.Log("RANSOM",
-            $"user={userId} site={request.SiteId} freed={freed} cost={cost} gold={balance}");
+            $"user={userId} site={request.SiteId} freed={freed} cost={cost} gold={balance} paidTo={captor ?? "nobody"}");
 
         return (new GarrisonOutcome(GarrisonError.None),
             new RansomResponse(request.SiteId, mine, cost, balance),
             world);
+    }
+
+    /// <summary>The player holding the region, if it is a player other than the payer.</summary>
+    private static string? CaptorOf(JsonNode regionNode, string payer)
+    {
+        string? owner = regionNode["OwnerUserId"]?.GetValue<string>();
+        return string.IsNullOrEmpty(owner) || owner == payer ? null : owner;
     }
 
     /// <summary>
