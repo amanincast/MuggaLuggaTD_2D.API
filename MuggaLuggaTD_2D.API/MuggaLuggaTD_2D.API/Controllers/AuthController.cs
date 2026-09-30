@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
@@ -17,15 +18,18 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
+    private readonly InviteCodeService _invites;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        InviteCodeService invites)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _configuration = configuration;
+        _invites = invites;
     }
 
     [HttpPost("register")]
@@ -37,18 +41,31 @@ public class AuthController : ControllerBase
             return BadRequest(new AuthResponse(false, null, null, null, null, null, new[] { "Email already registered" }));
         }
 
+        // While the game is open to invited testers only, a code is spent before the account is
+        // made and refunded if making it fails, so a typo in a password does not use it up.
+        bool inviteOnly = _configuration.GetValue("Registration:RequireInviteCode", true);
+        string? invite = inviteOnly ? InviteCodeService.Normalize(request.InviteCode) : null;
+        if (inviteOnly)
+        {
+            var redeemed = await _invites.RedeemAsync(invite);
+            if (redeemed != InviteCodeService.RedeemResult.Redeemed)
+                return BadRequest(new AuthResponse(false, null, null, null, null, null, new[] { InviteCodeService.Describe(redeemed) }));
+        }
+
         var user = new ApplicationUser
         {
             UserName = request.Username,
             Email = request.Email,
             DisplayName = request.DisplayName,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            InviteCode = invite
         };
 
         var result = await _userManager.CreateAsync(user, request.Password);
 
         if (!result.Succeeded)
         {
+            if (inviteOnly) await _invites.RefundAsync(invite);
             return BadRequest(new AuthResponse(false, null, null, null, null, null, result.Errors.Select(e => e.Description)));
         }
 
