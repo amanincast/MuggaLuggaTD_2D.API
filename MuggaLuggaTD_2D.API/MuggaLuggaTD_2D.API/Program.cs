@@ -98,6 +98,7 @@ builder.Services.AddHostedService<SiegeScheduler>();
 builder.Services.AddSingleton<ISessionLog, SessionLog>();
 builder.Services.AddScoped<PlayerSaveValidator>();
 builder.Services.AddScoped<PlaytestSeeder>();
+builder.Services.AddScoped<InviteCodeService>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support
@@ -150,6 +151,11 @@ if (args.Contains(PlaytestSeeder.Command))
     return await PlaytestSeeder.RunFromCommandLineAsync(app.Services, args);
 }
 
+// `invite-codes ...`: mint, list or revoke invite codes and exit (any environment - it is how the
+// server gets its codes). See InviteCodeService.
+if (args.Contains(InviteCodeService.Command))
+    return await InviteCodeService.RunFromCommandLineAsync(app.Services, args);
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -158,6 +164,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseMiddleware<ClientVersionGate>();
 
 app.UseAuthentication();
 app.UseAuthorization();

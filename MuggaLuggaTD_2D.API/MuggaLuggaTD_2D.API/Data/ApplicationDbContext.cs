@@ -34,10 +34,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TavernState> TavernStates => Set<TavernState>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
+    public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // Invite codes are looked up by the code a tester types.
+        builder.Entity<InviteCode>(entity =>
+        {
+            entity.HasIndex(e => e.Code).IsUnique();
+        });
 
         // Configure GameSave entity
         builder.Entity<GameSave>(entity =>

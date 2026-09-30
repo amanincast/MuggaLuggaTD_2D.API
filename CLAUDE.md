@@ -186,6 +186,27 @@ exists.**
 - Points come from the saved level, which is client-written and only clamped: the same gap as
   awakening.
 
+## Tester access: invite codes and the version gate
+
+- **Registration needs an invite code** while `Registration:RequireInviteCode` is on. It is on by default
+  and off in `appsettings.Development.json`, so local registration still works. A code is **spent
+  before the account is made and refunded if creation fails**, so a failed registration does not burn a
+  single-use code. `ApplicationUser.InviteCode` records which code made the account.
+- **Codes are minted from the command line**, in any environment. There is no admin endpoint to attack:
+  `dotnet run -- invite-codes --count 5 --uses 1 --days 30 --note "Sam"`, then `--list`, then
+  `--revoke CODE`. On the server, run the same through `docker compose exec`.
+  - Codes look like `XXXX-XXXX` and leave out 0/O/1/I/L/U.
+  - Case, spaces and the dash are forgiven.
+- **`ClientVersionGate`** turns away a game build older than `Client:MinimumVersion` (e.g. `0.1.300`).
+  - The game sends `X-Client-Version`. A too-old build gets **426** with an `AuthResponse`-shaped body, so
+    the login screen shows "out of date, open the launcher" as-is.
+  - A request **without** the header passes. This is for honest stale builds, not security;
+    `SharedContract.Version` still guards the rules.
+  - An unparsable version is never "older".
+  - `GET /api/client/version?current=` reports the minimum and whether an invite code is needed.
+  - Raise the minimum when a release must not be mixed with older builds.
+- Pinned by `TesterAccessTests`.
+
 ## Development URLs
 
 - HTTP: http://localhost:5081

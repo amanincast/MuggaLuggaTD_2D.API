@@ -10,6 +10,9 @@ public class ApplicationUser : IdentityUser
 
     public DateTime? LastLoginAt { get; set; }
 
+    /// <summary>The invite code this account registered with, if registration required one.</summary>
+    public string? InviteCode { get; set; }
+
     // Navigation property for game saves
     public ICollection<GameSave> GameSaves { get; set; } = new List<GameSave>();
 

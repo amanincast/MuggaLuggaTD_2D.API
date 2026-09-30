@@ -6,7 +6,8 @@ public record RegisterRequest(
     [Required][EmailAddress] string Email,
     [Required][MinLength(6)] string Password,
     [Required][MinLength(3)] string Username,
-    string? DisplayName = null
+    string? DisplayName = null,
+    string? InviteCode = null
 );
 
 public record LoginRequest(
