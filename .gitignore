@@ -422,3 +422,4 @@ FodyWeavers.xsd
 
 # Session diagnostics logs (Diagnostics:SessionLog)
 logs/
+deploy/downloads/

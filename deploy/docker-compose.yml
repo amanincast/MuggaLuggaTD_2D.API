@@ -1,0 +1,80 @@
+# MuggaLugga on the production box (74.208.203.85, shared with Club.Manager). TLS is not here: the
+# box's front door is she-bee-extras/league-hub-edge, which proxies
+#   api-muggalugga.she-bee-solutions.com -> muggalugga-api:8080
+#   muggalugga.she-bee-solutions.com     -> muggalugga-web:8080
+# over the external `edge` Docker network. Nothing here publishes a host port. See deploy/README.md.
+#
+#   docker compose --env-file .env build api
+#   docker compose --env-file .env run --rm api migrate
+#   docker compose --env-file .env up -d
+
+name: muggalugga
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: muggalugga
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: muggaluggaTD
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U muggalugga -d muggaluggaTD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # The box is shared with Club.Manager: a runaway game must not starve it.
+    mem_limit: 768m
+    networks: [internal]
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=muggaluggaTD;Username=muggalugga;Password=${POSTGRES_PASSWORD}"
+      # Overrides the development key committed in appsettings.json. 48+ random bytes.
+      Jwt__Key: ${JWT_KEY:?JWT_KEY must be set in .env}
+      Registration__RequireInviteCode: "true"
+      # Raise when a release must not be mixed with older game builds (0.1.<commit count>).
+      Client__MinimumVersion: ${CLIENT_MINIMUM_VERSION:-0.1.0}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+    cpus: 2
+    networks:
+      internal:
+      edge:
+        aliases: [muggalugga-api]
+
+  # The public site: the download page now, the launcher's patch files later (/downloads).
+  web:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    volumes:
+      - ./web:/etc/caddy:ro
+      - ./www:/srv/site:ro
+      # Published builds live on the server, outside git (the publish tool writes them).
+      - ${DOWNLOADS_DIR:-./downloads}:/srv/downloads:ro
+    mem_limit: 128m
+    networks:
+      edge:
+        aliases: [muggalugga-web]
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+  edge:
+    external: true

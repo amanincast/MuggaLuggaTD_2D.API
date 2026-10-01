@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/logs/
+**/MSBuild_Logs/
+**/*.env
+.git/
+.github/
+.claude/
+deploy/
+MuggaLuggaTD_2D.API/MuggaLuggaTD_2D.API.Tests/
