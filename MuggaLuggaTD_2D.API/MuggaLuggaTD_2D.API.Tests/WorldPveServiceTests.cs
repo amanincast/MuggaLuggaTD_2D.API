@@ -318,6 +318,22 @@ public class WorldPveServiceTests : IDisposable
     // -----------------------------------------------------------------
 
     [Fact]
+    public async Task ClearingADungeonIsAFirstStep()
+    {
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        var instanceId = await SeedWorldAsync(region);
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+        var pve = new WorldPveService(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance, Items, new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()));
+
+        var (outcome, _, _) = await pve.ClaimAsync(instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var progress = await new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()).ReadAsync(instanceId, TestIds.Player);
+        Assert.Contains(FirstStepsRules.Clear, progress!.DoneSteps);
+    }
+
+    [Fact]
     public async Task AClaimPaysGoldIntoThePurse()
     {
         // Gold is never picked up in the level, so the claim is the only place it can arrive. What

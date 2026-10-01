@@ -295,6 +295,34 @@ public class PartyServiceTests : IDisposable
     // -----------------------------------------------------------------
 
     [Fact]
+    public async Task SendingACompanyOutIsAFirstStep()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        var parties = new PartyService(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(),
+            NullLogger<PartyService>.Instance, Items, new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog())) { Dice = _dice };
+
+        var (outcome, _) = await parties.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Contains(FirstStepsRules.March, (await new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()).ReadAsync(instance, TestIds.Player))!.DoneSteps);
+    }
+
+    [Fact]
+    public async Task StationingAGarrisonIsAFirstStep_EmptyingOneIsNot()
+    {
+        var (instance, keep) = await SeedAsync();
+        var garrison = new WorldGarrisonService(_db, _content, Gold, new FakeSessionLog(), NullLogger<WorldGarrisonService>.Instance,
+            new WarLogService(_db, new FakeHubContext(), NullLogger<WarLogService>.Instance, new FakeClock()), new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()));
+
+        await garrison.SetAsync(instance, TestIds.Player, new GarrisonRequest(keep, new List<string>(), Contract));
+        Assert.Null(await new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()).ReadAsync(instance, TestIds.Player));
+
+        await garrison.SetAsync(instance, TestIds.Player, new GarrisonRequest(keep, new List<string> { "hero-1" }, Contract));
+        Assert.Contains(FirstStepsRules.Garrison, (await new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()).ReadAsync(instance, TestIds.Player))!.DoneSteps);
+    }
+
+    [Fact]
     public async Task ACompanyIsSentDownTheRoadAndTakesOneToFiveMinutes()
     {
         var (instance, keep) = await SeedWithDungeonAsync();

@@ -174,14 +174,16 @@ namespace Items.Utilities
         /// <param name="creatureLevel">The level of the creature that dropped this item.</param>
         /// <param name="implicitPool">Optional pool of allowed implicit types.</param>
         /// <param name="explicitPool">Optional pool of allowed explicit types.</param>
+        /// <param name="rarity">A rarity decided beforehand (a reward that promises one), else rolled.</param>
         public static void ApplyDropProperties(
             IItemData item,
             int creatureLevel,
             List<ItemImplicitTypes> implicitPool = null,
-            List<ItemExplicitTypes> explicitPool = null)
+            List<ItemExplicitTypes> explicitPool = null,
+            ItemRarityTypes? rarity = null)
         {
             // Calculate rarity and tier based on creature level
-            item.Rarity = CalculateRarity(creatureLevel);
+            item.Rarity = rarity ?? CalculateRarity(creatureLevel);
             item.PowerTier = CalculatePowerTier(creatureLevel);
 
             // Calculate influence chance and generate attributes

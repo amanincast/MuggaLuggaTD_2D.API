@@ -355,6 +355,9 @@ public class SeasonScoreService
         _context.RegionRaids.RemoveRange(_context.RegionRaids.Where(r => r.GameInstanceId == instance.Id));
         _context.Sieges.RemoveRange(_context.Sieges.Where(s => s.GameInstanceId == instance.Id));
 
+        // A new map is a new world, so everyone walks its First Steps (and earns its chest) again.
+        await FirstStepsService.ResetRealmAsync(_context, instance.Id);
+
         await _context.SaveChangesAsync();
 
         // Its goods on the Bazaar go with the world (Mike, 2026-10-01); gold already earned is paid.

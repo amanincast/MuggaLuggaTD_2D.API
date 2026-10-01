@@ -53,14 +53,19 @@ public class TavernService
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<TavernService> _logger;
 
+    /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
+    private readonly FirstStepsService? _firstSteps;
+
     public TavernService(
         ApplicationDbContext context,
         IGameContentProvider content,
         MaterialWalletService wallet,
         GoldService gold,
         ISessionLog sessionLog,
-        ILogger<TavernService> logger)
+        ILogger<TavernService> logger,
+        FirstStepsService? firstSteps = null)
     {
+        _firstSteps = firstSteps;
         _context = context;
         _content = content;
         _wallet = wallet;
@@ -522,6 +527,7 @@ public class TavernService
             "Tavern hire by {User}: {Class} {Signature}/{Affinity} ({Rarity}) as {CharacterId}.",
             userId, hired.CharacterClass, hired.SignatureId, hired.Affinity, hired.Rarity, hired.CharacterId);
 
+        if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Hire);
         return (new TavernOutcome(TavernError.None), hired);
     }
 
