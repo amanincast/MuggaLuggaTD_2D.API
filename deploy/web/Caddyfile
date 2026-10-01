@@ -1,4 +1,5 @@
-# The muggalugga-web container: plain HTTP on :8080 behind the box's edge Caddy, which does TLS.
+# The muggalugga-web container: plain HTTP on :8080 behind the box's edge Caddy, which does TLS
+# and sets X-Robots-Tag (league-hub-edge/config/sites/muggalugga.caddy).
 {
 	auto_https off
 	admin off
@@ -6,7 +7,6 @@
 
 :8080 {
 	encode gzip zstd
-	header X-Robots-Tag "noindex, nofollow"
 
 	# The launcher's files (step 4): a manifest that must never be cached, and content-addressed blobs
 	# that never change once written.
@@ -14,6 +14,9 @@
 		root * /srv/downloads
 		@manifest path *.json
 		header @manifest Cache-Control "no-cache"
+		# The setup exe is replaced in place by each publish: always revalidate it.
+		@setup path /MuggaLuggaSetup.exe
+		header @setup Cache-Control "no-cache"
 		@blobs path /blobs/*
 		header @blobs Cache-Control "public, max-age=31536000, immutable"
 		file_server
