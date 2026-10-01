@@ -36,8 +36,12 @@ docker compose --env-file .env run --rm api invite-codes --revoke ABCD-EFGH
 count>`), then `up -d`. Builds older than it are told to open the launcher.
 
 ## What lives where
-- `pgdata` volume: the database. **Back it up before a migration that changes data**:
-  `docker compose --env-file .env exec db pg_dump -U muggalugga muggaluggaTD > ~/backups/muggalugga-$(date +%F).sql`
+- `pgdata` volume: the database.
+  - **Backed up nightly** by `backup.sh` (deploy's crontab, 02:30 UTC, after Club.Manager's at 02:00).
+    Dumps go to `~/backups/muggalugga/`, kept 14 days, and the job logs to `~/muggalugga-backup.log`.
+    The restore steps are at the top of the script.
+  - **Run it by hand before a migration that changes data:** `./backup.sh`.
+  - The dumps live on the same box. An off-box copy is not set up yet.
 - `DOWNLOADS_DIR` (default `deploy/downloads/`, gitignored): published game builds, written by the
   publish tool, served read-only at `/downloads/`. It holds `MuggaLuggaSetup.exe` (the launcher, which
   the download page links), `blobs/`, and one folder per channel with its `manifest.json`.
