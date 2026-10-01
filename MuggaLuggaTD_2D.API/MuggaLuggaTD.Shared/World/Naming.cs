@@ -186,17 +186,15 @@ namespace MuggaLuggaTD.Shared.World
             }
         }
 
-        private static string[] NodeWords(BiomeType biome)
+        private static string[] NodeWords(ResourceTrade trade)
         {
-            switch (biome)
+            switch (trade)
             {
-                case BiomeType.Forest: return new[] { "Stand", "Loggings", "Sawpits" };
-                case BiomeType.Lakeland: return new[] { "Reedbeds", "Claypits", "Fisheries" };
-                case BiomeType.Highland: return new[] { "Mine", "Quarry", "Diggings" };
-                case BiomeType.Volcanic: return new[] { "Pits", "Vents", "Forge" };
-                case BiomeType.Swamp: return new[] { "Peatcuts", "Beds", "Diggings" };
-                case BiomeType.Desert: return new[] { "Saltpans", "Diggings", "Wells" };
-                default: return new[] { "Quarry", "Claypits", "Mill" };
+                case ResourceTrade.Miner: return new[] { "Mine", "Diggings", "Seams" };
+                case ResourceTrade.Forester: return new[] { "Stand", "Loggings", "Sawpits" };
+                case ResourceTrade.Farmer: return new[] { "Fields", "Farm", "Acres" };
+                case ResourceTrade.Quarrier: return new[] { "Quarry", "Delves", "Cuttings" };
+                default: return new[] { "Snares", "Traplines", "Runs" };
             }
         }
 
@@ -245,7 +243,8 @@ namespace MuggaLuggaTD.Shared.World
                         default: return $"{Compound(Pick(roots, ref random), "side") ?? Pick(roots, ref random)} {Pick(RuinNouns, ref random)}";
                     }
                 case LocationType.ResourceNode:
-                    return $"{PlaceWord(biome, ref random)} {Pick(NodeWords(biome), ref random)}";
+                    // Named for what is worked there, so a "Quarry" is never a farm.
+                    return $"{PlaceWord(biome, ref random)} {Pick(NodeWords(ResourceNodeRules.TradeOf(site.SiteId, biome)), ref random)}";
                 default:
                     return PlaceWord(biome, ref random);
             }

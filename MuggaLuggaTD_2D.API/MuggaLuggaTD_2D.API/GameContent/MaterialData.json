@@ -413,6 +413,71 @@
             "Tier": 3,
             "MaxStackSize": 999,
             "Description": "Upgrades equipment rarity by 3 levels."
+        },
+        {
+            "ItemName": "Ore",
+            "ItemLinkName": "Ore",
+            "IsDroppable": false,
+            "IsPurchasable": false,
+            "ItemType": 14,
+            "ItemSpriteSheet": "Sprites/Items/General/Item_Sheet_General",
+            "ItemIcon": "Item_Sheet_General__60",
+            "Category": 3,
+            "Tier": 1,
+            "MaxStackSize": 99999,
+            "Description": "Dug by miners. Hardens the top tiers of a fortification and arms a siege."
+        },
+        {
+            "ItemName": "Timber",
+            "ItemLinkName": "Timber",
+            "IsDroppable": false,
+            "IsPurchasable": false,
+            "ItemType": 14,
+            "ItemSpriteSheet": "Sprites/Items/General/Item_Sheet_General",
+            "ItemIcon": "Item_Sheet_General__21",
+            "Category": 3,
+            "Tier": 1,
+            "MaxStackSize": 99999,
+            "Description": "Felled by foresters. Builds fortifications and siege engines."
+        },
+        {
+            "ItemName": "Grain",
+            "ItemLinkName": "Grain",
+            "IsDroppable": false,
+            "IsPurchasable": false,
+            "ItemType": 14,
+            "ItemSpriteSheet": "Sprites/Items/Botany/Item_Sheet_Botany",
+            "ItemIcon": "Botany_60",
+            "Category": 3,
+            "Tier": 1,
+            "MaxStackSize": 99999,
+            "Description": "Grown by farmers. Feeds an army through a siege."
+        },
+        {
+            "ItemName": "Stone",
+            "ItemLinkName": "Stone",
+            "IsDroppable": false,
+            "IsPurchasable": false,
+            "ItemType": 14,
+            "ItemSpriteSheet": "Sprites/Items/General/Item_Sheet_General",
+            "ItemIcon": "Item_Sheet_General__62",
+            "Category": 3,
+            "Tier": 1,
+            "MaxStackSize": 99999,
+            "Description": "Cut by quarriers. Raises a region's fortifications."
+        },
+        {
+            "ItemName": "Hides",
+            "ItemLinkName": "Hides",
+            "IsDroppable": false,
+            "IsPurchasable": false,
+            "ItemType": 14,
+            "ItemSpriteSheet": "Sprites/Items/Miscellaneous/Item_Sheet_Miscellaneous",
+            "ItemIcon": "Item_Sheet_MiscellaneousUpdate2_52",
+            "Category": 3,
+            "Tier": 1,
+            "MaxStackSize": 99999,
+            "Description": "Taken by trappers. Tents a besieging army."
         }
     ]
 }

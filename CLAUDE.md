@@ -188,6 +188,19 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   pays out what they already earned (`BazaarService.ExpireRealmAsync`, from `CloseSeasonAsync`).
 - Pinned by `BazaarTests` and `SeasonScoreServiceTests.AResetTakesTheWorldsGoodsOffTheBazaar`.
 
+## Resource sites and goods (`ResourceNodeRules`, Hiring Hall phase 1)
+
+- **Every ResourceNode has a trade, and so a good:**
+  - Worked out by `ResourceNodeRules.TradeOf(siteId, biome)`, never stored. Every biome can turn up
+    every trade.
+  - Goods are `MaterialCategory.Goods` in MaterialData (Ore, Timber, Grain, Stone, Hides),
+    undroppable.
+  - Workers will gather them, and fortifying and siege supplies will spend them (plan in the Unity
+    repo, `docs/design/hiring-hall.md`).
+- **Bazaar price:** one goods unit is `BazaarAssay.GoodsUnitPrice` (2 g), deliberately under the
+  floor every other tag starts at.
+- **Naming:** a node is named with its trade's words (`Naming.NodeWords(trade)`).
+
 ## First Steps and the Rare chest (`FirstStepsService`, `FirstStepsController`, design 12c)
 
 - **Six steps per player per world, and one Rare chest for doing them all** (Mike, 2026-10-01): every

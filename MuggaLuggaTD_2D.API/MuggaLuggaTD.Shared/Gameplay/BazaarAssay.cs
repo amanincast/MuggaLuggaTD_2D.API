@@ -57,9 +57,21 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return Tidy(power * power / PowerSquaredPerGold);
         }
 
+        /// <summary>
+
+        /// One unit of a worker's goods (tune). Goods move in bulk, hundreds at a time, so they sit under
+
+        /// the floor every other tag starts at: at 10 a unit a fortification would cost as much as a Rare sword.
+
+        /// </summary>
+
+        public const long GoodsUnitPrice = 2;
+
+
         /// <summary>The price of one unit of a material.</summary>
         public static long PriceOf(MaterialCategory category, MaterialTier tier)
         {
+            if (category == MaterialCategory.Goods) return GoodsUnitPrice;
             int index = Math.Max(1, Math.Min(MaterialTierPrice.Length, (int)tier)) - 1;
             return Tidy(MaterialTierPrice[index] * CategoryFactor(category));
         }
