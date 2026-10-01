@@ -222,6 +222,28 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   the realm's wallets are removed.
 - Pinned by `HiringRulesTests` and `HiringServiceTests`.
 
+## Fortify (`FortifyService`, `FortifyController`, Hiring Hall phase 3)
+
+- `POST api/gameinstance/{id}/fortify` `{regionId, sharedContractVersion}`.
+  - Checks the region (`FortifyRules.Check`: yours, below V, no works under way, no siege
+    mustering or assaulting).
+  - Settles the player's workers, then spends the bill from the material wallet
+    (`FortifyRules.CostFor`: Stone + Timber 150 × level, Ore 100 × (level − 3) from IV, × tier
+    factor 1 + 0.5(tier − 1)).
+  - Marks the blob (`FortifyingTo`, `FortifyEndsAtUtcTicks`, via `WorldRegionBlob.SetFortifying`)
+    and broadcasts.
+- **The works row** (`RegionFortifications`): from/to, spent, started, completes, state
+  (UnderWay/Done/Cancelled).
+- **Finishing:** `SiegeScheduler`'s sweep calls `CompleteAllDueAsync`, and the world GET calls
+  `CompleteDueAsync` first.
+  - The realm is settled at `CompletesAt` with the old walls, entrenchment is raised and the
+    scaffolding cleared, then it is settled again at that instant to re-rate.
+  - War log `Fortified` (detail: the new level's numeral).
+  - **"Still ours" is owner + target level, not the end tick**, so a mismatch can never strand
+    scaffolding that would block the region for good.
+  - Works on land that changed hands are Cancelled; `CaptureRegion` clears the scaffolding.
+- Season reset deletes the rows. Pinned by `FortifyTests`.
+
 ## First Steps and the Rare chest (`FirstStepsService`, `FirstStepsController`, design 12c)
 
 - **Six steps per player per world, and one Rare chest for doing them all** (Mike, 2026-10-01): every

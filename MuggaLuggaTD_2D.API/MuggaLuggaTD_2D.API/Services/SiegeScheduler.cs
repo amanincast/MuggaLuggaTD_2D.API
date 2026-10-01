@@ -41,6 +41,13 @@ public class SiegeScheduler : BackgroundService
                 int advanced = await sieges.AdvanceAllDueAsync();
                 if (advanced > 0)
                     _logger.LogInformation("Siege sweep advanced {Count} siege(s).", advanced);
+
+                // Fortification works finish on the same sweep, so a region's walls rise within a
+                // minute of their time even if nobody opens the map.
+                var fortify = scope.ServiceProvider.GetRequiredService<FortifyService>();
+                int raised = await fortify.CompleteAllDueAsync();
+                if (raised > 0)
+                    _logger.LogInformation("Fortify sweep finished {Count} work(s).", raised);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

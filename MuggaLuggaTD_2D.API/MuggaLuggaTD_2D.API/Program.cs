@@ -90,6 +90,7 @@ builder.Services.AddScoped<TavernService>();
 builder.Services.AddScoped<BazaarService>();
 builder.Services.AddScoped<FirstStepsService>();
 builder.Services.AddScoped<HiringService>();
+builder.Services.AddScoped<FortifyService>();
 builder.Services.AddScoped<TalentService>();
 builder.Services.AddScoped<PartyService>();
 builder.Services.AddScoped<WorldSiegeService>();

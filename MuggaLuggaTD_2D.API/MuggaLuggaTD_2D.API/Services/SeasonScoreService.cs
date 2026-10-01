@@ -369,6 +369,7 @@ public class SeasonScoreService
 
         // Workers, the board and the goods go with the map (Mike, 2026-10-01): hire again.
         await HiringService.ResetRealmAsync(_context, instance.Id);
+        await FortifyService.ResetRealmAsync(_context, instance.Id);
 
         await _context.SaveChangesAsync();
 

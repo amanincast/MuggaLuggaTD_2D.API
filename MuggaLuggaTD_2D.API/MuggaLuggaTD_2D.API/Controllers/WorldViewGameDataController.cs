@@ -21,13 +21,16 @@ public class WorldViewGameDataController : ControllerBase
     private readonly IHubContext<GameHub> _hubContext;
     private readonly WorldProvisioningService _provisioning;
     private readonly SeasonScoreService _seasons;
+    private readonly FortifyService? _fortify;
 
     public WorldViewGameDataController(
         ApplicationDbContext context,
         IHubContext<GameHub> hubContext,
         WorldProvisioningService provisioning,
-        SeasonScoreService seasons)
+        SeasonScoreService seasons,
+        FortifyService? fortify = null)
     {
+        _fortify = fortify;
         _context = context;
         _hubContext = hubContext;
         _provisioning = provisioning;
@@ -55,6 +58,10 @@ public class WorldViewGameDataController : ControllerBase
         // The client renders what it is handed rather than building a map the server cannot verify.
         var worldData = await _provisioning.EnsureWorldAsync(gameInstanceId);
         await _provisioning.EnsureSeatAsync(gameInstanceId, userId, User?.Identity?.Name);
+
+        // Works that are due finish before the map is handed out, so nobody sees finished walls
+        // still under scaffolding.
+        if (_fortify != null) await _fortify.CompleteDueAsync(gameInstanceId);
 
         // Settling here is what gives a player a scoreboard row from the moment they are seated,
         // rather than from whenever they first do something that scores. A capital held from day one

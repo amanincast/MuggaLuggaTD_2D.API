@@ -36,6 +36,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<HiringCandidate> HiringCandidates => Set<HiringCandidate>();
     public DbSet<HiredWorker> HiredWorkers => Set<HiredWorker>();
     public DbSet<HiringState> HiringStates => Set<HiringState>();
+    public DbSet<RegionFortification> RegionFortifications => Set<RegionFortification>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
@@ -203,6 +204,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<HiringState>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // Configure RegionFortification (the sweep looks for works under way that are due)
+        builder.Entity<RegionFortification>(entity =>
+        {
+            entity.HasIndex(e => new { e.State, e.CompletesAt });
+            entity.HasIndex(e => new { e.GameInstanceId, e.RegionId });
         });
 
         // Configure FirstStepsProgress (one row per player per realm: a second row would be a second chest)
