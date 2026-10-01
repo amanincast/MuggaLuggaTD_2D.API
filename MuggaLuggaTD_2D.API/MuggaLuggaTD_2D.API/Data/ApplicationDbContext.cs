@@ -32,6 +32,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TavernRecruit> TavernRecruits => Set<TavernRecruit>();
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
     public DbSet<TavernState> TavernStates => Set<TavernState>();
+    public DbSet<FirstStepsProgress> FirstStepsProgress => Set<FirstStepsProgress>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
@@ -182,6 +183,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // Configure TavernState (one row per player per realm; it is read and written on every
         // refresh and every clear, and a second row would be a second refresh count)
         builder.Entity<TavernState>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // Configure FirstStepsProgress (one row per player per realm: a second row would be a second chest)
+        builder.Entity<FirstStepsProgress>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
         });

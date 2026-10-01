@@ -70,10 +70,14 @@ public class PartyService
 
     private readonly ItemLedgerService _items;
 
+    /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
+    private readonly FirstStepsService? _firstSteps;
+
     public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
         MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger,
-        ItemLedgerService items)
+        ItemLedgerService items, FirstStepsService? firstSteps = null)
     {
+        _firstSteps = firstSteps;
         _items = items;
         _context = context;
         _tavern = tavern;
@@ -331,6 +335,7 @@ public class PartyService
         _sessionLog.Log("PARTY-TRAVEL",
             $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} regions={route.Legs.Count} secs={route.Duration.TotalSeconds:F0} " +
             $"ambush-chance={chance:F2} ambush={(party.AmbushAt.HasValue ? party.AmbushAt.Value.ToString("F2") : "none")}");
+        if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.March);
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
 

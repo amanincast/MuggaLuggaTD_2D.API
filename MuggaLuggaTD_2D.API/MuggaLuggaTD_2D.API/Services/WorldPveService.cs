@@ -65,6 +65,9 @@ public class WorldPveService
 
     private readonly ItemLedgerService _items;
 
+    /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
+    private readonly FirstStepsService? _firstSteps;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -72,8 +75,10 @@ public class WorldPveService
         GoldService gold,
         TavernService tavern,
         ILogger<WorldPveService> logger,
-        ItemLedgerService items)
+        ItemLedgerService items,
+        FirstStepsService? firstSteps = null)
     {
+        _firstSteps = firstSteps;
         _items = items;
         _context = context;
         _content = content;
@@ -280,6 +285,9 @@ public class WorldPveService
             await _tavern.BringARecruitAsync(
                 gameInstanceId, userId, resolved.Site.Tier, resolved.Region.Biome,
                 $"pve-claim run={run.Id} site={run.LocationId}");
+
+            // The same sites count for First Steps' "clear a dungeon" (a dungeon or a portal).
+            if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
         }
 
         _logger.LogInformation(

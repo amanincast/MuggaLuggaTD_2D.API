@@ -56,14 +56,19 @@ public class WorldGarrisonService
     private readonly ILogger<WorldGarrisonService> _logger;
     private readonly WarLogService _warLog;
 
+    /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
+    private readonly FirstStepsService? _firstSteps;
+
     public WorldGarrisonService(
         ApplicationDbContext context,
         IGameContentProvider content,
         GoldService gold,
         ISessionLog sessionLog,
         ILogger<WorldGarrisonService> logger,
-        WarLogService warLog)
+        WarLogService warLog,
+        FirstStepsService? firstSteps = null)
     {
+        _firstSteps = firstSteps;
         _context = context;
         _content = content;
         _gold = gold;
@@ -136,6 +141,10 @@ public class WorldGarrisonService
         _sessionLog.Log("GARRISON",
             $"user={userId} site={request.SiteId} asked={request.CharacterIds?.Count ?? 0} " +
             $"stationed={muster.CharacterIds.Count} power={muster.Power:F0} hold={assessment.Hold}");
+
+        // Stationing somebody, not emptying the walls, is the First Steps' "station a garrison".
+        if (_firstSteps != null && muster.CharacterIds.Count > 0)
+            await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Garrison);
 
         return (new GarrisonOutcome(GarrisonError.None),
             new GarrisonResponse(request.SiteId, muster.CharacterIds, muster.Power, assessment.Hold),

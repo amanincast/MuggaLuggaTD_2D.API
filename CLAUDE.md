@@ -188,6 +188,27 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   pays out what they already earned (`BazaarService.ExpireRealmAsync`, from `CloseSeasonAsync`).
 - Pinned by `BazaarTests` and `SeasonScoreServiceTests.AResetTakesTheWorldsGoodsOffTheBazaar`.
 
+## First Steps and the Rare chest (`FirstStepsService`, `FirstStepsController`, design 12c)
+
+- **Six steps per player per world, and one Rare chest for doing them all** (Mike, 2026-10-01): every
+  world has its own, so a veteran on a new world earns the same chest a newcomer does. A season reset
+  deletes the realm's progress (`ResetRealmAsync`), so each new map has its chest too.
+- **The chest grants an item, so the server records the steps that could earn it, where they
+  happen**, after the action has saved:
+  - a hire (`TavernService.HireAsync`)
+  - a march (`PartyService.TravelAsync`)
+  - a Dungeon/Portal claim (`WorldPveService`, the same test that brings a recruit)
+  - a garrison with somebody in it (`WorldGarrisonService.SetAsync`)
+- **What a client may report:** only `company` and `equip`, which grant nothing on their own
+  (`FirstStepsRules.MayClientReport`; `POST first-steps/mark` refuses the rest).
+- **Recording never fails the action it records**: a lost race is caught and logged. The services
+  take `FirstStepsService` as an **optional last constructor argument**, so tests that build them by
+  hand need not.
+- **The chest:** `POST first-steps/open-chest`. All six must be done and it opens once. It rolls one
+  equipment piece at level 5, **always Rare** (`ItemDropCalculator.ApplyDropProperties` takes an
+  optional rarity), and grants it through the item ledger, so the next save keeps it.
+- Pinned by `FirstStepsTests` and a hook test in each of the Tavern, PvE and Party suites.
+
 ## Run picks and Trainer talents (`PlayerSaveValidator.StripRunPicks`, `TalentService`)
 
 - **A save carries no ability upgrades.** A run's level-up picks end with the run (Mike,

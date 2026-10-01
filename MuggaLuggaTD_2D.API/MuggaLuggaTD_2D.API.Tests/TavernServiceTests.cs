@@ -197,6 +197,21 @@ public class TavernServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AHireIsAFirstStep()
+    {
+        // The chest is granted on the server's word, so the server records the hire where it happens.
+        await FillWalletAsync();
+        var board = await Service.ReadBoardAsync(Realm, Player);
+        var tavern = new TavernService(_db, _content, Wallet, Gold, new FakeSessionLog(),
+            NullLogger<TavernService>.Instance, new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()));
+
+        await tavern.HireAsync(Realm, Player, board[0].Slot);
+
+        var progress = await new FirstStepsService(_db, _content, new ItemLedgerService(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance), new FakeSessionLog()).ReadAsync(Realm, Player);
+        Assert.Contains(FirstStepsRules.Hire, progress!.DoneSteps);
+    }
+
+    [Fact]
     public async Task HiringFreesTheSeat()
     {
         // Hiring is the main way a seat comes free, so a hired card must leave the board rather than
