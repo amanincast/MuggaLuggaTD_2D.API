@@ -244,6 +244,20 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   - Works on land that changed hands are Cancelled; `CaptureRegion` clears the scaffolding.
 - Season reset deletes the rows. Pinned by `FortifyTests`.
 
+## Siege supplies (`SiegeSupplyRules`, Hiring Hall phase 4)
+
+- `WorldSiegeService.DeclareAsync` charges goods **after every other check**, so a refused declare
+  costs nothing: `SiegeSupplyRules.CostFor(assessment.Hold)`.
+  - Per 1,000 hold: Grain 300, Timber 200, Hides 150, Ore 100, each rounded up to a ten.
+  - Hold is floored at 500.
+- It settles the attacker's workers first (`HiringService.SettlePlayerAsync`, optional in tests),
+  then spends from the material wallet. Short: `SiegeError.CannotSupply` → 409 `{message}`, and no
+  siege is made.
+- Spent whatever the siege comes to; logged in `SIEGE-DECLARE` as `supplies=`.
+- `WorldSiegeService` now needs `MaterialWalletService`; the tests' seed stocks the attackers
+  (`supplied: false` to start empty).
+- Shared contract 1.38.0.
+
 ## First Steps and the Rare chest (`FirstStepsService`, `FirstStepsController`, design 12c)
 
 - **Six steps per player per world, and one Rare chest for doing them all** (Mike, 2026-10-01): every

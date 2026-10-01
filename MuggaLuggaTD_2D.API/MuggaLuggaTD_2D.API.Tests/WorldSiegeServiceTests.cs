@@ -38,7 +38,13 @@ public class WorldSiegeServiceTests : IDisposable
             _hub,
             _log,
             NullLogger<SeasonScoreService>.Instance),
-        WarLog);
+        WarLog,
+        Wallet);
+
+    private MaterialWalletService Wallet => new(_db, _log, NullLogger<MaterialWalletService>.Instance);
+
+    /// <summary>Enough of every siege supply for any siege these tests lay.</summary>
+    private const int Stockpile = 100_000;
 
     private WarLogService WarLog => new(_db, _hub, NullLogger<WarLogService>.Instance, _clock);
 
@@ -98,6 +104,67 @@ public class WorldSiegeServiceTests : IDisposable
         Assert.Equal(SiegeRefusal.BelowGate, outcome.Refusal);
         Assert.Contains("gate", outcome.Message);
         Assert.Empty(await _db.Sieges.ToListAsync());
+    }
+
+    // -----------------------------------------------------------------
+    // Supplies (Hiring Hall phase 4)
+    // -----------------------------------------------------------------
+
+    private async Task<int> HeldAsync(Guid instanceId, string good)
+        => (await Wallet.ReadAsync(instanceId, TestIds.Player)).Where(m => m.MaterialName == good).Sum(m => m.Quantity);
+
+    [Fact]
+    public void TheSupplyBillFollowsTheHold()
+    {
+        Assert.Equal(new[] { ("Grain", 300), ("Timber", 200), ("Hides", 150), ("Ore", 100) }, SiegeSupplyRules.CostFor(1000));
+        Assert.Equal(new[] { ("Grain", 2710), ("Timber", 1810), ("Hides", 1360), ("Ore", 910) }, SiegeSupplyRules.CostFor(9024));
+        // Nothing is cheaper than a tier-1 region's floor.
+        Assert.Equal(SiegeSupplyRules.CostFor(SiegeSupplyRules.MinimumHold), SiegeSupplyRules.CostFor(10));
+    }
+
+    [Fact]
+    public async Task DeclaringSpendsTheSuppliesTheHoldCallsFor()
+    {
+        var instanceId = await SeedAsync();
+
+        var outcome = await Service.DeclareAsync(instanceId, TestIds.Player, Request());
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        foreach (var (good, quantity) in SiegeSupplyRules.CostFor(await HoldOfTargetAsync(instanceId)))
+            Assert.Equal(Stockpile - quantity, await HeldAsync(instanceId, good));
+    }
+
+    [Fact]
+    public async Task AnArmyThatCannotBeFedIsNotRaised_AndNothingIsSpent()
+    {
+        var instanceId = await SeedAsync(supplied: false);
+        await Wallet.GrantAsync(instanceId, TestIds.Player,
+            new List<MaterialGrant> { new() { MaterialName = "Grain", Quantity = Stockpile } }, "test");
+
+        var outcome = await Service.DeclareAsync(instanceId, TestIds.Player, Request());
+
+        Assert.Equal(SiegeError.CannotSupply, outcome.Error);
+        Assert.Empty(await _db.Sieges.ToListAsync());
+        Assert.Equal(Stockpile, await HeldAsync(instanceId, "Grain"));
+    }
+
+    [Fact]
+    public async Task ARefusedDeclareCostsNoSupplies()
+    {
+        var instanceId = await SeedAsync(resolve: 100);
+
+        await Service.DeclareAsync(instanceId, TestIds.Player, Request());
+
+        foreach (var (good, _) in SiegeSupplyRules.Rates)
+            Assert.Equal(Stockpile, await HeldAsync(instanceId, good));
+    }
+
+    private async Task<long> HoldOfTargetAsync(Guid instanceId)
+    {
+        var world = await _db.ReadWorldAsync(instanceId);
+        var all = WorldRegionBlob.ReadAllRegions(world);
+        var target = all.Single(r => r.RegionId == Target);
+        return RegionHoldCalculator.AssessRegion(target, all, 0f).Hold;
     }
 
     [Fact]
@@ -711,7 +778,8 @@ public class WorldSiegeServiceTests : IDisposable
         string[]? roster = null,
         string? secondAttacker = null,
         string[]? garrisonIds = null,
-        bool clockIsReal = false)
+        bool clockIsReal = false,
+        bool supplied = true)
     {
         var instance = await _db.AddInstanceAsync();
 
@@ -768,6 +836,14 @@ public class WorldSiegeServiceTests : IDisposable
                 _db.Users.Add(new ApplicationUser { Id = id, UserName = id });
         }
         await _db.SaveChangesAsync();
+
+        if (supplied)
+        {
+            var stores = SiegeSupplyRules.Rates
+                .Select(r => new MaterialGrant { MaterialName = r.Good, Quantity = Stockpile }).ToList();
+            await Wallet.GrantAsync(instance.Id, TestIds.Player, stores, "test");
+            if (secondAttacker != null) await Wallet.GrantAsync(instance.Id, secondAttacker, stores, "test");
+        }
 
         return instance.Id;
     }
