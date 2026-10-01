@@ -46,10 +46,20 @@ namespace MuggaLuggaTD.Shared.World
         public bool IsCapital;
 
         /// <summary>
-        /// Fortification level, 0 to 5, shown as "ENTRENCH IV". Raised by repairing the region's
-        /// ruins. Multiplies hold — see <see cref="RegionHoldCalculator"/>.
+        /// Fortification level, 0 to 5, shown as "ENTRENCH IV". Raised by fortifying with goods
+        /// (<see cref="Gameplay.FortifyRules"/>). Multiplies hold — see <see cref="RegionHoldCalculator"/>.
         /// </summary>
         public int Entrenchment;
+
+        /// <summary>
+        /// The level works under way will raise it to, or 0 when there are none. Written by the server
+        /// when the works start and cleared when they finish or the region changes hands, so every
+        /// player sees the scaffolding.
+        /// </summary>
+        public int FortifyingTo;
+
+        /// <summary>When the works under way finish, as UTC ticks. Meaningless while <see cref="FortifyingTo"/> is 0.</summary>
+        public long FortifyEndsAtUtcTicks;
 
         /// <summary>
         /// Morale, 0 to 100. Worn down by raids, restored by clearing the region's own dungeons.

@@ -80,6 +80,8 @@ public static class WorldRegionBlob
             Faction = (FactionId)(region["Faction"]?.GetValue<int>() ?? 0),
             IsCapital = region["IsCapital"]?.GetValue<bool>() ?? false,
             Entrenchment = region["Entrenchment"]?.GetValue<int>() ?? 0,
+            FortifyingTo = region["FortifyingTo"]?.GetValue<int>() ?? 0,
+            FortifyEndsAtUtcTicks = region["FortifyEndsAtUtcTicks"]?.GetValue<long>() ?? 0,
             Resolve = region["Resolve"]?.GetValue<int>() ?? 100,
             ClaimedAtUtcTicks = region["ClaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
             SiteOverrides = ReadOverrides(region)
@@ -373,6 +375,22 @@ public static class WorldRegionBlob
         // has only just changed hands (siege.md §7a). This is what stops the same region
         // ping-ponging between two players.
         regionNode["ClaimedAtUtcTicks"] = (claimedAt ?? DateTime.UtcNow).Ticks;
+
+        // Works the previous holder paid for stop where they stand; the goods are not returned.
+        ClearFortifying(regionNode);
+    }
+
+    /// <summary>Marks works under way, so every player sees the region being raised.</summary>
+    public static void SetFortifying(JsonNode regionNode, int toLevel, DateTime endsAt)
+    {
+        regionNode["FortifyingTo"] = toLevel;
+        regionNode["FortifyEndsAtUtcTicks"] = endsAt.Ticks;
+    }
+
+    public static void ClearFortifying(JsonNode regionNode)
+    {
+        regionNode["FortifyingTo"] = 0;
+        regionNode["FortifyEndsAtUtcTicks"] = 0L;
     }
 
     /// <summary>
