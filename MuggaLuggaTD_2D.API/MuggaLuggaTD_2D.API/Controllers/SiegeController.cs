@@ -127,7 +127,7 @@ public class SiegeController : ControllerBase
         SiegeError.WorldNotFound or SiegeError.RegionNotFound or SiegeError.SiegeNotFound
             => NotFound(new { message = outcome.Message }),
         SiegeError.ContractMismatch or SiegeError.RegionAlreadyBesieged or SiegeError.AlreadyBesieging
-            or SiegeError.WrongState or SiegeError.AssaultSpent
+            or SiegeError.WrongState or SiegeError.AssaultSpent or SiegeError.CannotSupply
             => Conflict(new { message = outcome.Message }),
         SiegeError.NotDefender or SiegeError.NotAttacker
             => StatusCode(StatusCodes.Status403Forbidden, new { message = outcome.Message }),

@@ -32,6 +32,10 @@ public enum SiegeError
     OnCooldown,
 
     NoArmy,
+
+    /// <summary>The attacker cannot pay the siege's supplies (<see cref="SiegeSupplyRules"/>).</summary>
+    CannotSupply,
+
     SiegeNotFound,
 
     /// <summary>Only the defender may declare ready.</summary>
@@ -97,8 +101,12 @@ public class WorldSiegeService
         ILogger<WorldSiegeService> logger,
         TimeProvider clock,
         SeasonScoreService seasons,
-        WarLogService warLog)
+        WarLogService warLog,
+        MaterialWalletService wallet,
+        HiringService? hiring = null)
     {
+        _wallet = wallet;
+        _hiring = hiring;
         _context = context;
         _content = content;
         _hubContext = hubContext;
@@ -108,6 +116,9 @@ public class WorldSiegeService
         _seasons = seasons;
         _warLog = warLog;
     }
+
+    private readonly MaterialWalletService _wallet;
+    private readonly HiringService? _hiring;
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
 
@@ -188,6 +199,16 @@ public class WorldSiegeService
             return new SiegeOutcome(SiegeError.Refused, Message: message, Refusal: refusal);
         }
 
+        // The army's supplies, paid last so a refused declare costs nothing, and spent whatever the
+        // siege comes to. Goods the workers have gathered so far are paid in first.
+        if (_hiring != null) await _hiring.SettlePlayerAsync(gameInstanceId, attackerUserId);
+        var supplies = SiegeSupplyRules.CostFor(assessment.Hold);
+        var paid = await _wallet.SpendAsync(gameInstanceId, attackerUserId,
+            supplies.Select(b => new MaterialGrant { MaterialName = b.Good, Quantity = b.Quantity }).ToList(),
+            $"siege-supplies region={request.RegionId} hold={assessment.Hold}");
+        if (!paid.Succeeded)
+            return new SiegeOutcome(SiegeError.CannotSupply, Message: $"Your army cannot be supplied. {paid.Message}");
+
         var siege = new Siege
         {
             GameInstanceId = gameInstanceId,
@@ -209,7 +230,8 @@ public class WorldSiegeService
         _sessionLog.Log("SIEGE-DECLARE",
             $"instance={gameInstanceId} siege={siege.Id} attacker={attackerUserId} defender={siege.DefenderUserId} " +
             $"region={siege.RegionId} army={army.CharacterIds.Count} power={army.Power:F0} " +
-            $"hold={assessment.Hold} gate={assessment.Gate} resolve={region.Resolve}");
+            $"hold={assessment.Hold} gate={assessment.Gate} resolve={region.Resolve} " +
+            $"supplies={string.Join(",", supplies.Select(b => $"{b.Good}:{b.Quantity}"))}");
 
         var response = await ToResponseAsync(siege, attackerUserId);
         await BroadcastAsync(siege);

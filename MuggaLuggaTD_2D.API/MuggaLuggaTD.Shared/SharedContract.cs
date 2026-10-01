@@ -174,6 +174,9 @@ namespace MuggaLuggaTD.Shared
         // 1.37.0 - the Crossroads Bazaar (design 12d). BazaarAssay prices every item from its power and
         //   every material from its tier, and the house keeps a tenth; the Sell tab quotes the seller what
         //   the server will pay, so the two must agree.
-        public const string Version = "1.37.0";
+        // 1.38.0 - goods spent on war (Hiring Hall phases 3-4). Fortifying spends stone, timber and ore
+        //   for a level of entrenchment (FortifyRules), and declaring a siege spends grain, timber, hides
+        //   and ore scaled by the target's hold (SiegeSupplyRules); the dossier and the codex quote both.
+        public const string Version = "1.38.0";
     }
 }
