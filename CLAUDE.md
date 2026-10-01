@@ -201,6 +201,27 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   floor every other tag starts at.
 - **Naming:** a node is named with its trade's words (`Naming.NodeWords(trade)`).
 
+## The Hiring Hall (`HiringService`, `HiringController`, design 12e phase 2)
+
+- **Tables:** `HiringCandidates` (the six benches), `HiredWorkers`, `HiringStates` (refresh count,
+  arrival clock), per player per realm. Routes under `api/gameinstance/{id}/hiring`: GET, `hire`,
+  `refresh`, `assign` (a null site sends the worker home); each answers with the whole room.
+- **Rolls and rates are shared** (`HiringRules`): tier, traits, cost, base rate, `RateAt` for a
+  worker at a site, `Gathered` (Lucky hours by worker id and hour index), beds (2 a region held).
+- **Board:** a first visit fills six; then one arrival every 2 h into a free bench (not banked
+  when full). Refresh 100 g, doubling until a dungeon/portal clear (`WorldPveService` calls
+  `ResetRefreshAsync`).
+- **Hire:** a bed, then the gold (`GoldService.SpendAsync`); the bench is freed.
+- **Assign** checks the site is a ResourceNode in a region the player holds, of a trade they can
+  work, with a free place. It settles the player first, then re-rates both sites (Foreman).
+- **Settling is lazy and rides the season settle**: `SeasonScoreService.SettleAllAsync` calls
+  `HiringService.SettleAllAsync` after gold, so a region changing hands pays its workers and sends
+  them home in the same pass. The wallet GET and the room GET settle that one player first. Whole
+  goods go to the material wallet (`hiring-output`); the fraction stays in `Carry`.
+- **Season reset** (`HiringService.ResetRealmAsync`): workers, benches, states and every good in
+  the realm's wallets are removed.
+- Pinned by `HiringRulesTests` and `HiringServiceTests`.
+
 ## First Steps and the Rare chest (`FirstStepsService`, `FirstStepsController`, design 12c)
 
 - **Six steps per player per world, and one Rare chest for doing them all** (Mike, 2026-10-01): every

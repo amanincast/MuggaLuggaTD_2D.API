@@ -26,10 +26,13 @@ public class WalletController : ControllerBase
     private readonly GoldService _gold;
     private readonly ISessionLog _sessionLog;
 
+    private readonly HiringService _hiring;
+
     public WalletController(
         ApplicationDbContext context, MaterialWalletService wallet, GoldService gold,
-        ISessionLog sessionLog)
+        ISessionLog sessionLog, HiringService hiring)
     {
+        _hiring = hiring;
         _context = context;
         _wallet = wallet;
         _gold = gold;
@@ -43,6 +46,8 @@ public class WalletController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
+        // Goods gathered since the last look are paid first, so the purse shows them.
+        await _hiring.SettlePlayerAsync(gameInstanceId, userId);
         return Ok(await BuildAsync(gameInstanceId, userId));
     }
 

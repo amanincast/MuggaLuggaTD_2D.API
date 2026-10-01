@@ -33,6 +33,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
     public DbSet<TavernState> TavernStates => Set<TavernState>();
     public DbSet<FirstStepsProgress> FirstStepsProgress => Set<FirstStepsProgress>();
+    public DbSet<HiringCandidate> HiringCandidates => Set<HiringCandidate>();
+    public DbSet<HiredWorker> HiredWorkers => Set<HiredWorker>();
+    public DbSet<HiringState> HiringStates => Set<HiringState>();
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
@@ -183,6 +186,21 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // Configure TavernState (one row per player per realm; it is read and written on every
         // refresh and every clear, and a second row would be a second refresh count)
         builder.Entity<TavernState>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+
+        // The Hiring Hall: a board of seats, the workers, and one state row per player per realm.
+        builder.Entity<HiringCandidate>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.Slot }).IsUnique();
+        });
+        builder.Entity<HiredWorker>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId });
+            entity.HasIndex(e => new { e.GameInstanceId, e.SiteId });
+        });
+        builder.Entity<HiringState>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
         });
