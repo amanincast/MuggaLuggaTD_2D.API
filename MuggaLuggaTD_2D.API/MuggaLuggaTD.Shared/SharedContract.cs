@@ -171,6 +171,9 @@ namespace MuggaLuggaTD.Shared
         // 1.36.0 - the Trainer (design 6c): permanent talents, a point a level plus one at 10, 20 and 30,
         //   spent on one stat tree for every class (TalentRules). A character's talents are priced at 25
         //   power a point, and Hold the Line raises what it is worth on a garrison.
-        public const string Version = "1.36.0";
+        // 1.37.0 - the Crossroads Bazaar (design 12d). BazaarAssay prices every item from its power and
+        //   every material from its tier, and the house keeps a tenth; the Sell tab quotes the seller what
+        //   the server will pay, so the two must agree.
+        public const string Version = "1.37.0";
     }
 }

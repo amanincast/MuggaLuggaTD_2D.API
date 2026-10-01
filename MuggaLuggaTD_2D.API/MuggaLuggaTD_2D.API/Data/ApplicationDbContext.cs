@@ -280,6 +280,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => e.SellerId);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => new { e.GameInstanceId, e.Status });
+            // A material queue is read by kind, status and name, oldest first.
+            entity.HasIndex(e => new { e.Kind, e.Status, e.GoodsKey, e.CreatedAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany(g => g.MarketplaceListings)

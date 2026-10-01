@@ -159,14 +159,34 @@ exists.**
 - **Adoption**: the first time the ledger meets a player it adopts what their **stored** save holds
   (never the arriving one, which could launder anything) and writes an `ItemLedgerState` so it
   happens once. A claim adopts before it grants, so a first claim after deploy loses nothing.
-- **Marketplace**: a listing sells the ledger's copy of an item the seller holds (the request's
-  `ItemData` only names it by `Id`); while listed it is out of the seller's inventory; a sale moves
-  the grant to the buyer, a cancel returns it. **No price is charged yet** — the marketplace's
-  economy waits on its design (`PurchaseConditions` is stored, not enforced).
+- **Bazaar**: a listing sells the ledger's copy of an item the seller holds (the request names it
+  by `Id` only); while listed it is out of the seller's inventory; a sale moves the grant to the
+  buyer **and into the buyer's realm** (a fresh id if that realm already uses it), a pull-back
+  returns it. See *The Crossroads Bazaar* below.
 - **The save's inventory is `InventoryItems`** (top level, `UserSaveData`). `StripMaterials` read
   `ItemInventory.Items` until this change — a shape no client writes — so it never stripped anything;
   its tests had been built in the same wrong shape. `ItemLedgerService.SaveItems` reads both.
 - Not covered: **experience/level** is still client-written (bounded by `ClampLevels` only).
+
+## The Crossroads Bazaar (`BazaarService`, `BazaarController`, design 12d)
+
+A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-10-01.
+- **The Assay** (`BazaarAssay`, shared, so the Sell tab quotes what the server pays): equipment is
+  power² / 50 (`PartyPowerCalculator.CalculateItemPower`), materials 20 / 80 / 300 by tier × 1 essence,
+  1.5 crystal, 3 shard. Tidied to 5s/10s/50s/100s, floor 10. **No price is stored**: it is worked out
+  when needed, so a queue never holds two prices. The design's supply-driven price is left out on purpose.
+- **The house keeps a tenth** (`BazaarAssay.Fee`), taken from the seller's side.
+- **Gold crosses worlds, never moves within one**: the buyer pays from the realm in the route; the
+  seller is paid into the realm the listing came from (`MarketplaceListing.GameInstanceId`), and
+  collects it there (`POST .../bazaar/collect`). `GoldService.CreditAsync` pays it — not a clear.
+- **A material is one queue**, oldest listing first across every seller and realm. A purchase is all
+  or nothing; a buyer is never sold their own goods; a quoted price that no longer matches is refused.
+- **Goods leave the seller when listed**: equipment into the ledger's escrow, materials out of the
+  wallet. Pulling back returns what is unsold; earned gold stays to collect.
+- **Trades are serialised** by one static lock (one API process).
+- **A season reset destroys that realm's unsold goods** (Mike: "destroyed for now", to revisit) and
+  pays out what they already earned (`BazaarService.ExpireRealmAsync`, from `CloseSeasonAsync`).
+- Pinned by `BazaarTests` and `SeasonScoreServiceTests.AResetTakesTheWorldsGoodsOffTheBazaar`.
 
 ## Run picks and Trainer talents (`PlayerSaveValidator.StripRunPicks`, `TalentService`)
 

@@ -175,7 +175,7 @@ public class ItemLedgerServiceTests : IDisposable
         await Ledger.ReconcileSaveAsync(Realm, Player, sellerSave);
         Assert.Empty(Items(sellerSave));
 
-        Assert.True(await Ledger.TransferAsync(Realm, listing, Buyer));
+        Assert.NotNull(await Ledger.TransferAsync(Realm, listing, Buyer));
         var buyerSave = SaveHolding(Sword("s1"));
         var result = await Ledger.ReconcileSaveAsync(Realm, Buyer, buyerSave);
         Assert.Equal(1, result.Kept);
