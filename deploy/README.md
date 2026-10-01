@@ -39,7 +39,11 @@ count>`), then `up -d`. Builds older than it are told to open the launcher.
 - `pgdata` volume: the database. **Back it up before a migration that changes data**:
   `docker compose --env-file .env exec db pg_dump -U muggalugga muggaluggaTD > ~/backups/muggalugga-$(date +%F).sql`
 - `DOWNLOADS_DIR` (default `deploy/downloads/`, gitignored): published game builds, written by the
-  publish tool, served read-only at `/downloads/`.
+  publish tool, served read-only at `/downloads/`. It holds `MuggaLuggaSetup.exe` (the launcher, which
+  the download page links), `blobs/`, and one folder per channel with its `manifest.json`.
+- `www/`: the download page. It reads the version and patch notes from the testers manifest, so a publish
+  needs no page edit. A page change goes live on `git pull`, since `www/` is mounted, with no restart.
+  A `web/Caddyfile` change needs `docker compose --env-file .env restart web`.
 - Memory is capped (api 1 GB, db 768 MB, web 128 MB) because the box is shared with Club.Manager.
 
 ## First-time setup (done 2026-09-30)

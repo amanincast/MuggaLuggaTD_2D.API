@@ -5,22 +5,106 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>MuggaLugga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Cinzel+Decorative:wght@900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
-  :root { --paper: #e8d9b5; --ink: #2b2014; --muted: #6b5a40; --accent: #b4532a; }
-  @media (prefers-color-scheme: dark) { :root { --paper: #1f1a14; --ink: #efe3c8; --muted: #b7a684; --accent: #e07a4f; } }
-  html, body { margin: 0; min-height: 100%; background: var(--paper); color: var(--ink); }
-  body { font-family: Georgia, "Times New Roman", serif; display: grid; place-items: center; min-height: 100vh; padding: 0 16px; box-sizing: border-box; }
-  main { max-width: 34rem; text-align: center; }
-  .eyebrow { color: var(--accent); letter-spacing: .18em; font-size: .8rem; text-transform: uppercase; }
-  h1 { font-size: clamp(2.6rem, 9vw, 4rem); margin: .2em 0; letter-spacing: .02em; }
-  p { color: var(--muted); line-height: 1.6; font-size: 1.05rem; }
+  /* The game's Storybook palette (Assets/UI/Styles/Storybook.uss), same as the launcher. */
+  :root {
+    --ink: #33240f; --ink-body: #6b5636; --ink-muted: #8a7350;
+    --paper: #fbf3df; --rule: #c9ad78; --rust: #af5331;
+    --gold: #c1a057; --gold-hi: #e2c276; --gold-shadow: #9c7d3f; --night: #222a35;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; padding: 48px 16px;
+    background: var(--night) url(background.png) center bottom / cover no-repeat fixed;
+    font-family: "EB Garamond", Georgia, serif; font-size: 18px; line-height: 1.55; color: var(--ink-body);
+    display: flex; justify-content: center; align-items: flex-start;
+  }
+  main {
+    width: 100%; max-width: 560px; padding: 40px 44px 34px;
+    background: var(--paper) url(paper.png) center / cover;
+    border: 1px solid var(--rule); box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  }
+  .eyebrow { font-family: Cinzel, serif; font-size: 13px; letter-spacing: .14em; color: var(--rust); margin: 0; }
+  h1 { font-family: "Cinzel Decorative", serif; font-weight: 900; font-size: clamp(40px, 11vw, 60px);
+       line-height: .95; color: var(--ink); margin: 8px 0 14px; }
+  h2 { font-family: Cinzel, serif; font-size: 13px; letter-spacing: .12em; color: var(--ink-muted);
+       font-weight: 500; margin: 30px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
+  p { margin: 0 0 10px; }
+  .download {
+    display: block; text-align: center; text-decoration: none; margin: 22px 0 8px;
+    font-family: Cinzel, serif; font-weight: 700; font-size: 20px; letter-spacing: .04em; color: #2c2013;
+    padding: 16px 12px 14px; border-radius: 2px;
+    background: linear-gradient(var(--gold-hi), var(--gold)); border-bottom: 4px solid var(--gold-shadow);
+  }
+  .download:hover { filter: brightness(1.04); }
+  .download:active { border-bottom-width: 2px; margin-top: 24px; }
+  .meta { text-align: center; font-family: Cinzel, serif; font-size: 12px; letter-spacing: .08em; color: var(--ink-muted); }
+  ol { margin: 0; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  li::marker { font-family: Cinzel, serif; color: var(--rust); }
+  b { color: var(--ink); font-weight: 600; }
+  kbd { font-family: inherit; font-size: .9em; padding: 0 5px; border: 1px solid var(--rule); border-radius: 2px; background: rgba(255,255,255,.4); }
+  .notes { font-style: italic; white-space: pre-line; }
+  footer { margin-top: 28px; font-size: 14px; color: var(--ink-muted); }
+  @media (max-width: 520px) { main { padding: 28px 22px; } body { padding: 16px; } }
 </style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">A pop-up adventure</div>
-  <h1>MuggaLugga</h1>
-  <p>Testing is by invitation. If you have been invited, your download link and invite code are on their way.</p>
+  <p class="eyebrow">A POP-UP ADVENTURE</p>
+  <h1>MUGGA<br>LUGGA</h1>
+  <p>Testing is by invitation. If you have been sent an invite code, download the launcher below: it installs
+     the game, keeps it up to date, and starts it.</p>
+
+  <a class="download" href="/downloads/MuggaLuggaSetup.exe" download>DOWNLOAD FOR WINDOWS</a>
+  <p class="meta" id="meta">WINDOWS 10 OR 11 · 64-BIT</p>
+
+  <h2>INSTALLING</h2>
+  <ol>
+    <li>Run <b>MuggaLuggaSetup.exe</b>. Nothing asks for an administrator: it installs for you only.</li>
+    <li>Windows may say <b>“Windows protected your PC”</b>. The tester build is not signed yet, so click
+        <b>More info</b>, then <b>Run anyway</b>. Your browser may also ask you to <b>Keep</b> the download.</li>
+    <li>The launcher opens and downloads the game (about 80 MB the first time). When it says
+        <b>Ready to play</b>, press <b>PLAY</b>.</li>
+    <li>In the game, choose <b>Forge New Herald</b> and enter a name, your <b>invite code</b>, your email
+        and a password (the game calls it your <i>sigil</i>). Each code is good for one account.</li>
+  </ol>
+
+  <h2>AFTER THAT</h2>
+  <p>Start the game from the <b>MuggaLugga</b> shortcut on your desktop or Start menu. It opens the
+     launcher, which fetches any update before you play: only the files that changed.</p>
+  <p>If the game will not start, press <b>Repair</b> in the launcher. To remove it, use
+     <b>Settings › Apps › Installed apps › MuggaLugga › Uninstall</b>. Your account and progress live on
+     the server and are not lost.</p>
+
+  <h2 id="notes-title" hidden>LATEST VERSION</h2>
+  <p class="notes" id="notes" hidden></p>
+
+  <footer>Something wrong? Press <b>Open log</b> in the launcher and send that file with a note of what happened.</footer>
 </main>
+<script>
+  // The version and its notes come from the same manifest the launcher reads.
+  fetch('/downloads/testers/manifest.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(m => {
+      if (!m) return;
+      const mb = Math.round((m.launcher ? m.launcher.size : 0) / 1048576 * 10) / 10;
+      document.getElementById('meta').textContent =
+        'VERSION ' + m.version + (m.launcher ? ' · LAUNCHER ' + mb + ' MB' : '') + ' · WINDOWS 10 OR 11 · 64-BIT';
+      if (m.notes) {
+        const notes = document.getElementById('notes');
+        notes.textContent = m.notes;
+        notes.hidden = false;
+        const title = document.getElementById('notes-title');
+        title.textContent = 'WHAT’S NEW IN ' + m.version;
+        title.hidden = false;
+      }
+    })
+    .catch(() => {});
+</script>
 </body>
 </html>
