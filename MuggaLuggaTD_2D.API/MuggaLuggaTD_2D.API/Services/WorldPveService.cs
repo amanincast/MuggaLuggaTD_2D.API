@@ -68,6 +68,9 @@ public class WorldPveService
     /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
     private readonly FirstStepsService? _firstSteps;
 
+    /// <summary>A clear resets the refresh price at the Hiring Hall; optional so tests can build this without it.</summary>
+    private readonly HiringService? _hiring;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -76,8 +79,10 @@ public class WorldPveService
         TavernService tavern,
         ILogger<WorldPveService> logger,
         ItemLedgerService items,
-        FirstStepsService? firstSteps = null)
+        FirstStepsService? firstSteps = null,
+        HiringService? hiring = null)
     {
+        _hiring = hiring;
         _firstSteps = firstSteps;
         _items = items;
         _context = context;
@@ -288,6 +293,7 @@ public class WorldPveService
 
             // The same sites count for First Steps' "clear a dungeon" (a dungeon or a portal).
             if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
+            if (_hiring != null) await _hiring.ResetRefreshAsync(gameInstanceId, userId);
         }
 
         _logger.LogInformation(

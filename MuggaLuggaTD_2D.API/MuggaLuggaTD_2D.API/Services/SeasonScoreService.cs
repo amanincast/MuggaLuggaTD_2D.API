@@ -48,14 +48,19 @@ public class SeasonScoreService
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<SeasonScoreService> _logger;
 
+    /// <summary>Output from workers settles with gold; optional so tests can build this without it.</summary>
+    private readonly HiringService? _hiring;
+
     public SeasonScoreService(
         ApplicationDbContext context,
         GoldService gold,
         WorldProvisioningService worlds,
         IHubContext<GameHub> hubContext,
         ISessionLog sessionLog,
-        ILogger<SeasonScoreService> logger)
+        ILogger<SeasonScoreService> logger,
+        HiringService? hiring = null)
     {
+        _hiring = hiring;
         _context = context;
         _gold = gold;
         _worlds = worlds;
@@ -103,6 +108,10 @@ public class SeasonScoreService
         // means the purse and the scoreboard can never disagree about when a region changed hands -
         // and a future sixth caller cannot forget to settle one of them.
         await _gold.SettleAllAsync(gameInstanceId, regions, scores.Keys, until);
+
+        // Workers too: what they gathered is paid up to the same instant, and a region that just
+        // changed hands sends the workers of its former holder home.
+        if (_hiring != null) await _hiring.SettleAllAsync(gameInstanceId, regions, until);
     }
 
     /// <summary>
@@ -357,6 +366,9 @@ public class SeasonScoreService
 
         // A new map is a new world, so everyone walks its First Steps (and earns its chest) again.
         await FirstStepsService.ResetRealmAsync(_context, instance.Id);
+
+        // Workers, the board and the goods go with the map (Mike, 2026-10-01): hire again.
+        await HiringService.ResetRealmAsync(_context, instance.Id);
 
         await _context.SaveChangesAsync();
 
