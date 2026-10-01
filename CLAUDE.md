@@ -207,6 +207,18 @@ exists.**
   - Raise the minimum when a release must not be mixed with older builds.
 - Pinned by `TesterAccessTests`.
 
+## Production (deploy/)
+
+- The API runs on the **Club.Manager VPS** (74.208.203.85) as the compose project `muggalugga`: api,
+  Postgres, and a small Caddy `web` for the download page and launcher files. Full steps are in `deploy/README.md`.
+- **TLS is the box's shared front door**, `she-bee-extras/league-hub-edge`. It reaches `muggalugga-api` and
+  `muggalugga-web` on the external `edge` network; nothing publishes a host port.
+- **Migrations are a deploy step** (`docker compose run --rm api migrate`). Startup never migrates.
+- **Secrets** (`JWT_KEY`, `POSTGRES_PASSWORD`) live only in the server's `deploy/.env`. They override the
+  development values committed in `appsettings.json`, which must never be used in production.
+- The API trusts `X-Forwarded-*` (it sits behind Caddy) and serves `/healthz` for the container healthcheck.
+- Memory is capped because the box is shared with Club.Manager.
+
 ## Development URLs
 
 - HTTP: http://localhost:5081

@@ -151,6 +151,18 @@ if (args.Contains(PlaytestSeeder.Command))
     return await PlaytestSeeder.RunFromCommandLineAsync(app.Services, args);
 }
 
+// `migrate`: apply pending EF migrations and exit. Startup never migrates on its own; a deploy runs
+// this first (`docker compose run --rm api migrate`), so a schema change is a step someone took.
+if (args.Contains("migrate"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+    await db.Database.MigrateAsync();
+    Console.WriteLine(pending.Count == 0 ? "No pending migrations." : $"Applied {pending.Count}: {string.Join(", ", pending)}");
+    return 0;
+}
+
 // `invite-codes ...`: mint, list or revoke invite codes and exit (any environment - it is how the
 // server gets its codes). See InviteCodeService.
 if (args.Contains(InviteCodeService.Command))
@@ -163,6 +175,18 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// Behind the server's edge Caddy, which terminates TLS: trust its X-Forwarded-* headers so the app
+// knows the request was HTTPS (and does not redirect it again). Caddy reaches the container over the
+// private Docker network, so the known proxy list is cleared rather than pinned to an address.
+var forwarded = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
+                       Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+};
+forwarded.KnownNetworks.Clear();
+forwarded.KnownProxies.Clear();
+app.UseForwardedHeaders(forwarded);
+
 app.UseHttpsRedirection();
 
 app.UseMiddleware<ClientVersionGate>();
@@ -172,6 +196,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
+app.MapGet("/healthz", () => Results.Text("healthy")).AllowAnonymous();
 
 app.Run();
 return 0;
