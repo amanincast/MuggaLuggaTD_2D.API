@@ -18,6 +18,12 @@ namespace Enums
         /// <summary>
         /// Rarity shards upgrade the rarity level of equipment (Common through GodLike).
         /// </summary>
-        RarityShard = 2
+        RarityShard = 2,
+
+        /// <summary>
+        /// Goods gathered by hired workers at resource sites (ore, timber, grain, stone, hides). Spent
+        /// on fortifying regions and supplying sieges, never on gear, and never dropped by a fight.
+        /// </summary>
+        Goods = 3
     }
 }
