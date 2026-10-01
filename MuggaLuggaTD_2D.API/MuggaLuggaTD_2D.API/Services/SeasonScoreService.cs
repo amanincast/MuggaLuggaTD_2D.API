@@ -357,6 +357,9 @@ public class SeasonScoreService
 
         await _context.SaveChangesAsync();
 
+        // Its goods on the Bazaar go with the world (Mike, 2026-10-01); gold already earned is paid.
+        await BazaarService.ExpireRealmAsync(_context, _gold, _sessionLog, instance.Id);
+
         var fresh = await _worlds.RegenerateWorldAsync(instance.Id);
 
         // Everyone starts the new season at zero, rated against the map they were just seated in.

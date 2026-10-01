@@ -315,6 +315,23 @@ public class SeasonScoreServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AResetTakesTheWorldsGoodsOffTheBazaar()
+    {
+        var instance = await SeedAsync(TestWorld.OwnedBy(TestIds.Player, "r1"));
+        _db.MarketplaceListings.Add(new MarketplaceListing
+        {
+            GameInstanceId = instance.Id, SellerId = TestIds.Player, Kind = ListingKind.Material,
+            GoodsKey = "Lesser Essence", GoodsName = "Lesser Essence", Quantity = 5
+        });
+        await _db.SaveChangesAsync();
+
+        await ExpireSeasonAsync(instance.Id);
+        await Service.EnsureSeasonCurrentAsync(instance.Id);
+
+        Assert.Equal(ListingStatus.Expired, (await _db.MarketplaceListings.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task ClosingIsDoneOnceHoweverManyRequestsNoticeIt()
     {
         // Without a scheduler, arriving traffic is what notices the bell - and several requests can

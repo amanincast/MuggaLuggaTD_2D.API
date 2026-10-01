@@ -225,19 +225,40 @@ public class ItemLedgerService
         await _context.SaveChangesAsync();
     }
 
-    /// <summary>A sale moves the grant to the buyer, whose next save may then carry the item.</summary>
-    public async Task<bool> TransferAsync(Guid gameInstanceId, Guid listingId, string buyerId)
+    /// <summary>
+    /// A sale moves the grant to the buyer, whose next save may then carry the item. The Bazaar is
+    /// cross-world, so the grant also moves into the realm the buyer paid from
+    /// (<paramref name="buyerRealm"/>; the seller's own realm when null). An item id is unique only
+    /// within a realm, so one that is already taken there is given a fresh id. Returns the item as
+    /// the buyer now holds it, or null when the listing holds nothing.
+    /// </summary>
+    public async Task<string?> TransferAsync(Guid gameInstanceId, Guid listingId, string buyerId, Guid? buyerRealm = null)
     {
         var grant = await _context.ItemGrants.FirstOrDefaultAsync(g => g.GameInstanceId == gameInstanceId && g.ListingId == listingId);
-        if (grant == null) return false;
-        await EnsureAdoptedAsync(gameInstanceId, buyerId);
+        if (grant == null) return null;
 
-        _sessionLog.Log("ITEM-SOLD", $"item={grant.ItemId} from={grant.UserId} to={buyerId} listing={listingId}");
+        Guid destination = buyerRealm ?? gameInstanceId;
+        await EnsureAdoptedAsync(destination, buyerId);
+
+        if (destination != gameInstanceId &&
+            await _context.ItemGrants.AnyAsync(g => g.GameInstanceId == destination && g.ItemId == grant.ItemId))
+        {
+            string fresh = Guid.NewGuid().ToString();
+            if (JsonNode.Parse(grant.ItemJson) is JsonObject item)
+            {
+                item["Id"] = fresh;
+                grant.ItemJson = item.ToJsonString();
+            }
+            grant.ItemId = fresh;
+        }
+
+        _sessionLog.Log("ITEM-SOLD", $"item={grant.ItemId} from={grant.UserId} to={buyerId} listing={listingId} realm={destination}");
+        grant.GameInstanceId = destination;
         grant.UserId = buyerId;
         grant.ListingId = null;
-        grant.Source = Trim($"marketplace listing={listingId}");
+        grant.Source = Trim($"bazaar listing={listingId}");
         await _context.SaveChangesAsync();
-        return true;
+        return grant.ItemJson;
     }
 
     /// <summary>What a player holds, for a client that wants to rebuild its inventory from the truth.</summary>

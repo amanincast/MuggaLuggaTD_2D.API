@@ -130,6 +130,30 @@ public class GoldService
     }
 
     /// <summary>
+    /// Pays gold that changed hands rather than gold the game made: a Bazaar sale collected, or a
+    /// refund. Unlike <see cref="GrantAsync"/> it is not counted as earned from clears.
+    /// </summary>
+    public async Task<long> CreditAsync(Guid gameInstanceId, string userId, long gold, string reason)
+    {
+        if (gold <= 0 || string.IsNullOrEmpty(userId)) return 0;
+
+        var row = await FindOrCreateAsync(gameInstanceId, userId);
+        Settle(row, DateTime.UtcNow);
+
+        row.SettledGold += gold;
+        row.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        long balance = (long)Math.Floor(row.SettledGold);
+
+        _sessionLog.Log("GOLD-CREDIT",
+            $"user={userId} instance={gameInstanceId} reason={reason} gold={gold} balance={balance}");
+
+        return balance;
+    }
+
+    /// <summary>
     /// Deducts gold, all of it or none. Returns what went wrong rather than throwing, so a caller
     /// can answer "you cannot afford that" without a stack trace.
     /// </summary>
