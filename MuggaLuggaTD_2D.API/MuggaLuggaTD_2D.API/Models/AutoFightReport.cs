@@ -42,6 +42,9 @@ public class AutoFightReport
     /// <summary>A site fight, or a patrol's skirmish.</summary>
     public bool Skirmish { get; set; }
 
+    /// <summary>A skirmish forced on it by an ambush on the road (<see cref="SiteId"/> is where it was bound).</summary>
+    public bool Ambush { get; set; }
+
     public int Level { get; set; }
 
     /// <summary>When the fight ended, in the company's replayed day.</summary>

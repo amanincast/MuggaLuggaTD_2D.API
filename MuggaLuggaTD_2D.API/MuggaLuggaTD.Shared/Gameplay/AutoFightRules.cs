@@ -48,6 +48,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>Stopped: none of its members is free to fight (garrisoned, held, or in a siege).</summary>
         NobodyFree = 8,
+
+        /// <summary>Lost an ambush on the road: walking back where it set out, Bloodied. It rests, then resumes.</summary>
+        FallingBack = 9,
     }
 
     /// <summary>A site an auto company might fight next, as the server knows it.</summary>
@@ -157,6 +160,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
         {
             var dice = DeterministicRandom.ForSubject(Naming.Hash(companyId), unchecked((ulong)fightNumber));
             return dice.Chance((int)Math.Round(chance * 10000));
+        }
+
+        /// <summary>
+        /// Rolls an auto company's road (auto-fight.md §6): the share of the walk at which it is
+        /// ambushed, or null for a quiet road. Seeded from the company and when it set out, so a
+        /// settle that is re-run meets the same road.
+        /// </summary>
+        public static double? RollAmbush(double chance, string companyId, DateTime departed)
+        {
+            var dice = DeterministicRandom.ForSubject(Naming.Hash(companyId + ":road"), unchecked((ulong)departed.Ticks));
+            if (!dice.Chance((int)Math.Round(chance * 10000))) return null;
+            return AmbushRules.EarliestStrike + dice.Next(10000) / 10000.0 * (AmbushRules.LatestStrike - AmbushRules.EarliestStrike);
         }
 
         /// <summary>How long a fight at this site takes.</summary>

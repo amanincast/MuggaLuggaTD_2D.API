@@ -425,7 +425,7 @@ public class PartyService
     /// A journey's route as stored: its legs, region by region (<see cref="RouteLeg"/>). A route written
     /// before 1.35.0 (one region's cells, no legs) reads as none; the company still lands on time.
     /// </summary>
-    private static List<RouteLeg> LegsOf(PlayerParty p)
+    internal static List<RouteLeg> LegsOf(PlayerParty p)
     {
         if (string.IsNullOrEmpty(p.RouteJson) || !p.RouteJson.TrimStart().StartsWith("[")) return new List<RouteLeg>();
         try { return JsonSerializer.Deserialize<List<RouteLeg>>(p.RouteJson) ?? new List<RouteLeg>(); }
@@ -433,7 +433,7 @@ public class PartyService
     }
 
     /// <summary>The region a company on the road is in at <paramref name="at"/>, or null if its route is unknown.</summary>
-    private static string? RegionAlong(PlayerParty p, DateTime at)
+    internal static string? RegionAlong(PlayerParty p, DateTime at)
     {
         if (p.DepartedAt == null) return null;
         var legs = LegsOf(p);
@@ -608,7 +608,7 @@ public class PartyService
     /// Sends a halted company back where it set out, over every cell it walked - across each border it
     /// crossed - as fast as it came.
     /// </summary>
-    private static void TurnBack(PlayerParty party, DateTime now)
+    internal static void TurnBack(PlayerParty party, DateTime now)
     {
         double halted = party.DepartedAt == null ? 0 : ((party.HaltedAt ?? now) - party.DepartedAt.Value).TotalSeconds;
         var back = AmbushRules.RouteBack(LegsOf(party), halted);

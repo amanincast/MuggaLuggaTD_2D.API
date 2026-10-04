@@ -31,13 +31,16 @@ public class AutoFightServiceTests : IDisposable
     private DateTime _now = DateTime.UtcNow;
     private Func<double, string, long, bool> _roll = (_, _, _) => true;
 
+    /// <summary>Quiet roads unless a test says otherwise, so fight counts stay exact.</summary>
+    private Func<double, string, DateTime, double?> _road = (_, _, _) => null;
+
     private GoldService Gold => new(_db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
     private MaterialWalletService Wallet => new(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
     private ItemLedgerService Items => new(_db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance);
     private TavernService Tavern => new(_db, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
 
     private AutoFightService Auto => new(_db, _content, Wallet, Gold, Items, new FakeSessionLog(),
-        NullLogger<AutoFightService>.Instance) { Clock = () => _now, Roll = _roll, Dice = new Random(3) };
+        NullLogger<AutoFightService>.Instance) { Clock = () => _now, Roll = _roll, RollRoad = _road, Dice = new Random(3) };
 
     private PartyService Parties => new(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(),
         NullLogger<PartyService>.Instance, Items, null, Auto);
@@ -51,9 +54,9 @@ public class AutoFightServiceTests : IDisposable
     /// <paramref name="level"/>. Returns the company, the capital's id and the other region's.
     /// </summary>
     private async Task<(Guid Instance, PlayerParty Company, WorldRegionData Home, WorldRegionData Other)> SeedAsync(
-        long level = 40, int grain = 100, int hides = 100)
+        long level = 40, int grain = 100, int hides = 100, string owner = TestIds.Owner)
     {
-        var instance = await _db.AddInstanceAsync();
+        var instance = await _db.AddInstanceAsync(owner);
         var home = TestWorld.OwnedBy(TestIds.Player, "r1");
         home.IsCapital = true;
         var other = TestWorld.Region("r2", q: 1, r: 0);
@@ -112,7 +115,7 @@ public class AutoFightServiceTests : IDisposable
                 new MaterialWalletService(other, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance),
                 new GoldService(other, new FakeSessionLog(), NullLogger<GoldService>.Instance),
                 new ItemLedgerService(other, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance),
-                new FakeSessionLog(), NullLogger<AutoFightService>.Instance) { Clock = () => _now, Roll = _roll, Dice = new Random(3) };
+                new FakeSessionLog(), NullLogger<AutoFightService>.Instance) { Clock = () => _now, Roll = _roll, RollRoad = _road, Dice = new Random(3) };
             await first.SettleAsync(instance, TestIds.Player);
         }
         int once = (await ReportsAsync(instance)).Count;
@@ -399,6 +402,92 @@ public class AutoFightServiceTests : IDisposable
         var (instance, company, home, _) = await SeedAsync();
         await SendAsync(instance, company, AutoOrder.Patrol, home.RegionId);
         Assert.False(await SecondCompanyIsAmbushedAsync(instance, home));
+    }
+
+    [Fact]
+    public async Task AnAmbushOnTheRoadIsFoughtByItselfAndTheCompanyWalksOn()
+    {
+        var (instance, company, home, _) = await SeedAsync();
+        int roads = 0;
+        _road = (_, _, _) => roads++ == 0 ? 0.5 : null;   // the first road is ambushed halfway
+        await SendAsync(instance, company, AutoOrder.Roam, home.RegionId);
+
+        _now += TimeSpan.FromHours(1);
+        await Auto.SettleAsync(instance, TestIds.Player);
+
+        var reports = await ReportsAsync(instance);
+        Assert.True(reports.Count >= 2, $"an ambush and then the fight it was bound for, was {reports.Count}");
+        var ambush = reports[0];
+        Assert.True(ambush.Ambush && ambush.Skirmish && ambush.Won);
+        Assert.True(ambush.Experience > 0, "a won ambush pays as a skirmish");
+        Assert.Equal(AutoFightRules.MobLevel(RegionGenerator.Generate(home).Sites), ambush.Level);
+
+        // It walked on to the site it was bound for and fought there.
+        Assert.False(reports[1].Ambush);
+        Assert.Equal(ambush.SiteId, reports[1].SiteId);
+        Assert.Equal(1, reports.Count(r => r.Ambush));
+    }
+
+    [Fact]
+    public async Task ALostAmbushBloodiesTheCompanyAndSendsItBackTheWayItCame()
+    {
+        var (instance, company, home, _) = await SeedAsync();
+        string setOutFrom = company.SiteId!;
+        long fights = 0;
+        int roads = 0;
+        _roll = (_, _, _) => fights++ != 0;               // the ambush is lost, the rest won
+        _road = (_, _, _) => roads++ == 0 ? 0.5 : null;
+        await SendAsync(instance, company, AutoOrder.Roam, home.RegionId);
+
+        // Its first walk ends where the ambush strikes; settle just after.
+        var walking = await ReloadAsync(company.Id);
+        Assert.Equal(AutoStatus.Walking, walking.AutoStatus);
+        Assert.True(walking.AutoStepEndsAt < walking.ArrivesAt, "the step ends at the strike, before the road does");
+        _now = walking.AutoStepEndsAt!.Value + TimeSpan.FromSeconds(1);
+        await Auto.SettleAsync(instance, TestIds.Player);
+        var lost = Assert.Single(await ReportsAsync(instance));
+        Assert.True(lost.Ambush && !lost.Won);
+
+        var falling = await ReloadAsync(company.Id);
+        Assert.Equal(AutoStatus.FallingBack, falling.AutoStatus);
+        Assert.Equal(CompanyState.Returning, falling.State);
+        Assert.Equal(setOutFrom, falling.ToSiteId);
+        Assert.Equal(3, await _db.BloodiedCharacters.CountAsync(b => b.GameInstanceId == instance));
+
+        // Home again, it rests out its wounds, then goes back to work.
+        _now += TimeSpan.FromHours(2);
+        await Auto.SettleAsync(instance, TestIds.Player);
+        var reports = await ReportsAsync(instance);
+        Assert.True(reports.Count > 1);
+        Assert.True(reports[1].At - lost.At >= BloodiedRules.Recovery);
+    }
+
+    [Fact]
+    public async Task AnAutoCompanysRoadIsSaferWhereItsPlayerPatrols()
+    {
+        var chances = new Dictionary<string, double>();
+        _road = (chance, id, _) => { chances.TryAdd(id, chance); return null; };
+
+        // Alone: a company roams the capital.
+        var (alone, first, home, _) = await SeedAsync();
+        await SendAsync(alone, first, AutoOrder.Roam, home.RegionId);
+        _now += TimeSpan.FromMinutes(30);
+        await Auto.SettleAsync(alone, TestIds.Player);
+        double unpatrolled = chances[first.Id.ToString()];
+
+        // In another realm, the same road while the player's other company patrols the region.
+        var (patrolled, patrol, home2, _) = await SeedAsync(owner: "owner-2");
+        await SendAsync(patrolled, patrol, AutoOrder.Patrol, home2.RegionId);
+        var (formed, listed) = await Parties.CreateAsync(patrolled, TestIds.Player,
+            new PartyCreateRequest(null, null, new List<string> { "hero-4" }, Contract));
+        Assert.True(formed.Succeeded, formed.Message);
+        var roamer = await _db.PlayerParties.SingleAsync(p => p.Id == listed!.Parties.Last().Id);
+        await SendAsync(patrolled, roamer, AutoOrder.Roam, home2.RegionId);
+        _now += TimeSpan.FromMinutes(30);
+        await Auto.SettleAsync(patrolled, TestIds.Player);
+
+        Assert.True(unpatrolled > 0);
+        Assert.True(chances[roamer.Id.ToString()] < unpatrolled, "a patrol in the region makes the road safer");
     }
 
     [Fact]

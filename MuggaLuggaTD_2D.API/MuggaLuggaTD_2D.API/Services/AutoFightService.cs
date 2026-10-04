@@ -67,6 +67,9 @@ public class AutoFightService
     /// <summary>How a fight is rolled (<see cref="AutoFightRules.RollWin"/>). Tests fix the outcome.</summary>
     public Func<double, string, long, bool> Roll { get; set; } = AutoFightRules.RollWin;
 
+    /// <summary>Rolls a road: where along it an ambush strikes, or null. Tests fix it.</summary>
+    public Func<double, string, DateTime, double?> RollRoad { get; set; } = AutoFightRules.RollAmbush;
+
     /// <summary>Now. Tests move it.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
@@ -131,6 +134,7 @@ public class AutoFightService
                 party.SiteId = party.AutoTargetSiteId ?? party.SiteId;
             }
             // A walk is left as it is: an ordinary journey now, which lands by the clock like any other.
+            // An ambush already rolled for it stays, and now halts it to be asked, as any steered company is.
             party.AutoMode = false;
             party.AutoOrder = AutoOrder.None;
             party.AutoRegionId = null;
@@ -271,6 +275,9 @@ public class AutoFightService
         public required Dictionary<string, RegionLayout> Layouts { get; init; }
         public required Dictionary<string, int> Levels { get; init; }
         public required HashSet<string> Committed { get; init; }
+
+        /// <summary>The regions this player has a company ordered to patrol: their roads are safer (§6).</summary>
+        public required HashSet<string> Patrolled { get; init; }
         /// <summary>When each wounded character recovers; read untracked, written after the companies are.</summary>
         public required Dictionary<string, DateTime> Bloodied { get; init; }
 
@@ -339,6 +346,8 @@ public class AutoFightService
                          .ToDictionary(g => g.Key, g => (int)Math.Max(1, g.First().Level), StringComparer.Ordinal)
                      ?? new Dictionary<string, int>(StringComparer.Ordinal),
             Committed = committed,
+            Patrolled = parties.Where(p => p.AutoOrder == AutoOrder.Patrol && p.AutoRegionId != null)
+                .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal),
             Bloodied = await _context.BloodiedCharacters.AsNoTracking()
                 .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId)
                 .ToDictionaryAsync(b => b.CharacterId, b => b.RecoversAt, StringComparer.Ordinal),
@@ -408,7 +417,8 @@ public class AutoFightService
     }
 
     private static bool IsStep(AutoStatus status) =>
-        status is AutoStatus.Walking or AutoStatus.Fighting or AutoStatus.Patrolling or AutoStatus.Resting;
+        status is AutoStatus.Walking or AutoStatus.Fighting or AutoStatus.Patrolling or AutoStatus.Resting
+            or AutoStatus.FallingBack;
 
     private static bool IsStopped(AutoStatus status) =>
         status is AutoStatus.OutOfProvisions or AutoStatus.RegionLost or AutoStatus.NobodyFree;
@@ -449,6 +459,12 @@ public class AutoFightService
         switch (status)
         {
             case AutoStatus.Walking:
+                // Struck on the road: the ambush is fought where it halted the company.
+                if (party.AmbushAt != null && party.ArrivesAt is DateTime arrives && at < arrives)
+                {
+                    Ambushed(party, day, at);
+                    break;
+                }
                 Arrive(party, at);
                 // Arriving at a site to fight starts the fight; arriving to patrol starts the patrol at the next decision.
                 if (party.AutoOrder == AutoOrder.Roam && FindSite(day, party.AutoTargetSiteId) is SiteSpec site && site.IsFightable)
@@ -458,6 +474,10 @@ public class AutoFightService
             case AutoStatus.Fighting:
                 if (FindSite(day, party.AutoTargetSiteId) is SiteSpec fought) SettleFight(party, day, fought, at);
                 party.State = CompanyState.Idle;
+                break;
+
+            case AutoStatus.FallingBack:
+                Arrive(party, at);
                 break;
 
             case AutoStatus.Patrolling:
@@ -527,7 +547,7 @@ public class AutoFightService
         party.AutoTargetSiteId = next.SiteId;
         var route = plans[next.SiteId];
         if (route == null || route.Duration <= TimeSpan.Zero) BeginFight(party, day, next, t);
-        else StartWalk(party, next, route, t);
+        else StartWalk(party, day, next, route, t);
         return true;
     }
 
@@ -544,12 +564,16 @@ public class AutoFightService
         if (plan == null) return false;
         party.AutoTargetSiteId = to.SiteId;
         if (plan.Duration <= TimeSpan.Zero) { Arrive(party, t, to.SiteId); return true; }
-        StartWalk(party, to, plan, t);
+        StartWalk(party, day, to, plan, t);
         return true;
     }
 
-    /// <summary>Sets out on the road, as an ordinary journey the client already knows how to draw.</summary>
-    private static void StartWalk(PlayerParty party, SiteSpec to, RoutePlan route, DateTime t)
+    /// <summary>
+    /// Sets out on the road, as an ordinary journey the client already knows how to draw. The road is
+    /// rolled now, by the same chance a steered company's is (patrols included), and seeded, so a
+    /// re-run meets the same road. If it is ambushed, the step ends where the ambush strikes.
+    /// </summary>
+    private void StartWalk(PlayerParty party, Day day, SiteSpec to, RoutePlan route, DateTime t)
     {
         party.State = CompanyState.Travelling;
         party.FromSiteId = party.SiteId;
@@ -562,6 +586,57 @@ public class AutoFightService
         party.HaltedAt = null;
         party.AutoStatus = AutoStatus.Walking;
         party.AutoStepEndsAt = t + route.Duration;
+
+        double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
+        {
+            day.Regions.TryGetValue(leg.RegionId, out var land);
+            var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
+            return (land?.Tier ?? 1, land != null && land.IsOwnedByPlayer(day.UserId), walk, day.Patrolled.Contains(leg.RegionId));
+        }));
+        if (RollRoad(chance, party.Id.ToString(), t) is double strikes)
+        {
+            party.AmbushAt = strikes;
+            party.AutoStepEndsAt = t + TimeSpan.FromTicks((long)(route.Duration.Ticks * strikes));
+        }
+    }
+
+    /// <summary>
+    /// An auto company ambushed on the road fights it by itself (§6): a skirmish at the level of the
+    /// land it was struck in. Won, it is paid as a patrol's skirmish and walks on; lost, it is Bloodied
+    /// and walks back where it set out, as a steered company that fled would.
+    /// </summary>
+    private void Ambushed(PlayerParty party, Day day, DateTime at)
+    {
+        var bound = party.ToSiteId ?? party.AutoTargetSiteId ?? "";
+        var regionId = PartyService.RegionAlong(party, at) ?? party.RegionId ?? SiteSpec.RegionIdOf(bound);
+        int mobs = day.Regions.TryGetValue(regionId ?? "", out var land)
+            ? SkirmishLevel(day.LayoutOf(land))
+            : FindSite(day, bound)?.Level ?? 1;
+
+        var fighters = FightersOf(party, day);
+        int level = AutoFightRules.CompanyLevel(fighters.Select(id => day.Levels.TryGetValue(id, out var l) ? l : 1));
+        bool won = Roll(AutoFightRules.WinChance(level, mobs), party.Id.ToString(), party.AutoFightCount++);
+
+        var report = NewReport(party, day, bound, mobs, true, at, won, fighters);
+        report.Ambush = true;
+        party.AmbushAt = null;
+
+        if (won)
+        {
+            PaySkirmish(report, day, mobs);
+            party.AutoStatus = AutoStatus.Walking;
+            party.AutoStepEndsAt = party.ArrivesAt;
+        }
+        else
+        {
+            Bloody(day, fighters, at);
+            party.HaltedAt = at;
+            PartyService.TurnBack(party, at);
+            party.AutoTargetSiteId = null;
+            party.AutoStatus = AutoStatus.FallingBack;
+            party.AutoStepEndsAt = party.ArrivesAt;
+        }
+        day.Reports.Add(report);
     }
 
     private static void Arrive(PlayerParty party, DateTime at, string? siteId = null)
@@ -633,19 +708,22 @@ public class AutoFightService
             new() { MaterialName = ResourceNodeRules.Grain, Quantity = ProvisionRules.PatrolGrainEaten(AmbushRules.PatrolSkirmishEvery) }
         });
 
-        if (won)
-        {
-            double share = AmbushRules.RewardShare * AutoFightRules.RewardShare;
-            var full = RunRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.DroppableItems,
-                Dice, AutoFightRules.RarityStepsDown);
-            var materials = MaterialRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.Materials, Dice)
-                .Select(m => (m.MaterialName, (int)AutoFightRules.Share(AmbushRules.Share(m.Quantity, Dice), Dice)));
-            Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * AmbushRules.RewardShare), Dice),
-                full.Items.Where(_ => Dice.NextDouble() < share).ToList(), materials);
-        }
+        if (won) PaySkirmish(report, day, mobs);
         else Bloody(day, fighters, at);
 
         day.Reports.Add(report);
+    }
+
+    /// <summary>A skirmish's pay: an ambush's share of a tier-1 clear at the mobs' level, then a third of that.</summary>
+    private void PaySkirmish(AutoFightReport report, Day day, int mobs)
+    {
+        double share = AmbushRules.RewardShare * AutoFightRules.RewardShare;
+        var full = RunRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.DroppableItems,
+            Dice, AutoFightRules.RarityStepsDown);
+        var materials = MaterialRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.Materials, Dice)
+            .Select(m => (m.MaterialName, (int)AutoFightRules.Share(AmbushRules.Share(m.Quantity, Dice), Dice)));
+        Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * AmbushRules.RewardShare), Dice),
+            full.Items.Where(_ => Dice.NextDouble() < share).ToList(), materials);
     }
 
     private AutoFightReport NewReport(PlayerParty party, Day day, string siteId, int level, bool skirmish, DateTime at,
@@ -750,7 +828,8 @@ public class AutoFightService
         r.Experience, r.Gold,
         Read<List<ItemSaveData>>(r.ItemsJson) ?? new List<ItemSaveData>(),
         Read<List<MaterialGrant>>(r.MaterialsJson) ?? new List<MaterialGrant>(),
-        Read<List<MaterialGrant>>(r.ProvisionsJson) ?? new List<MaterialGrant>());
+        Read<List<MaterialGrant>>(r.ProvisionsJson) ?? new List<MaterialGrant>(),
+        r.Ambush);
 
     private static T? Read<T>(string json)
     {
