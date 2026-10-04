@@ -124,6 +124,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return (int)Math.Floor(levels.Sum(l => (long)l) / (double)levels.Count);
         }
 
+        /// <summary>
+        /// The level of a region's mobs, which a patrol fights: its sites' average, as an ambush there
+        /// is fought. A patrol is only ordered where this is below the company's level.
+        /// </summary>
+        public static int MobLevel(IEnumerable<SiteSpec> sites)
+        {
+            var levels = (sites ?? Enumerable.Empty<SiteSpec>()).Select(s => Math.Max(1, s.Level)).ToList();
+            return levels.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(levels.Average()));
+        }
+
         /// <summary>Whether auto mode may fight this kind of site at all: portals and dungeons (caves are dungeons).</summary>
         public static bool IsFightable(LocationType type) =>
             type == LocationType.Portal || type == LocationType.Dungeon;

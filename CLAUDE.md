@@ -168,6 +168,10 @@ business, so nothing here is broadcast.
   - **Reruns are safe:** each fight is rolled from `AutoFightCount` (`AutoFightRules.RollWin`, seeded),
     so a rerun rolls nothing twice.
   - **Bounded:** at most 48h is replayed.
+  - **One settle at a time:** the Hall reads companies and reports together, and two replays of one
+    stretch once paid it twice. On Postgres a transaction takes `FOR UPDATE` on the player's auto
+    companies; `AutoSettledAt` is also a concurrency token. The companies are saved **first and
+    alone**, so a losing settle writes no report, wound or spent provision.
   - **Called from:** `PartyService.ListAsync`, before every auto order, and the reports read.
 - **Paid:**
   - **Gold and materials** go straight to the purse and wallet.

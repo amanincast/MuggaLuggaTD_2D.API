@@ -271,8 +271,14 @@ public class AutoFightService
         public required Dictionary<string, RegionLayout> Layouts { get; init; }
         public required Dictionary<string, int> Levels { get; init; }
         public required HashSet<string> Committed { get; init; }
-        public required Dictionary<string, BloodiedCharacter> Bloodied { get; init; }
-        public required Dictionary<string, PlayerMaterial> Goods { get; init; }
+        /// <summary>When each wounded character recovers; read untracked, written after the companies are.</summary>
+        public required Dictionary<string, DateTime> Bloodied { get; init; }
+
+        /// <summary>The wallet's goods as the replay spends them; read untracked, written after the companies are.</summary>
+        public required Dictionary<string, int> Goods { get; init; }
+
+        public readonly List<AutoFightReport> Reports = new();
+        public readonly HashSet<string> Wounded = new(StringComparer.Ordinal);
 
         public long Gold;
         public readonly List<ItemSaveData> Items = new();
@@ -294,6 +300,17 @@ public class AutoFightService
     /// </summary>
     public async Task SettleAsync(Guid gameInstanceId, string userId)
     {
+        if (!await _context.PlayerParties.AnyAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.AutoMode))
+            return;
+
+        // One settle at a time per player. The Hall reads the companies and the reports together, and
+        // two replays of the same stretch would pay it twice: on Postgres the second waits here for the
+        // first to commit, then finds nothing left to do.
+        await using var transaction = _context.Database.IsRelational() ? await _context.Database.BeginTransactionAsync() : null;
+        if (transaction != null)
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM \"PlayerParties\" WHERE \"GameInstanceId\" = {gameInstanceId} AND \"UserId\" = {userId} AND \"AutoMode\" FOR UPDATE");
+
         var parties = await _context.PlayerParties
             .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.AutoMode)
             .ToListAsync();
@@ -322,15 +339,56 @@ public class AutoFightService
                          .ToDictionary(g => g.Key, g => (int)Math.Max(1, g.First().Level), StringComparer.Ordinal)
                      ?? new Dictionary<string, int>(StringComparer.Ordinal),
             Committed = committed,
-            Bloodied = await _context.BloodiedCharacters
+            Bloodied = await _context.BloodiedCharacters.AsNoTracking()
                 .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId)
-                .ToDictionaryAsync(b => b.CharacterId, StringComparer.Ordinal),
-            Goods = await _context.PlayerMaterials
+                .ToDictionaryAsync(b => b.CharacterId, b => b.RecoversAt, StringComparer.Ordinal),
+            Goods = await _context.PlayerMaterials.AsNoTracking()
                 .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
-                .ToDictionaryAsync(m => m.MaterialName, StringComparer.Ordinal),
+                .ToDictionaryAsync(m => m.MaterialName, m => m.Quantity, StringComparer.Ordinal),
         };
 
         foreach (var party in parties) Replay(party, day);
+
+        // The companies are written first, and alone: AutoSettledAt is a concurrency token, so if
+        // another read settled them meanwhile this save fails before any report, wound or spent
+        // provision of this replay is written. (The in-memory provider is not transactional, so the
+        // order matters there too.)
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _context.ChangeTracker.Clear();
+            _sessionLog.Log("AUTO-SETTLE-RACE", $"user={userId} another read settled first; nothing paid twice");
+            return;
+        }
+
+        _context.AutoFightReports.AddRange(day.Reports);
+        if (day.Wounded.Count > 0)
+        {
+            var rows = await _context.BloodiedCharacters
+                .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId && day.Wounded.Contains(b.CharacterId))
+                .ToDictionaryAsync(b => b.CharacterId, StringComparer.Ordinal);
+            foreach (var id in day.Wounded)
+            {
+                if (!rows.TryGetValue(id, out var row))
+                    _context.BloodiedCharacters.Add(row = new BloodiedCharacter { GameInstanceId = gameInstanceId, UserId = userId, CharacterId = id });
+                row.RecoversAt = day.Bloodied[id];
+            }
+        }
+        if (day.Eaten.Count > 0)
+        {
+            var names = day.Eaten.Keys.ToList();
+            var goods = await _context.PlayerMaterials
+                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId && names.Contains(m.MaterialName))
+                .ToListAsync();
+            foreach (var row in goods)
+            {
+                row.Quantity = Math.Max(0, row.Quantity - day.Eaten[row.MaterialName]);
+                row.UpdatedAt = day.Now;
+            }
+        }
         await _context.SaveChangesAsync();
 
         // Paid as one sum each, after the replay: the purse settles its land income up to now first.
@@ -340,6 +398,8 @@ public class AutoFightService
                 day.Materials.Select(m => new MaterialGrant { MaterialName = m.Key, Quantity = m.Value }).ToList(), source);
         if (day.Items.Count > 0) await _items.GrantAsync(gameInstanceId, userId, day.Items, source);
         if (day.Gold > 0) await _gold.GrantAsync(gameInstanceId, userId, day.Gold, source);
+
+        if (transaction != null) await transaction.CommitAsync();
 
         if (day.Fights > 0 || day.Eaten.Count > 0)
             _sessionLog.Log("AUTO-SETTLE",
@@ -415,7 +475,7 @@ public class AutoFightService
         var fighters = FightersOf(party, day);
         if (fighters.Count == 0) return Stop(party, AutoStatus.NobodyFree);
 
-        var recovers = fighters.Select(id => day.Bloodied.TryGetValue(id, out var b) ? b.RecoversAt : DateTime.MinValue).Max();
+        var recovers = fighters.Select(id => day.Bloodied.TryGetValue(id, out var until) ? until : DateTime.MinValue).Max();
         if (recovers > t)
         {
             party.AutoStatus = AutoStatus.Resting;
@@ -556,7 +616,7 @@ public class AutoFightService
         }
         else Bloody(day, fighters, at);
 
-        _context.AutoFightReports.Add(report);
+        day.Reports.Add(report);
     }
 
     /// <summary>A patrol meets the mobs it keeps down: an ambush's skirmish at the region's level, paid at an ambush's share of a third.</summary>
@@ -585,7 +645,7 @@ public class AutoFightService
         }
         else Bloody(day, fighters, at);
 
-        _context.AutoFightReports.Add(report);
+        day.Reports.Add(report);
     }
 
     private AutoFightReport NewReport(PlayerParty party, Day day, string siteId, int level, bool skirmish, DateTime at,
@@ -622,18 +682,14 @@ public class AutoFightService
             day.Materials[name] = day.Materials.TryGetValue(name, out var had) ? had + quantity : quantity;
     }
 
-    private void Bloody(Day day, List<string> fighters, DateTime at)
+    private static void Bloody(Day day, List<string> fighters, DateTime at)
     {
         var recovers = BloodiedRules.RecoversAt(at);
         foreach (var id in fighters)
         {
-            if (!day.Bloodied.TryGetValue(id, out var row))
-            {
-                row = new BloodiedCharacter { GameInstanceId = day.Instance, UserId = day.UserId, CharacterId = id };
-                _context.BloodiedCharacters.Add(row);
-                day.Bloodied[id] = row;
-            }
-            if (recovers > row.RecoversAt) row.RecoversAt = recovers;
+            if (day.Bloodied.TryGetValue(id, out var until) && until >= recovers) continue;
+            day.Bloodied[id] = recovers;
+            day.Wounded.Add(id);
         }
     }
 
@@ -641,12 +697,11 @@ public class AutoFightService
     private static bool Spend(Day day, IEnumerable<(string Good, int Quantity)> cost)
     {
         var list = cost.Where(c => c.Quantity > 0).ToList();
-        var held = day.Goods.ToDictionary(g => g.Key, g => (long)g.Value.Quantity, StringComparer.Ordinal);
+        var held = day.Goods.ToDictionary(g => g.Key, g => (long)g.Value, StringComparer.Ordinal);
         if (!ProvisionRules.CanAfford(held, list)) return false;
         foreach (var (good, quantity) in list)
         {
-            day.Goods[good].Quantity -= quantity;
-            day.Goods[good].UpdatedAt = day.Now;
+            day.Goods[good] -= quantity;
             day.Eaten[good] = day.Eaten.TryGetValue(good, out var had) ? had + quantity : quantity;
         }
         return true;
@@ -682,9 +737,8 @@ public class AutoFightService
         catch (JsonException) { return new List<string>(); }
     }
 
-    /// <summary>The level of a region's mobs, as an ambush there is fought: its sites' average.</summary>
-    private static int SkirmishLevel(RegionLayout layout) =>
-        layout.Sites.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(layout.Sites.Average(s => Math.Max(1, s.Level))));
+    /// <summary>The level of a region's mobs (<see cref="AutoFightRules.MobLevel"/>).</summary>
+    private static int SkirmishLevel(RegionLayout layout) => AutoFightRules.MobLevel(layout.Sites);
 
     private static IEnumerable<int> LevelsOf(UserSaveData? save, List<string> ids) =>
         ids.Select(id => (int)Math.Max(1, save?.Characters?.FirstOrDefault(c => c?.Id == id)?.Level ?? 1));

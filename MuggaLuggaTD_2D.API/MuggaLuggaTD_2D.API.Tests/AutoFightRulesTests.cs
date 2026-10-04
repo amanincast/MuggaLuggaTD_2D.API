@@ -45,6 +45,14 @@ public class AutoFightRulesTests
     }
 
     [Fact]
+    public void ARegionsMobsAreItsSitesAverageLevel()
+    {
+        var sites = new[] { new SiteSpec { Level = 3 }, new SiteSpec { Level = 4 }, new SiteSpec { Level = 8 } };
+        Assert.Equal(5, AutoFightRules.MobLevel(sites));
+        Assert.Equal(1, AutoFightRules.MobLevel(Array.Empty<SiteSpec>()));
+    }
+
+    [Fact]
     public void OnlyPortalsAndDungeonsAreFoughtInAutoMode()
     {
         Assert.True(AutoFightRules.IsFightable(LocationType.Portal));

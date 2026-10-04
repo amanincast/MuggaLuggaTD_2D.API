@@ -23,7 +23,10 @@ namespace MuggaLuggaTD_2D.API.Tests;
 /// </summary>
 public class AutoFightServiceTests : IDisposable
 {
-    private readonly ApplicationDbContext _db = TestDb.Create();
+    private readonly string _store = $"tests-{Guid.NewGuid()}";
+    private readonly ApplicationDbContext _db;
+
+    public AutoFightServiceTests() => _db = TestDb.Create(_store);
     private readonly FakeGameContent _content = new();
     private DateTime _now = DateTime.UtcNow;
     private Func<double, string, long, bool> _roll = (_, _, _) => true;
@@ -91,6 +94,36 @@ public class AutoFightServiceTests : IDisposable
         await _db.AutoFightReports.AsNoTracking()
             .Where(r => r.GameInstanceId == instance && r.UserId == TestIds.Player)
             .OrderBy(r => r.At).ToListAsync();
+
+    [Fact]
+    public async Task TwoReadsAtOnceReplayTheStretchOnlyOnce()
+    {
+        var (instance, company, home, _) = await SeedAsync();
+        await SendAsync(instance, company, AutoOrder.Roam, home.RegionId);
+        _now += TimeSpan.FromHours(1);
+
+        // This request has the company in hand, as of the order...
+        await _db.PlayerParties.SingleAsync(p => p.Id == company.Id);
+
+        // ...when another request (the Hall reads companies and reports together) settles it first.
+        using (var other = TestDb.Create(_store))
+        {
+            var first = new AutoFightService(other, _content,
+                new MaterialWalletService(other, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance),
+                new GoldService(other, new FakeSessionLog(), NullLogger<GoldService>.Instance),
+                new ItemLedgerService(other, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance),
+                new FakeSessionLog(), NullLogger<AutoFightService>.Instance) { Clock = () => _now, Roll = _roll, Dice = new Random(3) };
+            await first.SettleAsync(instance, TestIds.Player);
+        }
+        int once = (await ReportsAsync(instance)).Count;
+        int grain = await HeldAsync(instance, ResourceNodeRules.Grain);
+        Assert.True(once > 0);
+
+        await Auto.SettleAsync(instance, TestIds.Player);
+
+        Assert.Equal(once, (await ReportsAsync(instance)).Count);
+        Assert.Equal(grain, await HeldAsync(instance, ResourceNodeRules.Grain));
+    }
 
     [Fact]
     public async Task ACompanyInAutoModeWaitsForAnOrder()
