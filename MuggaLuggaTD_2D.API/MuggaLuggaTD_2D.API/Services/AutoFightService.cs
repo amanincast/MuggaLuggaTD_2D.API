@@ -346,7 +346,7 @@ public class AutoFightService
                          .ToDictionary(g => g.Key, g => (int)Math.Max(1, g.First().Level), StringComparer.Ordinal)
                      ?? new Dictionary<string, int>(StringComparer.Ordinal),
             Committed = committed,
-            Patrolled = parties.Where(p => p.AutoOrder == AutoOrder.Patrol && p.AutoRegionId != null)
+            Patrolled = parties.Where(p => AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
                 .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal),
             Bloodied = await _context.BloodiedCharacters.AsNoTracking()
                 .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId)

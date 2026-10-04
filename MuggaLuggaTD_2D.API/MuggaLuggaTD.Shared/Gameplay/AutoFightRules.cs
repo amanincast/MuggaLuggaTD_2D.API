@@ -93,6 +93,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// </summary>
     public static class AutoFightRules
     {
+        /// <summary>
+        /// Whether a company keeps its region's roads and diggings safe: under patrol orders and not
+        /// stopped (out of provisions, outmatched, the land lost, or nobody free). A stopped patrol
+        /// guards nothing. Its region is <c>AutoRegionId</c>.
+        /// </summary>
+        public static bool Guards(AutoOrder order, AutoStatus status) =>
+            order == AutoOrder.Patrol
+            && status != AutoStatus.OutOfProvisions && status != AutoStatus.NothingToFight
+            && status != AutoStatus.RegionLost && status != AutoStatus.NobodyFree;
+
         /// <summary>The share of a hand-played clear's experience, gold, items and materials an auto win pays.</summary>
         public const double RewardShare = 0.33;
 

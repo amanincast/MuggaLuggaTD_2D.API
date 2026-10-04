@@ -199,6 +199,8 @@ business, so nothing here is broadcast.
 - **Season reset:** every company comes out of auto mode, and wounds heal. Uncollected reports stay.
 - **A patrol halves the ambush chance** on its player's journeys through its region (`TravelAsync`
   passes it to `AmbushRules.ChanceForRoute`), and the client's risk preview reads the same.
+  - **Which patrols count** (everywhere: roads, auto roads, diggings): `AutoFightRules.Guards`,
+    a company under patrol orders that has not stopped. Out of provisions, it guards nothing.
 - **An auto company's road is rolled too** (phase 4), in `StartWalk`, by the same chance with
   patrols counted. The roll is `AutoFightRules.RollAmbush`, seeded from the company and its
   departure, so it is the same on every rerun.
@@ -284,6 +286,13 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   `HiringService.SettleAllAsync` after gold, so a region changing hands pays its workers and sends
   them home in the same pass. The wallet GET and the room GET settle that one player first. Whole
   goods go to the material wallet (`hiring-output`); the fraction stays in `Carry`.
+- **Raiders at the diggings** (auto-fight.md §7, phase 5): in an hour `HarassmentRules.IsHarried`
+  picks (about 1 in 10, from realm, region and hour; nothing stored), an unpatrolled region's
+  workers gather at **half** pace (`HiringRules.Gathered` with a harried-hour function).
+  - **A patrol keeps them off:** `GuardedAsync` reads the player's guarding patrols as they stand
+    *now*. A settle over a long stretch therefore credits the patrol for all of it, or none. Every
+    wallet or company read settles both, so while the player plays the stretch is short.
+  - The client shows it from the same rule (`HiringHandler.IsHarriedNow`); the server sends nothing.
 - **Season reset** (`HiringService.ResetRealmAsync`): workers, benches, states and every good in
   the realm's wallets are removed.
 - Pinned by `HiringRulesTests` and `HiringServiceTests`.
