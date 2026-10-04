@@ -55,6 +55,11 @@ public class HiringServiceTests : IDisposable
         throw new InvalidOperationException("no region with a resource site");
     }
 
+    /// <summary>What a worker at <paramref name="siteId"/> gathers over a stretch, raiders included (nobody patrols).</summary>
+    private double Expected(HiredWorker worker, double rate, string siteId, DateTime from, DateTime to) =>
+        HiringRules.Gathered(rate, from, to, false, worker.Id.ToString(),
+            h => HarassmentRules.IsHarried(_realm.ToString(), SiteSpec.RegionIdOf(siteId), h));
+
     private async Task<HiredWorker> WorkerAsync(ResourceTrade trade, params WorkerTrait[] traits)
     {
         var worker = new HiredWorker
@@ -253,10 +258,11 @@ public class HiringServiceTests : IDisposable
         await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
         double rate = worker.RatePerHour;
 
+        var from = _now;
         _now += TimeSpan.FromHours(2.5);
         await Hiring.SettlePlayerAsync(_realm, Player);
 
-        double expected = rate * 2.5;
+        double expected = Expected(worker, rate, site.SiteId, from, _now);
         Assert.Equal((int)Math.Floor(expected), await GoodsAsync(trade));
         Assert.Equal(expected - Math.Floor(expected), worker.Carry, 6);
     }
@@ -296,6 +302,7 @@ public class HiringServiceTests : IDisposable
         var worker = await WorkerAsync(trade);
         await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
         double rate = worker.RatePerHour;
+        var from = _now;
 
         _now += TimeSpan.FromHours(4);
         region.Ownership = LocationOwnership.Player;
@@ -304,7 +311,89 @@ public class HiringServiceTests : IDisposable
 
         Assert.Null(worker.SiteId);
         Assert.Equal(0, worker.RatePerHour);
-        Assert.Equal((int)Math.Floor(rate * 4), await GoodsAsync(trade));
+        Assert.Equal((int)Math.Floor(Expected(worker, rate, site.SiteId, from, _now)), await GoodsAsync(trade));
+    }
+
+    // -----------------------------------------------------------------
+    // Raiders at the diggings (auto-fight.md §7, phase 5)
+    // -----------------------------------------------------------------
+
+    /// <summary>Moves the clock to the start of a day that holds at least one harried hour for the region.</summary>
+    private int ToATroubledDay(string regionId)
+    {
+        for (int day = 0; day < 60; day++)
+        {
+            var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(day);
+            long first = HarassmentRules.HourOf(start);
+            int harried = Enumerable.Range(0, 24).Count(h => HarassmentRules.IsHarried(_realm.ToString(), regionId, first + h));
+            if (harried > 0) { _now = start; return harried; }
+        }
+        throw new InvalidOperationException("sixty quiet days");
+    }
+
+    [Fact]
+    public async Task RaidersHarryTheDiggingsOfARegionNobodyPatrols()
+    {
+        var (region, site, trade) = await WorldAsync();
+        int harried = ToATroubledDay(region.RegionId);
+        var worker = await WorkerAsync(trade);
+        worker.LastSettledAt = _now;
+        await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
+        double rate = worker.RatePerHour;
+
+        _now += TimeSpan.FromHours(24);
+        await Hiring.SettlePlayerAsync(_realm, Player);
+
+        // Each harried hour paid half of its work.
+        double expected = rate * (24 - harried * (1 - HarassmentRules.HarriedFactor));
+        Assert.Equal((int)Math.Floor(expected), await GoodsAsync(trade));
+        Assert.True(await GoodsAsync(trade) < (int)Math.Floor(rate * 24));
+    }
+
+    [Fact]
+    public async Task APatrolKeepsTheRaidersOff()
+    {
+        var (region, site, trade) = await WorldAsync();
+        ToATroubledDay(region.RegionId);
+        var worker = await WorkerAsync(trade);
+        worker.LastSettledAt = _now;
+        await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
+        double rate = worker.RatePerHour;
+
+        _db.PlayerParties.Add(new PlayerParty
+        {
+            GameInstanceId = _realm, UserId = Player, Name = "The Watch", CharacterIdsJson = "[\"hero-1\"]",
+            AutoMode = true, AutoOrder = AutoOrder.Patrol, AutoRegionId = region.RegionId, AutoStatus = AutoStatus.Patrolling,
+        });
+        await _db.SaveChangesAsync();
+
+        _now += TimeSpan.FromHours(24);
+        await Hiring.SettlePlayerAsync(_realm, Player);
+
+        Assert.Equal((int)Math.Floor(rate * 24), await GoodsAsync(trade));
+    }
+
+    [Fact]
+    public async Task APatrolThatHasStoppedKeepsNobodyOff()
+    {
+        var (region, site, trade) = await WorldAsync();
+        int harried = ToATroubledDay(region.RegionId);
+        var worker = await WorkerAsync(trade);
+        worker.LastSettledAt = _now;
+        await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
+        double rate = worker.RatePerHour;
+
+        _db.PlayerParties.Add(new PlayerParty
+        {
+            GameInstanceId = _realm, UserId = Player, Name = "The Watch", CharacterIdsJson = "[\"hero-1\"]",
+            AutoMode = true, AutoOrder = AutoOrder.Patrol, AutoRegionId = region.RegionId, AutoStatus = AutoStatus.OutOfProvisions,
+        });
+        await _db.SaveChangesAsync();
+
+        _now += TimeSpan.FromHours(24);
+        await Hiring.SettlePlayerAsync(_realm, Player);
+
+        Assert.Equal((int)Math.Floor(rate * (24 - harried * (1 - HarassmentRules.HarriedFactor))), await GoodsAsync(trade));
     }
 
     // -----------------------------------------------------------------

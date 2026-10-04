@@ -122,10 +122,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// lucky hours count double, so the luck comes in lumps rather than as a flat +10%.
         /// </summary>
         public static double Gathered(double ratePerHour, DateTime from, DateTime to, bool lucky, string workerId)
+            => Gathered(ratePerHour, from, to, lucky, workerId, null);
+
+        /// <summary>
+        /// As above, with the hours raiders harried the diggings (<see cref="HarassmentRules"/>): each
+        /// pays <see cref="HarassmentRules.HarriedFactor"/> of its work. Null for none.
+        /// </summary>
+        public static double Gathered(double ratePerHour, DateTime from, DateTime to, bool lucky, string workerId,
+            Func<long, bool> harried)
         {
             if (ratePerHour <= 0 || to <= from) return 0;
             double hours = (to - from).TotalHours;
-            if (!lucky) return ratePerHour * hours;
+            if (!lucky && harried == null) return ratePerHour * hours;
 
             double total = 0;
             long first = from.Ticks / TimeSpan.TicksPerHour, last = (to.Ticks - 1) / TimeSpan.TicksPerHour;
@@ -134,7 +142,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 var start = new DateTime(Math.Max(from.Ticks, h * TimeSpan.TicksPerHour), DateTimeKind.Utc);
                 var end = new DateTime(Math.Min(to.Ticks, (h + 1) * TimeSpan.TicksPerHour), DateTimeKind.Utc);
                 double share = (end - start).TotalHours;
-                total += ratePerHour * share * (IsLuckyHour(workerId, h) ? 2 : 1);
+                double factor = lucky && IsLuckyHour(workerId, h) ? 2 : 1;
+                if (harried != null && harried(h)) factor *= HarassmentRules.HarriedFactor;
+                total += ratePerHour * share * factor;
             }
             return total;
         }

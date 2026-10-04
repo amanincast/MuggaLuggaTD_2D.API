@@ -333,7 +333,7 @@ public class PartyService
         // is not told until it strikes. Every region walked is a chance of its own, and one of the
         // player's companies patrolling it makes it safer (auto-fight.md §6).
         var byId = regions.ToDictionary(r => r.RegionId);
-        var patrolled = parties.Where(p => p.AutoMode && p.AutoOrder == AutoOrder.Patrol && p.AutoRegionId != null)
+        var patrolled = parties.Where(p => p.AutoMode && AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
             .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal);
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {

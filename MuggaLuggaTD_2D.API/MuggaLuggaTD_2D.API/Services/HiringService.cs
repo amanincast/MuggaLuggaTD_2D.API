@@ -267,13 +267,19 @@ public class HiringService
         var byId = regions.ToDictionary(r => r.RegionId ?? "", r => r);
         var touched = new HashSet<string?>();
         var pay = new Dictionary<string, Dictionary<string, int>>();
+        var guarded = await GuardedAsync(gameInstanceId, onlyUserId);
+        string realm = gameInstanceId.ToString();
 
         foreach (var worker in workers)
         {
             if (until > worker.LastSettledAt)
             {
+                // Raiders harry the diggings of a region nobody patrols, now and then (auto-fight.md §7).
+                string regionId = SiteSpec.RegionIdOf(worker.SiteId!);
+                bool patrolled = guarded.Contains((worker.UserId, regionId));
                 double gathered = worker.Carry + HiringRules.Gathered(worker.RatePerHour, worker.LastSettledAt, until,
-                    worker.TraitList.Contains(WorkerTrait.Lucky), worker.Id.ToString());
+                    worker.TraitList.Contains(WorkerTrait.Lucky), worker.Id.ToString(),
+                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h));
                 int whole = (int)Math.Floor(gathered);
                 worker.Carry = gathered - whole;
                 worker.LastSettledAt = until;
@@ -310,6 +316,21 @@ public class HiringService
                 goods.Select(g => new MaterialGrant { MaterialName = g.Key, Quantity = g.Value }).ToList(), "hiring-output");
 
         if (touched.Count > 0) await RerateAsync(gameInstanceId, regions, touched);
+    }
+
+    /// <summary>
+    /// The regions each player keeps a patrol in (<see cref="AutoFightRules.Guards"/>), as they stand
+    /// now. A settle covering a long stretch takes the patrol as it is at the end of it: every read of
+    /// the player's companies or wallet settles both, so the stretch is short while they play.
+    /// </summary>
+    private async Task<HashSet<(string UserId, string RegionId)>> GuardedAsync(Guid gameInstanceId, string? onlyUserId)
+    {
+        var query = _context.PlayerParties.AsNoTracking()
+            .Where(p => p.GameInstanceId == gameInstanceId && p.AutoMode && p.AutoOrder == AutoOrder.Patrol && p.AutoRegionId != null);
+        if (onlyUserId != null) query = query.Where(p => p.UserId == onlyUserId);
+        var patrols = await query.Select(p => new { p.UserId, p.AutoRegionId, p.AutoOrder, p.AutoStatus }).ToListAsync();
+        return patrols.Where(p => AutoFightRules.Guards(p.AutoOrder, p.AutoStatus))
+            .Select(p => (p.UserId, p.AutoRegionId!)).ToHashSet();
     }
 
     /// <summary>Settles one player's workers against the realm's current world. Before their goods are read or spent.</summary>

@@ -226,4 +226,50 @@ public class AutoFightRulesTests
         Assert.InRange(struck, 60, 140);   // about a quarter of 400
         Assert.Null(AutoFightRules.RollAmbush(0, "company-a", departed));
     }
+
+    [Fact]
+    public void RaidersComeToAboutOneHourInTen_TheSameEveryTime()
+    {
+        int harried = 0;
+        for (long h = 0; h < 20000; h++)
+        {
+            bool once = HarassmentRules.IsHarried("realm-a", "r7", h);
+            Assert.Equal(once, HarassmentRules.IsHarried("REALM-A", "r7", h));   // the realm id's case does not matter
+            if (once) harried++;
+        }
+        Assert.InRange(harried, 1700, 2300);
+        Assert.False(HarassmentRules.IsHarried("realm-a", "", 5));
+    }
+
+    [Fact]
+    public void APatrolledRegionIsNeverHarried()
+    {
+        long hour = Enumerable.Range(0, 1000).First(h => HarassmentRules.IsHarried("realm-a", "r7", h));
+        var at = new DateTime(hour * TimeSpan.TicksPerHour + TimeSpan.TicksPerMinute, DateTimeKind.Utc);
+        Assert.True(HarassmentRules.IsHarriedAt("realm-a", "r7", at, patrolled: false));
+        Assert.False(HarassmentRules.IsHarriedAt("realm-a", "r7", at, patrolled: true));
+        Assert.Equal(new DateTime((hour + 1) * TimeSpan.TicksPerHour, DateTimeKind.Utc), HarassmentRules.HourEnds(at));
+    }
+
+    [Fact]
+    public void AHarriedHourPaysHalf()
+    {
+        var from = new DateTime(2026, 10, 4, 0, 0, 0, DateTimeKind.Utc);
+        long first = HarassmentRules.HourOf(from);
+        double full = HiringRules.Gathered(12, from, from.AddHours(4), false, "w");
+        double troubled = HiringRules.Gathered(12, from, from.AddHours(4), false, "w", h => h == first + 1);
+        Assert.Equal(48, full, 6);
+        Assert.Equal(42, troubled, 6);
+    }
+
+    [Fact]
+    public void OnlyAPatrolThatIsStillGoingGuards()
+    {
+        Assert.True(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.Patrolling));
+        Assert.True(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.Walking));
+        Assert.True(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.Resting));
+        Assert.False(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.OutOfProvisions));
+        Assert.False(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.RegionLost));
+        Assert.False(AutoFightRules.Guards(AutoOrder.Roam, AutoStatus.Fighting));
+    }
 }
