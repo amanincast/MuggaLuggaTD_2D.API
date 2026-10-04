@@ -202,7 +202,8 @@ public record AutoReportDto(
     long Gold,
     List<StateManagement.Models.ItemSaveData> Items,
     List<MaterialGrant> Materials,
-    List<MaterialGrant> Provisions
+    List<MaterialGrant> Provisions,
+    bool Ambush = false
 );
 
 public record AutoReportsResponse(List<AutoReportDto> Reports, DateTime ServerNow);

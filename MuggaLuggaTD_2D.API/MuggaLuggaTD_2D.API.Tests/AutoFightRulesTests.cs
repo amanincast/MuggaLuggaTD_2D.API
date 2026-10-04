@@ -206,4 +206,24 @@ public class AutoFightRulesTests
         Assert.Equal(hand.Experience, auto.Experience);
         Assert.Equal(hand.Gold, auto.Gold);
     }
+
+    [Fact]
+    public void AnAutoRoadIsRolledTheSameEveryTimeAndStrikesMidway()
+    {
+        var departed = new DateTime(2026, 10, 4, 12, 0, 0, DateTimeKind.Utc);
+        int struck = 0;
+        for (int i = 0; i < 400; i++)
+        {
+            var at = departed.AddMinutes(i);
+            var once = AutoFightRules.RollAmbush(0.25, "company-a", at);
+            Assert.Equal(once, AutoFightRules.RollAmbush(0.25, "company-a", at));
+            if (once is double share)
+            {
+                struck++;
+                Assert.InRange(share, AmbushRules.EarliestStrike, AmbushRules.LatestStrike);
+            }
+        }
+        Assert.InRange(struck, 60, 140);   // about a quarter of 400
+        Assert.Null(AutoFightRules.RollAmbush(0, "company-a", departed));
+    }
 }

@@ -198,8 +198,18 @@ business, so nothing here is broadcast.
   - `SettleArrival` skips auto companies.
 - **Season reset:** every company comes out of auto mode, and wounds heal. Uncollected reports stay.
 - **A patrol halves the ambush chance** on its player's journeys through its region (`TravelAsync`
-  passes it to `AmbushRules.ChanceForRoute`). The client's risk preview catches up in phase 4.
-- **Not yet:** an auto company on the road is never ambushed. That is phase 4.
+  passes it to `AmbushRules.ChanceForRoute`), and the client's risk preview reads the same.
+- **An auto company's road is rolled too** (phase 4), in `StartWalk`, by the same chance with
+  patrols counted. The roll is `AutoFightRules.RollAmbush`, seeded from the company and its
+  departure, so it is the same on every rerun.
+  - **The strike:** the walk's step ends where the ambush strikes (`AmbushAt` set,
+    `AutoStepEndsAt` < `ArrivesAt`). `Ambushed` fights a skirmish at the mob level of the region
+    struck in, and writes a report with `Ambush` set.
+  - **Won:** it is paid as a patrol's skirmish and walks on.
+  - **Lost:** its fighters are Bloodied, and it walks back the way it came (`PartyService.TurnBack`,
+    `AutoStatus.FallingBack`). It then rests out its wounds and carries on.
+  - **Toggled off mid-walk:** an ambush already rolled stays, and halts the company to be asked,
+    as for any steered company.
 
 ## The equipment ledger (`ItemLedgerService`, `ItemGrant`)
 
