@@ -35,6 +35,18 @@ public record PveClaimRequest(
     [Required] string SharedContractVersion
 );
 
+/// <summary>
+/// The player gave up a run (BloodiedRules): the server closes it and Bloodies everyone who went in.
+/// A lost run that was not given up is never reported; its cost is the capture roll.
+/// </summary>
+public record PveAbandonRequest(
+    [Required] Guid RunId,
+    [Required] string SharedContractVersion
+);
+
+/// <summary>Who came out Bloodied, and until when.</summary>
+public record PveAbandonResponse(List<BloodiedDto> Bloodied);
+
 public record PveClaimResponse(
     string SiteId,
     /// <summary>"CaptureForPlayer" or "RemoveLocation", as decided by the server.</summary>

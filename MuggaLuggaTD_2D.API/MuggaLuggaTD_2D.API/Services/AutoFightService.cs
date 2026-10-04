@@ -242,6 +242,30 @@ public class AutoFightService
         return rows.ToDictionary(b => b.CharacterId, b => DateTime.SpecifyKind(b.RecoversAt, DateTimeKind.Utc), StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// Bloodies <paramref name="characterIds"/> from <paramref name="at"/> (BloodiedRules): a lost
+    /// ambush, an abandoned run, a lost raid, a repelled siege. A later recovery already on the books
+    /// stands. The caller saves.
+    /// </summary>
+    public static async Task BloodyAsync(ApplicationDbContext context, Guid gameInstanceId, string userId,
+        IEnumerable<string> characterIds, DateTime at)
+    {
+        var ids = characterIds.Where(id => !string.IsNullOrEmpty(id)).ToHashSet(StringComparer.Ordinal);
+        if (ids.Count == 0) return;
+        var recovers = BloodiedRules.RecoversAt(at);
+        var rows = await context.BloodiedCharacters
+            .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId && ids.Contains(b.CharacterId))
+            .ToDictionaryAsync(b => b.CharacterId, StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            if (!rows.TryGetValue(id, out var row))
+                context.BloodiedCharacters.Add(row = new BloodiedCharacter { GameInstanceId = gameInstanceId, UserId = userId, CharacterId = id });
+            else if (row.RecoversAt >= recovers)
+                continue;
+            row.RecoversAt = recovers;
+        }
+    }
+
     /// <summary>A season reset: every company comes out of auto mode and every wound heals. Uncollected reports stay; their gear is the player's.</summary>
     public static async Task ResetRealmAsync(ApplicationDbContext context, Guid realmId)
     {

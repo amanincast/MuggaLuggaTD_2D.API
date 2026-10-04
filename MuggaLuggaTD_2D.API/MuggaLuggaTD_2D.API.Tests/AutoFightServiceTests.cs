@@ -245,26 +245,34 @@ public class AutoFightServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ABloodiedCharacterIsRefusedEveryFight()
+    public async Task ABloodiedHeroFightsAQuarterWeakerWhereThePlayerChose_ButStandsNoGarrison()
     {
         var (instance, _, _, _) = await SeedAsync();
+        var world = TestWorld.RoundTrip(TestWorld.Blob(TestWorld.OwnedBy(TestIds.Player, "r1")));
+        var both = new[] { "hero-1", "hero-4" };
+        var fresh = await MarchingArmy.MusterAsync(_db, _content, NullLogger.Instance, instance, TestIds.Player, world, both);
+        var alone = await MarchingArmy.MusterAsync(_db, _content, NullLogger.Instance, instance, TestIds.Player, world, new[] { "hero-1" });
+
         _db.BloodiedCharacters.Add(new BloodiedCharacter
         {
             GameInstanceId = instance, UserId = TestIds.Player, CharacterId = "hero-4",
             RecoversAt = DateTime.UtcNow.AddMinutes(12),
         });
         await _db.SaveChangesAsync();
-        var world = TestWorld.RoundTrip(TestWorld.Blob(TestWorld.OwnedBy(TestIds.Player, "r1")));
 
-        var why = await PartyService.WhyCannotFightAsync(_db, NullLogger.Instance, world, instance, TestIds.Player,
-            new[] { "hero-1", "hero-4" });
-        Assert.NotNull(why);
-        Assert.Contains("Bloodied", why);
-        Assert.Contains("12 min", why);
+        // A hand-played fight takes them (the client fields them a quarter weaker).
+        Assert.Null(await PartyService.WhyCannotFightAsync(_db, NullLogger.Instance, world, instance, TestIds.Player, both));
 
-        var muster = await MarchingArmy.MusterAsync(_db, _content, NullLogger.Instance, instance, TestIds.Player, world,
-            new[] { "hero-1", "hero-4" });
-        Assert.Equal(new[] { "hero-1" }, muster.CharacterIds);
+        // A raid or siege march takes them, their share of its power a quarter less.
+        var muster = await MarchingArmy.MusterAsync(_db, _content, NullLogger.Instance, instance, TestIds.Player, world, both);
+        Assert.Equal(both, muster.CharacterIds);
+        Assert.Equal(BloodiedRules.Weaken(fresh.Power, alone.Power), muster.Power, 6);
+        Assert.True(muster.Power < fresh.Power && muster.Power > alone.Power);
+
+        // Nobody steers a garrison: it takes none of them.
+        var post = await MarchingArmy.MusterAsync(_db, _content, NullLogger.Instance, instance, TestIds.Player, world,
+            both, onAGarrison: true);
+        Assert.Equal(new[] { "hero-1" }, post.CharacterIds);
     }
 
     [Fact]

@@ -272,4 +272,14 @@ public class AutoFightRulesTests
         Assert.False(AutoFightRules.Guards(AutoOrder.Patrol, AutoStatus.RegionLost));
         Assert.False(AutoFightRules.Guards(AutoOrder.Roam, AutoStatus.Fighting));
     }
+
+    [Fact]
+    public void ABloodiedHerosShareOfAMarchIsAQuarterLess()
+    {
+        Assert.Equal(0.25, BloodiedRules.Penalty);
+        Assert.Equal(0.75, BloodiedRules.Strength);
+        Assert.Equal(175, BloodiedRules.Weaken(200, 100), 6);   // they added 100; it counts 75
+        Assert.Equal(75, BloodiedRules.Weaken(100, 0), 6);      // all of them Bloodied
+        Assert.Equal(100, BloodiedRules.Weaken(100, 100), 6);   // nobody Bloodied
+    }
 }

@@ -912,6 +912,11 @@ public class PartyServiceTests : IDisposable
         Assert.Equal(0, claim.Gold);
         Assert.Equal(CompanyState.Returning, claim.Parties.Parties[0].State);
         Assert.Equal(keep, claim.Parties.Parties[0].Journey!.ToSiteId);
+
+        // Its fighters come home Bloodied.
+        var wounded = await AutoFightService.BloodiedAsync(_db, instance, TestIds.Player, DateTime.UtcNow);
+        Assert.Equal(company.CharacterIds.OrderBy(i => i), wounded.Keys.OrderBy(i => i));
+        Assert.NotEmpty(claim.Parties.Bloodied!);
     }
 
     [Fact]

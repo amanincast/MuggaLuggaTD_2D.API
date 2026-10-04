@@ -585,6 +585,11 @@ public class WorldSiegeServiceTests : IDisposable
 
         var defender = await _db.SeasonScores.AsNoTracking().FirstAsync(s => s.UserId == TestIds.Rival);
         Assert.True(defender.SettledPoints >= SeasonScoreRules.PointsFor(SeasonDeed.SiegeRepelled));
+
+        // The army goes home Bloodied.
+        var wounded = await _db.BloodiedCharacters.AsNoTracking().ToListAsync();
+        Assert.Equal("hero-1", Assert.Single(wounded).CharacterId);
+        Assert.Equal(TestIds.Player, wounded[0].UserId);
     }
 
     [Fact]

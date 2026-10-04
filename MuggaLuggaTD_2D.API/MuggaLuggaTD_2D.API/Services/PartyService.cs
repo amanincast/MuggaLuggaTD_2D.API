@@ -528,7 +528,7 @@ public class PartyService
 
     /// <summary>
     /// Settles an ambush fight. Won: half of a tier-1 run at the land's level, and the company marches
-    /// on. Lost: nothing, and the company turns back. Neither conquers, recruits or restores anything.
+    /// on. Lost: nothing, the company turns back, and its fighters are Bloodied. Neither conquers, recruits or restores anything.
     /// </summary>
     public async Task<(PartyOutcome Outcome, AmbushClaimResponse? Response)> ClaimAmbushAsync(
         Guid gameInstanceId, string userId, Guid partyId, AmbushClaimRequest request)
@@ -592,7 +592,9 @@ public class PartyService
         }
         else
         {
+            // A lost ambush turns the company back, its fighters Bloodied (BloodiedRules).
             TurnBack(party, now);
+            await AutoFightService.BloodyAsync(_context, gameInstanceId, userId, MarchingArmy.ReadIds(run.FighterIdsJson), now);
         }
 
         party.UpdatedAt = now;
@@ -741,6 +743,9 @@ public class PartyService
     /// Why the characters asked to fight cannot, or null if they all can: each must be the player's own
     /// and not garrisoned, held or in a siege. PvE begin asks this; before 1.32.0 it asked nothing, and a
     /// sieging army could slip off and run dungeons.
+    ///
+    /// <para>A Bloodied hero may go: the player is steering this fight, and the client fields them at a
+    /// quarter less (BloodiedRules; Mike, 2026-10-04). Only auto mode and garrisons bar them.</para>
     /// </summary>
     public static async Task<string?> WhyCannotFightAsync(ApplicationDbContext context, ILogger logger,
         JsonNode? world, Guid gameInstanceId, string userId, IReadOnlyCollection<string> fighters)
@@ -753,13 +758,10 @@ public class PartyService
                     ?? new HashSet<string>(StringComparer.Ordinal);
 
         var commitments = await CommitmentsAsync(context, world, gameInstanceId, userId);
-        var bloodied = await AutoFightService.BloodiedAsync(context, gameInstanceId, userId, DateTime.UtcNow);
         foreach (var id in fighters)
         {
             if (!owned.Contains(id)) return $"{id} is not one of your characters.";
             if (commitments.TryGetValue(id, out var why)) return $"{NameOf(save, id)} is {Describe(why)}.";
-            if (bloodied.TryGetValue(id, out var recovers))
-                return $"{NameOf(save, id)} is Bloodied and cannot fight for another {Minutes(recovers - DateTime.UtcNow)}.";
         }
         return null;
     }

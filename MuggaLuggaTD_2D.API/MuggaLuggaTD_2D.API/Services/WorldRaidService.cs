@@ -153,6 +153,9 @@ public class WorldRaidService
         };
 
         _context.RegionRaids.Add(raid);
+        // Thrown back, the march comes home Bloodied (BloodiedRules).
+        if (!result.AttackerWins)
+            await AutoFightService.BloodyAsync(_context, gameInstanceId, attackerUserId, marching, raid.RaidedAt);
         await _context.SaveChangesAsync();
 
         _logger.LogInformation(
