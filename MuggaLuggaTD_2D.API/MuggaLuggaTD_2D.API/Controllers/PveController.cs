@@ -122,6 +122,25 @@ public class PveController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>The player gave a run up: it closes, and its fighters are Bloodied.</summary>
+    [HttpPost("abandon")]
+    public async Task<ActionResult<PveAbandonResponse>> Abandon(Guid gameInstanceId, [FromBody] PveAbandonRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _pve.AbandonAsync(gameInstanceId, userId, request);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("PVE-ABANDON-DENY", $"user={userId} run={request.RunId} {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
+
+        _sessionLog.Log("PVE-ABANDON", $"user={userId} run={request.RunId} bloodied={response!.Bloodied.Count}");
+        return Ok(response);
+    }
+
     private ActionResult ToError(PveOutcome outcome) => outcome.Error switch
     {
         PveError.WorldNotFound or PveError.LocationNotFound or PveError.RunNotFound

@@ -261,6 +261,18 @@ public class WorldRaidServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ARepelledMarchComesHomeBloodied_AWinningOneDoesNot()
+    {
+        await UntilAsync(win: false, async attempt =>
+        {
+            var wounded = await AutoFightService.BloodiedAsync(attempt.Db, attempt.InstanceId, TestIds.Player, DateTime.UtcNow);
+            Assert.Equal(new[] { "hero-1" }, wounded.Keys);
+        });
+        await UntilAsync(win: true, async attempt =>
+            Assert.Empty(await AutoFightService.BloodiedAsync(attempt.Db, attempt.InstanceId, TestIds.Player, DateTime.UtcNow)));
+    }
+
+    [Fact]
     public async Task NoSingleRaidIsWorthMoreThanItsBoundedDamage()
     {
         // The sentence the whole design rests on, as an assertion: whatever an attacker brings, one
@@ -549,7 +561,7 @@ public class WorldRaidServiceTests : IDisposable
 
     /// <summary>One raid that came out the way a test needed, with the world it happened in.</summary>
     private sealed record RaidAttempt(
-        Guid InstanceId, WorldRaidService Service, RegionRaidResponse Response, JsonNode? World);
+        Guid InstanceId, WorldRaidService Service, RegionRaidResponse Response, JsonNode? World, ApplicationDbContext Db);
 
     private async Task UntilAsync(bool win, Func<RaidAttempt, Task> assert)
     {
@@ -565,7 +577,7 @@ public class WorldRaidServiceTests : IDisposable
             Assert.True(outcome.Succeeded, outcome.Message);
             if (outcome.Response!.AttackerWins != win) continue;
 
-            await assert(new RaidAttempt(instanceId, service, outcome.Response, world));
+            await assert(new RaidAttempt(instanceId, service, outcome.Response, world, db));
             return;
         }
 

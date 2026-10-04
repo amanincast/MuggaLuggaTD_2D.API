@@ -185,6 +185,10 @@ namespace MuggaLuggaTD.Shared
         //   fights only sites below its average level, wins by the gap, pays a third and gear a rarity
         //   down; BloodiedRules bar a loser from every fight for 30 minutes; ProvisionRules spend Grain
         //   and Hides; a patrolled region halves the ambush chance.
-        public const string Version = "1.40.0";
+        // 1.41.0 - Bloodied in fights the player chose (Mike, 2026-10-04). A Bloodied hero may fight by
+        //   hand at a quarter less (BloodiedRules.Penalty) and marches on a raid or siege at a quarter of
+        //   their power less (BloodiedRules.Weaken); auto mode and garrisons still bar them. A lost
+        //   ambush, an abandoned run, a lost raid and a repelled siege now Bloody too; a ransom does not.
+        public const string Version = "1.41.0";
     }
 }

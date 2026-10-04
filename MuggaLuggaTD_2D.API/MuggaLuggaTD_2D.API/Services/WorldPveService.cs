@@ -174,6 +174,36 @@ public class WorldPveService
     }
 
     /// <summary>
+    /// The player gave the run up. It is closed, so it can never be claimed, and everyone who went in
+    /// is Bloodied (BloodiedRules; Mike, 2026-10-04). Giving up an ambush or a siege assault is reported
+    /// as a lost claim of its own, which Bloodies them there.
+    /// </summary>
+    public async Task<(PveOutcome Outcome, PveAbandonResponse? Response)> AbandonAsync(
+        Guid gameInstanceId, string userId, PveAbandonRequest request)
+    {
+        if (!ContractMatches(request.SharedContractVersion, out var mismatch))
+            return (mismatch, null);
+
+        var run = await _context.PveRuns.FirstOrDefaultAsync(r =>
+            r.Id == request.RunId && r.GameInstanceId == gameInstanceId && r.UserId == userId);
+        if (run == null)
+            return (new PveOutcome(PveError.RunNotFound, "No such run for this player."), null);
+        if (run.ClaimedAt != null)
+            return (new PveOutcome(PveError.RunAlreadyClaimed, "That run has already been settled."), null);
+
+        var now = DateTime.UtcNow;
+        run.ClaimedAt = now;
+        var fighters = MarchingArmy.ReadIds(run.FighterIdsJson);
+        await AutoFightService.BloodyAsync(_context, gameInstanceId, userId, fighters, now);
+        await _context.SaveChangesAsync();
+
+        var bloodied = await AutoFightService.BloodiedAsync(_context, gameInstanceId, userId, now);
+        return (new PveOutcome(PveError.None), new PveAbandonResponse(bloodied
+            .Where(b => fighters.Contains(b.Key))
+            .Select(b => new BloodiedDto(b.Key, b.Value)).ToList()));
+    }
+
+    /// <summary>
     /// Claims the conquest for a completed run. Returns the mutated world for the caller to persist
     /// and broadcast, so persistence stays in one place.
     /// </summary>

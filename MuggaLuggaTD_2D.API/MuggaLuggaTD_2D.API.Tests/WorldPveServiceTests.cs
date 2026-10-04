@@ -284,6 +284,39 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GivingUpARunClosesIt_AndBloodiesWhoeverWentIn()
+    {
+        var region = TestWorld.Region();
+        var instanceId = await SeedWorldAsync(region);
+        var (_, runId) = await Service.BeginAsync(instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.DungeonIn(region)));
+
+        var (outcome, response) = await Service.AbandonAsync(instanceId, TestIds.Player, new PveAbandonRequest(runId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(Hero, Assert.Single(response!.Bloodied).CharacterId);
+        Assert.NotNull((await _db.PveRuns.SingleAsync()).ClaimedAt);
+
+        // Given up is settled: it can be neither claimed nor given up again.
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(5));
+        var (claim, _, _) = await Service.ClaimAsync(instanceId, TestIds.Player, "p", new PveClaimRequest(runId, Contract));
+        Assert.Equal(PveError.RunAlreadyClaimed, claim.Error);
+        var (again, _) = await Service.AbandonAsync(instanceId, TestIds.Player, new PveAbandonRequest(runId, Contract));
+        Assert.Equal(PveError.RunAlreadyClaimed, again.Error);
+    }
+
+    [Fact]
+    public async Task OnlyTheRunnerCanGiveUpTheirRun()
+    {
+        var region = TestWorld.Region();
+        var instanceId = await SeedWorldAsync(region);
+        var (_, runId) = await Service.BeginAsync(instanceId, TestIds.Player, await HereAsync(instanceId, TestWorld.DungeonIn(region)));
+
+        var (outcome, _) = await Service.AbandonAsync(instanceId, TestIds.Rival, new PveAbandonRequest(runId, Contract));
+        Assert.Equal(PveError.RunNotFound, outcome.Error);
+        Assert.Empty(await _db.BloodiedCharacters.ToListAsync());
+    }
+
+    [Fact]
     public async Task ReEnteringASiteReplacesTheOpenRunRatherThanStackingUp()
     {
         // Otherwise a player could walk in and out of a dungeon to bank a pile of claimable runs and

@@ -186,9 +186,14 @@ business, so nothing here is broadcast.
     stint begins. Out of Grain, it **stops** (`OutOfProvisions`) until its player re-orders it.
   - **A patrol stint** ends in a skirmish at the region's mob level, at an ambush's share of a third.
 - **Bloodied** (`BloodiedCharacter`, per character):
-  - **Cause:** a lost auto-fight. The fighters are barred for 30 min.
-  - **Who refuses them:** `WhyCannotFightAsync` (PvE begin, ambush fight) and `MarchingArmy.MusterAsync`
-    (raids, sieges).
+  - **Cause** (`AutoFightService.BloodyAsync`, 30 min): a lost auto-fight; a lost ambush claim
+    (`ClaimAmbushAsync`); a run given up (`WorldPveService.AbandonAsync`, `POST pve/abandon`); a raid
+    thrown back; a repelled siege (`RepelAsync`, the army). **Not** a ransom (Mike), nor a run lost
+    by falling (never reported).
+  - **What it does** (1.41.0; Mike: barred only where nobody steers):
+    - Auto mode bars them, and so does a garrison muster (`onAGarrison`).
+    - `WhyCannotFightAsync` no longer refuses them: the client fights them at 25% less.
+    - A raid or siege muster counts their share at 25% less (`BloodiedRules.Weaken`).
   - **The company** rests where it stands, then resumes by itself.
   - **The client** sees `PartiesResponse.Bloodied`.
 - **While in auto mode its player cannot steer it:** travel, member changes and disband are refused

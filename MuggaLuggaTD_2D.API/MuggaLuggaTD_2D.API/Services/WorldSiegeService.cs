@@ -483,7 +483,10 @@ public class WorldSiegeService
                 SeasonScoreRules.PointsFor(SeasonDeed.SiegeWon), captured));
     }
 
-    /// <summary>The defence held: the region's resolve rises and the defender is paid for it.</summary>
+    /// <summary>
+    /// The defence held: the region's resolve rises and the defender is paid for it, and the army goes
+    /// home Bloodied (BloodiedRules).
+    /// </summary>
     private async Task RepelAsync(Siege siege, WorldViewGameData row, JsonNode world, JsonNode regionNode, DateTime at)
     {
         var region = WorldRegionBlob.ReadRegion(regionNode);
@@ -491,6 +494,8 @@ public class WorldSiegeService
 
         siege.State = SiegeState.Repelled;
         siege.ResolvedAt = at;
+        await AutoFightService.BloodyAsync(_context, siege.GameInstanceId, siege.AttackerUserId,
+            MarchingArmy.ReadIds(siege.ArmyCharacterIdsJson), at);
         await PersistWorldAsync(row, world);
 
         _sessionLog.Log("SIEGE-REPELLED",

@@ -41,8 +41,11 @@ public static class MarchingArmy
 
         var committed = WorldRegionBlob.CollectCommittedCharacterIds(world, userId);
         committed.UnionWith(await SiegeLockedIdsAsync(context, gameInstanceId, userId));
-        // A Bloodied champion marches nowhere until they recover (BloodiedRules).
-        committed.UnionWith((await AutoFightService.BloodiedAsync(context, gameInstanceId, userId, DateTime.UtcNow)).Keys);
+        // A Bloodied champion may march on a raid or a siege the player chose, at a quarter less; nobody
+        // steers a garrison, so it takes none of them (BloodiedRules).
+        var bloodied = (await AutoFightService.BloodiedAsync(context, gameInstanceId, userId, DateTime.UtcNow)).Keys
+            .ToHashSet(StringComparer.Ordinal);
+        if (onAGarrison) committed.UnionWith(bloodied);
 
         var marching = (requestedIds ?? Enumerable.Empty<string>())
             .Where(id => !string.IsNullOrEmpty(id) && owned.Contains(id) && !committed.Contains(id))
@@ -52,6 +55,15 @@ public static class MarchingArmy
         double power = marching.Count == 0
             ? 0
             : PartyPowerCalculator.CalculatePartyPower(save, marching, content.AbilityTemplates, content.Signatures, onAGarrison);
+
+        var fit = marching.Where(id => !bloodied.Contains(id)).ToList();
+        if (fit.Count < marching.Count)
+        {
+            double withoutThem = fit.Count == 0
+                ? 0
+                : PartyPowerCalculator.CalculatePartyPower(save, fit, content.AbilityTemplates, content.Signatures, onAGarrison);
+            power = BloodiedRules.Weaken(power, withoutThem);
+        }
 
         return new Muster(marching, power, save);
     }
