@@ -94,6 +94,39 @@ public class PlayerParty
     /// <summary>When that run opened; a claim faster than a fight could be is refused.</summary>
     public DateTime? AmbushRunStartedAt { get; set; }
 
+    // ---- Auto mode (docs/design/auto-fight.md, phase 2) ----
+
+    /// <summary>Whether the company fights on its own. Its player steers it no further until it is toggled off.</summary>
+    public bool AutoMode { get; set; }
+
+    /// <summary>What it was told to do, and in which region (one its player holds).</summary>
+    public AutoOrder AutoOrder { get; set; }
+
+    [MaxLength(64)]
+    public string? AutoRegionId { get; set; }
+
+    /// <summary>What it is doing now; a walk, a fight, a patrol stint or a rest ends at <see cref="AutoStepEndsAt"/>.</summary>
+    public AutoStatus AutoStatus { get; set; }
+
+    public DateTime? AutoStepEndsAt { get; set; }
+
+    /// <summary>The site it is walking to or fighting at.</summary>
+    [MaxLength(64)]
+    public string? AutoTargetSiteId { get; set; }
+
+    /// <summary>
+    /// Fights and skirmishes it has had, ever: each is rolled from this count
+    /// (<see cref="AutoFightRules.RollWin"/>), so a settle that is run again cannot re-roll one.
+    /// </summary>
+    public long AutoFightCount { get; set; }
+
+    /// <summary>The sites it has fought, most recent first, as a JSON array: what it rotates away from.</summary>
+    [Required]
+    public string AutoRecentJson { get; set; } = "[]";
+
+    /// <summary>How far its day has been settled. Nothing ticks: a read replays it from here to now.</summary>
+    public DateTime? AutoSettledAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

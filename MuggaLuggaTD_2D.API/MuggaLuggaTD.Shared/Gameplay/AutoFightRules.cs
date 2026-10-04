@@ -19,6 +19,37 @@ namespace MuggaLuggaTD.Shared.Gameplay
         Patrol = 2,
     }
 
+    /// <summary>What a company in auto mode is doing now, as its card shows it.</summary>
+    public enum AutoStatus
+    {
+        /// <summary>In auto mode with no order yet.</summary>
+        Ready = 0,
+
+        /// <summary>On the road to its next fight, or to the region it was ordered to.</summary>
+        Walking = 1,
+
+        /// <summary>In a fight at a site; it ends at the step's end.</summary>
+        Fighting = 2,
+
+        /// <summary>Walking a region's roads, keeping the mobs down.</summary>
+        Patrolling = 3,
+
+        /// <summary>Bloodied by a loss, resting until its members recover. It resumes by itself.</summary>
+        Resting = 4,
+
+        /// <summary>Stopped: the Grain (or a dungeon's Hides) ran out. It waits for its player's word.</summary>
+        OutOfProvisions = 5,
+
+        /// <summary>Waiting: nothing in its region is below its level, or it has just fought the only site.</summary>
+        NothingToFight = 6,
+
+        /// <summary>Stopped: the region it was ordered to is no longer held.</summary>
+        RegionLost = 7,
+
+        /// <summary>Stopped: none of its members is free to fight (garrisoned, held, or in a siege).</summary>
+        NobodyFree = 8,
+    }
+
     /// <summary>A site an auto company might fight next, as the server knows it.</summary>
     public readonly struct AutoFightCandidate
     {

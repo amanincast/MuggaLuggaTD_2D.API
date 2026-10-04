@@ -41,6 +41,8 @@ public static class MarchingArmy
 
         var committed = WorldRegionBlob.CollectCommittedCharacterIds(world, userId);
         committed.UnionWith(await SiegeLockedIdsAsync(context, gameInstanceId, userId));
+        // A Bloodied champion marches nowhere until they recover (BloodiedRules).
+        committed.UnionWith((await AutoFightService.BloodiedAsync(context, gameInstanceId, userId, DateTime.UtcNow)).Keys);
 
         var marching = (requestedIds ?? Enumerable.Empty<string>())
             .Where(id => !string.IsNullOrEmpty(id) && owned.Contains(id) && !committed.Contains(id))

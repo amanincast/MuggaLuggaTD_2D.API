@@ -93,6 +93,7 @@ builder.Services.AddScoped<HiringService>();
 builder.Services.AddScoped<FortifyService>();
 builder.Services.AddScoped<TalentService>();
 builder.Services.AddScoped<PartyService>();
+builder.Services.AddScoped<AutoFightService>();
 builder.Services.AddScoped<WorldSiegeService>();
 builder.Services.AddSingleton(TimeProvider.System);
 // The one thing in the game that runs on a clock: freezing a besieged region's hold when muster closes.

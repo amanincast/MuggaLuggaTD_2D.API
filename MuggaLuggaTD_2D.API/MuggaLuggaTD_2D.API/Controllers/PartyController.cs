@@ -25,11 +25,14 @@ public class PartyController : ControllerBase
     private readonly PartyService _parties;
     private readonly ISessionLog _sessionLog;
     private readonly IHubContext<GameHub> _hub;
+    private readonly AutoFightService _auto;
 
-    public PartyController(ApplicationDbContext context, PartyService parties, ISessionLog sessionLog, IHubContext<GameHub> hub)
+    public PartyController(ApplicationDbContext context, PartyService parties, ISessionLog sessionLog, IHubContext<GameHub> hub,
+        AutoFightService auto)
     {
         _context = context;
         _parties = parties;
+        _auto = auto;
         _sessionLog = sessionLog;
         _hub = hub;
     }
@@ -143,6 +146,71 @@ public class PartyController : ControllerBase
 
         var (outcome, response) = await _parties.DisbandAsync(gameInstanceId, userId, partyId);
         return await MovedAsync(gameInstanceId, outcome, response, userId, $"disband {partyId}");
+    }
+
+    // ---- Auto mode (docs/design/auto-fight.md, phase 2) ----
+
+    /// <summary>Puts a company into auto mode, or takes it out. Answers with the companies.</summary>
+    [HttpPost("{partyId:guid}/auto")]
+    public async Task<ActionResult<PartiesResponse>> AutoMode(Guid gameInstanceId, Guid partyId, [FromBody] AutoModeRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var outcome = await _auto.SetModeAsync(gameInstanceId, userId, partyId, request);
+        if (!outcome.Succeeded) return RefuseAuto(outcome, userId, $"auto {partyId} on={request.On}");
+        var (listed, response) = await _parties.ListAsync(gameInstanceId, userId);
+        return await MovedAsync(gameInstanceId, listed, response, userId, $"auto {partyId}");
+    }
+
+    /// <summary>Orders a company in auto mode to roam or patrol a region its player holds. Answers with the companies.</summary>
+    [HttpPost("{partyId:guid}/auto/order")]
+    public async Task<ActionResult<PartiesResponse>> AutoOrder(Guid gameInstanceId, Guid partyId, [FromBody] AutoOrderRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var outcome = await _auto.OrderAsync(gameInstanceId, userId, partyId, request);
+        if (!outcome.Succeeded) return RefuseAuto(outcome, userId, $"auto-order {partyId} {request.Order} {request.RegionId}");
+        var (listed, response) = await _parties.ListAsync(gameInstanceId, userId);
+        return await MovedAsync(gameInstanceId, listed, response, userId, $"auto-order {partyId}");
+    }
+
+    /// <summary>What companies in auto mode have done that the client has not yet taken into its save.</summary>
+    [HttpGet("auto/reports")]
+    public async Task<ActionResult<AutoReportsResponse>> AutoReports(Guid gameInstanceId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        return Ok(await _auto.ReportsAsync(gameInstanceId, userId));
+    }
+
+    /// <summary>Marks reports collected, once their experience and gear are in the client's save.</summary>
+    [HttpPost("auto/reports/collect")]
+    public async Task<ActionResult> CollectAutoReports(Guid gameInstanceId, [FromBody] AutoCollectRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        int collected = await _auto.CollectAsync(gameInstanceId, userId, request);
+        return Ok(new { collected });
+    }
+
+    private ObjectResult RefuseAuto(AutoOutcome outcome, string userId, string what)
+    {
+        _sessionLog.Log("AUTO-DENY", $"user={userId} {what} {outcome.Error}: {outcome.Message}");
+        return outcome.Error switch
+        {
+            AutoError.WorldNotFound or AutoError.PartyNotFound => NotFound(new { message = outcome.Message }),
+            AutoError.ContractMismatch or AutoError.Busy or AutoError.Empty or AutoError.NotInAutoMode
+                or AutoError.RegionNotHeld or AutoError.TooStrong => Conflict(new { message = outcome.Message }),
+            _ => BadRequest(new { message = outcome.Message })
+        };
     }
 
     private async Task<ActionResult<PartiesResponse>> MovedAsync(Guid gameInstanceId, PartyOutcome outcome,

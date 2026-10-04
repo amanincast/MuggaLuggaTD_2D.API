@@ -17,7 +17,9 @@ public record PartyDto(
     /// <summary>Its journey while travelling, returning or ambushed, else null.</summary>
     JourneyDto? Journey = null,
     /// <summary>What has it halted, while ambushed.</summary>
-    AmbushDto? Ambush = null
+    AmbushDto? Ambush = null,
+    /// <summary>Its auto mode, while it is in it (auto-fight.md).</summary>
+    AutoStateDto? Auto = null
 );
 
 /// <summary>
@@ -131,7 +133,9 @@ public record PartiesResponse(
     int RosterCap,
     List<CharacterCommitmentDto> Commitments,
     /// <summary>The server's clock when this was written, so a client can walk journeys by server time.</summary>
-    DateTime ServerNow = default
+    DateTime ServerNow = default,
+    /// <summary>Characters barred from fights until they recover (BloodiedRules).</summary>
+    List<BloodiedDto>? Bloodied = null
 );
 
 /// <summary>
@@ -152,3 +156,55 @@ public record PartyUpdateRequest(
     List<string>? CharacterIds,
     [Required] string SharedContractVersion
 );
+
+// ---- Auto mode (docs/design/auto-fight.md, phase 2) ----
+
+/// <summary>Puts a company into auto mode, or takes it out.</summary>
+public record AutoModeRequest(
+    bool On,
+    [Required] string SharedContractVersion
+);
+
+/// <summary>Tells a company in auto mode what to do: roam or patrol a region its player holds.</summary>
+public record AutoOrderRequest(
+    AutoOrder Order,
+    [Required] string RegionId,
+    [Required] string SharedContractVersion
+);
+
+/// <summary>A company in auto mode, as its card shows it.</summary>
+public record AutoStateDto(
+    AutoOrder Order,
+    string? RegionId,
+    AutoStatus Status,
+    string? TargetSiteId,
+    DateTime? StepEndsAt
+);
+
+/// <summary>A character barred from fights until they recover (BloodiedRules).</summary>
+public record BloodiedDto(string CharacterId, DateTime RecoversAt);
+
+/// <summary>
+/// One auto-fight or patrol skirmish. Gold and materials are already paid; the client adds the
+/// experience (to the fighters) and the items to its save, saves, then collects the report.
+/// </summary>
+public record AutoReportDto(
+    Guid Id,
+    Guid PartyId,
+    string PartyName,
+    string SiteId,
+    bool Skirmish,
+    int Level,
+    DateTime At,
+    bool Won,
+    List<string> FighterIds,
+    long Experience,
+    long Gold,
+    List<StateManagement.Models.ItemSaveData> Items,
+    List<MaterialGrant> Materials,
+    List<MaterialGrant> Provisions
+);
+
+public record AutoReportsResponse(List<AutoReportDto> Reports, DateTime ServerNow);
+
+public record AutoCollectRequest(List<Guid> ReportIds);

@@ -364,6 +364,8 @@ public class SeasonScoreService
         _context.RegionRaids.RemoveRange(_context.RegionRaids.Where(r => r.GameInstanceId == instance.Id));
         // The new world's site ids would otherwise inherit last season's lockouts and reward windows.
         _context.PlayerSiteClears.RemoveRange(_context.PlayerSiteClears.Where(c => c.GameInstanceId == instance.Id));
+        // Every company comes out of auto mode (its orders named the old map's regions) and every wound heals.
+        await AutoFightService.ResetRealmAsync(_context, instance.Id);
         _context.Sieges.RemoveRange(_context.Sieges.Where(s => s.GameInstanceId == instance.Id));
 
         // A new map is a new world, so everyone walks its First Steps (and earns its chest) again.
