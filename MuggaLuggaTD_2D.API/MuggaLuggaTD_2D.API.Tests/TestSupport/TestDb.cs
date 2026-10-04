@@ -13,10 +13,13 @@ namespace MuggaLuggaTD_2D.API.Tests.TestSupport;
 /// </summary>
 public static class TestDb
 {
-    public static ApplicationDbContext Create()
+    public static ApplicationDbContext Create() => Create($"tests-{Guid.NewGuid()}");
+
+    /// <summary>A context on a named store: two of them see the same rows, as two requests would.</summary>
+    public static ApplicationDbContext Create(string databaseName)
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase($"tests-{Guid.NewGuid()}")
+            .UseInMemoryDatabase(databaseName)
             .Options;
 
         return new ApplicationDbContext(options);

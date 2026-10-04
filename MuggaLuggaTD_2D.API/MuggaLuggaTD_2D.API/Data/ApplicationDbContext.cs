@@ -131,6 +131,12 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // A company in auto mode is settled by whichever request reads it first. Two at once (the Hall
+        // reads the companies and the reports together) would each replay the same stretch and pay it
+        // twice, so the settle's save is conditional on where the last one left off: the second fails
+        // as a whole, and nothing it wrote survives (AutoFightService.SettleAsync).
+        builder.Entity<PlayerParty>().Property(e => e.AutoSettledAt).IsConcurrencyToken();
+
         // Bloodied characters (BloodiedRules): one row per character, asked before every fight.
         builder.Entity<BloodiedCharacter>(entity =>
         {
