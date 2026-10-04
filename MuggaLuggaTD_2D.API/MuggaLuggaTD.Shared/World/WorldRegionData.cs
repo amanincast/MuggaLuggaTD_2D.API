@@ -96,16 +96,16 @@ namespace MuggaLuggaTD.Shared.World
     [Serializable]
     public class SiteOverride
     {
-        /// <summary>A dungeon or portal that has been cleared, and no longer offers a fight.</summary>
+        /// <summary>
+        /// Legacy: a dungeon or portal cleared before 1.39.0, when a clear was written into the shared
+        /// world. Nothing writes or reads it now: clears are per player (<see cref="Gameplay.SiteRotationRules"/>).
+        /// Kept so older worlds still read.
+        /// </summary>
         public bool Cleared;
 
         /// <summary>
-        /// When it was cleared, as UTC ticks. Zero when unknown.
-        ///
-        /// <para>A cleared site comes back — see <see cref="Gameplay.SiteRespawnRules"/>. Without
-        /// this it never did, which quietly made a region's defence finite: the only way to restore
-        /// a region's resolve is to clear its own hostile sites, so a defender had a ceiling that
-        /// raiding did not.</para>
+        /// Legacy, with <see cref="Cleared"/>: when it was cleared, as UTC ticks. The combat arena's
+        /// seed still folds it in, so an old world's cleared sites keep the arena they had.
         /// </summary>
         public long ClearedAtUtcTicks;
 

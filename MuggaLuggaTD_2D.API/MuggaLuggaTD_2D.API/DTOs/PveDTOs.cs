@@ -66,5 +66,23 @@ public record PveClaimResponse(
     /// fighting. Sent back so the completion screen can show a real balance rather than adding the
     /// grant to a figure it read before the run.
     /// </summary>
-    long GoldBalance = 0
+    long GoldBalance = 0,
+    /// <summary>
+    /// Whether this clear shaped the realm (resolve, a recruit, refresh resets, season points). A
+    /// player's clears of one site do that once every eight hours (<c>SiteRotationRules</c>).
+    /// </summary>
+    bool WorldRewards = true,
+    /// <summary>When this player may fight the site again (the ten-minute lockout); null for a capture.</summary>
+    DateTime? LockedUntil = null,
+    /// <summary>When a clear here will shape the realm again for this player; null for a capture.</summary>
+    DateTime? WorldRewardsBackAt = null
 );
+
+/// <summary>
+/// One site this player has cleared (<c>SiteRotationRules</c>): when they may fight it again, and
+/// when clearing it will shape the realm again. The region view greys a locked site and the panel
+/// says when its realm rewards return.
+/// </summary>
+public record SiteClearDto(string SiteId, DateTime LockedUntil, DateTime WorldRewardsBackAt);
+
+public record SiteClearsResponse(List<SiteClearDto> Clears, DateTime ServerNow);

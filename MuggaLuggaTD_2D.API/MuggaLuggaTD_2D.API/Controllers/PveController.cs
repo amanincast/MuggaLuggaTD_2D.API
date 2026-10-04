@@ -65,6 +65,20 @@ public class PveController : ControllerBase
         return Ok(new PveBeginResponse(runId));
     }
 
+    /// <summary>
+    /// This player's recent clears (<c>SiteRotationRules</c>): which sites are locked to them and
+    /// when each will shape the realm again.
+    /// </summary>
+    [HttpGet("clears")]
+    public async Task<ActionResult<SiteClearsResponse>> Clears(Guid gameInstanceId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        return Ok(await _pve.ClearsAsync(gameInstanceId, userId));
+    }
+
     /// <summary>Claims the conquest for a completed run.</summary>
     [HttpPost("claim")]
     public async Task<ActionResult<PveClaimResponse>> Claim(Guid gameInstanceId, [FromBody] PveClaimRequest request)
@@ -95,7 +109,9 @@ public class PveController : ControllerBase
         // Clearing a site pays a lump - it is the bounce-back lever, available to a player with no
         // territory at all. Taking a keep pays nothing directly; it pays by earning from then on,
         // which is why a capture only re-rates.
-        if (string.Equals(response.ConquestOutcome, nameof(ConquestOutcome.RemoveLocation), StringComparison.Ordinal))
+        // Once per player per site every eight hours (SiteRotationRules), like the other realm rewards.
+        if (string.Equals(response.ConquestOutcome, nameof(ConquestOutcome.RemoveLocation), StringComparison.Ordinal)
+            && response.WorldRewards)
             await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.SiteCleared);
         else
             await _seasons.SettleAllAsync(gameInstanceId);
@@ -111,6 +127,7 @@ public class PveController : ControllerBase
         PveError.WorldNotFound or PveError.LocationNotFound or PveError.RunNotFound
             => NotFound(new { message = outcome.Message }),
         PveError.ContractMismatch or PveError.RunAlreadyClaimed or PveError.FightersUnavailable or PveError.NoCompanyThere
+            or PveError.SiteLocked
             => Conflict(new { message = outcome.Message }),
         _ => BadRequest(new { message = outcome.Message })
     };

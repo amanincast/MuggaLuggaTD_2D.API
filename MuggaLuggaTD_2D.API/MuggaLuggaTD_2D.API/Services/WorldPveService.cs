@@ -20,7 +20,8 @@ public enum PveError
     ContractMismatch,
     NoConquestEffect,
     FightersUnavailable,
-    NoCompanyThere
+    NoCompanyThere,
+    SiteLocked
 }
 
 public record PveOutcome(PveError Error, string? Message = null)
@@ -120,6 +121,16 @@ public class WorldPveService
         var check = ValidatePveTarget(resolved, userId);
         if (!check.Succeeded)
             return (check, Guid.Empty);
+
+        // The rotation (SiteRotationRules): a player who has just cleared this site fights elsewhere
+        // for ten minutes. Their own clear only - nobody else is locked out by it.
+        var clear = await ClearOfAsync(gameInstanceId, userId, request.SiteId);
+        if (SiteRotationRules.IsLocked(clear?.LastClearedAt, DateTime.UtcNow))
+        {
+            var minutes = Math.Max(1, (int)Math.Ceiling((SiteRotationRules.LockedUntil(clear!.LastClearedAt) - DateTime.UtcNow).TotalMinutes));
+            return (new PveOutcome(PveError.SiteLocked,
+                $"You cleared this site moments ago. Fight elsewhere; it is open to you again in {minutes} min."), Guid.Empty);
+        }
 
         // You fight where you stand (1.33.0): a company must have walked there, and it is who goes in.
         if (request.PartyId == null)
@@ -222,10 +233,30 @@ public class WorldPveService
                 WorldRegionBlob.CaptureRegion(resolved.RegionNode, userId, displayName);
                 break;
             case ConquestOutcome.RemoveLocation:
-                // A site cannot be deleted — it regenerates from the region's seed — so a cleared
-                // dungeon is recorded as spent instead.
-                WorldRegionBlob.MarkCleared(resolved.RegionNode, run.LocationId);
+                // A cleared dungeon or portal is no longer written into the shared world: the clear
+                // is this player's alone (SiteRotationRules), recorded below.
                 break;
+        }
+
+        // The rotation. A clear locks its clearer out for ten minutes, and shapes the realm (resolve,
+        // a recruit, refresh resets, season points) once per player per site every eight hours.
+        // Experience, gold, gear and materials are paid on every clear.
+        bool worldRewards = true;
+        DateTime? lockedUntil = null, worldRewardsBackAt = null;
+        if (outcome == ConquestOutcome.RemoveLocation)
+        {
+            var now = DateTime.UtcNow;
+            var clear = await ClearOfAsync(gameInstanceId, userId, run.LocationId);
+            if (clear == null)
+            {
+                clear = new PlayerSiteClear { GameInstanceId = gameInstanceId, UserId = userId, SiteId = run.LocationId };
+                _context.PlayerSiteClears.Add(clear);
+            }
+            worldRewards = SiteRotationRules.WorldRewardsDue(clear.WorldRewardsAt, now);
+            clear.LastClearedAt = now;
+            if (worldRewards) clear.WorldRewardsAt = now;
+            lockedUntil = SiteRotationRules.LockedUntil(clear.LastClearedAt);
+            worldRewardsBackAt = SiteRotationRules.WorldRewardsBackAt(clear.WorldRewardsAt);
         }
 
         // Clearing a hostile site inside your own region steadies it. This is the defender's half of
@@ -233,7 +264,7 @@ public class WorldPveService
         // into the region and dealing with what is under it. Without this, being raided has no reply
         // — which is why the own-region PvE fix had to land before raiding could.
         int resolveRestored = 0;
-        if (resolved.Region.IsOwnedByPlayer(userId))
+        if (worldRewards && resolved.Region.IsOwnedByPlayer(userId))
         {
             resolveRestored = RegionResolveRules.RestoredByClearing(resolved.Site.Type);
             if (resolveRestored > 0)
@@ -287,13 +318,18 @@ public class WorldPveService
         // cleared shows up in who walks in. Design doc 05 §4.
         if (TavernRules.BringsARecruit(resolved.Site.Type))
         {
-            await _tavern.BringARecruitAsync(
-                gameInstanceId, userId, resolved.Site.Tier, resolved.Region.Biome,
-                $"pve-claim run={run.Id} site={run.LocationId}");
+            // A recruit and the refresh resets are realm rewards: once per site every eight hours,
+            // or a ten-minute loop would fill the Tavern and keep both refreshes at their base price.
+            if (worldRewards)
+            {
+                await _tavern.BringARecruitAsync(
+                    gameInstanceId, userId, resolved.Site.Tier, resolved.Region.Biome,
+                    $"pve-claim run={run.Id} site={run.LocationId}");
+                if (_hiring != null) await _hiring.ResetRefreshAsync(gameInstanceId, userId);
+            }
 
             // The same sites count for First Steps' "clear a dungeon" (a dungeon or a portal).
             if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
-            if (_hiring != null) await _hiring.ResetRefreshAsync(gameInstanceId, userId);
         }
 
         _logger.LogInformation(
@@ -303,14 +339,15 @@ public class WorldPveService
 
         var response = new PveClaimResponse(
             run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials,
-            rewards.Gold, goldBalance);
+            rewards.Gold, goldBalance, worldRewards, lockedUntil, worldRewardsBackAt);
 
         return (new PveOutcome(PveError.None), response, world);
     }
 
     /// <summary>
     /// A site is a legitimate PvE target when the player is not being handed a rival's territory,
-    /// the site itself has combat to offer, and that combat has not already been spent.
+    /// and the site itself has combat to offer. (Whether this player has just cleared it is the
+    /// lockout's question, asked in <see cref="BeginAsync"/>.)
     ///
     /// <para>A <b>rival's</b> region is a PvP target and must go through the PvP endpoint, which
     /// resolves a contested fight rather than handing over a capture on the attacker's say-so.</para>
@@ -339,21 +376,37 @@ public class WorldPveService
         if (ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type) == ConquestOutcome.None)
             return new PveOutcome(PveError.NotPveTarget, "That site has no combat to complete.");
 
-        // A cleared dungeon still generates from the seed, so without this a player could farm one
-        // site continuously by re-entering it. It does come back — see SiteRespawnRules — so this
-        // bounds the rate rather than spending the site permanently.
-        if (resolved.IsCleared)
-        {
-            var recoversAt = SiteRespawnRules.RecoversAt(resolved.Region.SiteOverrides
-                .TryGetValue(resolved.Site.SiteId, out var over) ? over : null);
-
-            return new PveOutcome(PveError.NotPveTarget,
-                recoversAt == DateTime.MinValue
-                    ? "That site has already been cleared."
-                    : $"That site is still spent. It is worth fighting again at {recoversAt:HH:mm} UTC.");
-        }
-
+        // A site is never spent for the realm any more: whether this player may fight it again is
+        // their own clear's lockout (SiteRotationRules), checked in BeginAsync.
         return new PveOutcome(PveError.None);
+    }
+
+    /// <summary>This player's last clear of a site, or null if they have never cleared it.</summary>
+    private Task<PlayerSiteClear?> ClearOfAsync(Guid gameInstanceId, string userId, string siteId) =>
+        _context.PlayerSiteClears.FirstOrDefaultAsync(c =>
+            c.GameInstanceId == gameInstanceId && c.UserId == userId && c.SiteId == siteId);
+
+    /// <summary>
+    /// Every site this player has cleared that is still locked to them or not yet shaping the realm
+    /// again, for the region view to draw.
+    /// </summary>
+    public async Task<SiteClearsResponse> ClearsAsync(Guid gameInstanceId, string userId)
+    {
+        var now = DateTime.UtcNow;
+        var since = now - SiteRotationRules.WorldRewardWindow - SiteRotationRules.Lockout;
+        var rows = await _context.PlayerSiteClears
+            .Where(c => c.GameInstanceId == gameInstanceId && c.UserId == userId
+                        && (c.LastClearedAt > since || (c.WorldRewardsAt != null && c.WorldRewardsAt > since)))
+            .ToListAsync();
+
+        var clears = rows
+            .Select(c => new SiteClearDto(c.SiteId,
+                SiteRotationRules.LockedUntil(c.LastClearedAt),
+                SiteRotationRules.WorldRewardsBackAt(c.WorldRewardsAt)))
+            .Where(c => c.LockedUntil > now || c.WorldRewardsBackAt > now)
+            .OrderBy(c => c.SiteId, StringComparer.Ordinal)
+            .ToList();
+        return new SiteClearsResponse(clears, now);
     }
 
     private static bool ContractMatches(string clientVersion, out PveOutcome mismatch)

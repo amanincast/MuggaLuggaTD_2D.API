@@ -40,6 +40,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<HiredCharacter> HiredCharacters => Set<HiredCharacter>();
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
+    public DbSet<PlayerSiteClear> PlayerSiteClears => Set<PlayerSiteClear>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -99,6 +100,23 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
             // And a defender reads the log for their own region.
             entity.HasIndex(e => new { e.GameInstanceId, e.RegionId, e.RaidedAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure PlayerSiteClear (one player's last clear of one site: SiteRotationRules)
+        builder.Entity<PlayerSiteClear>(entity =>
+        {
+            // One row per player per site, read on every begin and claim.
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.SiteId }).IsUnique();
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()

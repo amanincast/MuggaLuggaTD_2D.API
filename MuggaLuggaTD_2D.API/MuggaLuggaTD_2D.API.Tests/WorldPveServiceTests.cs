@@ -201,40 +201,45 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ADungeonThatWasJustClearedIsRefused()
+    public async Task ADungeonYouJustClearedIsLockedToYouForTenMinutes()
     {
-        // A cleared site still generates from the seed, so without this it could be farmed
-        // continuously. The refusal bounds the rate; it no longer spends the site permanently.
+        // The rotation (SiteRotationRules): a clear sends its clearer elsewhere for their next fight.
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
         var siteId = TestWorld.DungeonIn(region);
-        await EditStoredWorldAsync(instanceId, world =>
-            WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId));
+        await ClearAsync(instanceId, siteId);
 
         var (outcome, _) = await Service.BeginAsync(
             instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
 
-        Assert.Equal(PveError.NotPveTarget, outcome.Error);
-        Assert.Contains("spent", outcome.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(PveError.SiteLocked, outcome.Error);
+        Assert.Contains("elsewhere", outcome.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task ADungeonClearedLongEnoughAgoIsWorthFightingAgain()
+    public async Task YourClearLocksNobodyElseOut()
     {
-        // The fix for a defence that used to be finite: a region's own sites are what restore its
-        // resolve, so if they never came back a defender ran out of answers and a raider did not.
-        var region = TestWorld.OwnedBy(TestIds.Player);
+        // A site used to be spent for the whole realm, so one player's clear emptied the region for
+        // everyone else in it.
+        var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
         var siteId = TestWorld.DungeonIn(region);
+        await ClearAsync(instanceId, siteId);
 
-        await EditStoredWorldAsync(instanceId, world =>
-        {
-            var regionNode = WorldRegionBlob.FindRegion(world, region.RegionId)!;
-            var entry = WorldRegionBlob.EnsureOverride(regionNode, siteId);
-            entry["Cleared"] = true;
-            entry["ClearedAtUtcTicks"] = DateTime.UtcNow
-                .Subtract(SiteRespawnRules.RespawnAfter + TimeSpan.FromMinutes(1)).Ticks;
-        });
+        var (outcome, _) = await Service.BeginAsync(
+            instanceId, TestIds.Rival, await HereAsync(instanceId, siteId, TestIds.Rival));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+    }
+
+    [Fact]
+    public async Task AfterTheLockoutTheSiteIsYoursToFightAgain()
+    {
+        var region = TestWorld.Region();
+        var instanceId = await SeedWorldAsync(region);
+        var siteId = TestWorld.DungeonIn(region);
+        await ClearAsync(instanceId, siteId);
+        await AgeClearAsync(siteId, SiteRotationRules.Lockout + TimeSpan.FromSeconds(5), TimeSpan.Zero);
 
         var (outcome, _) = await Service.BeginAsync(
             instanceId, TestIds.Player, await HereAsync(instanceId, siteId));
@@ -243,43 +248,39 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ARecoveredDungeonSteadiesTheRegionAgainWhenCleared()
+    public async Task ARepeatClearPaysInFullButShapesTheRealmOnlyOnceAWindow()
     {
-        // The whole point: the defender's answer renews. Clearing the same site a window later
-        // returns resolve a second time, which is what a raided region needs to keep up.
+        // Experience, gold, gear and materials on every clear: the rotation is the farming loop.
+        // Resolve, a recruit, refresh resets and season points once per site every eight hours, or a
+        // ten-minute loop would farm the defence, the Tavern and the scoreboard.
         var region = TestWorld.OwnedBy(TestIds.Player);
         region.Resolve = 40;
         var instanceId = await SeedWorldAsync(region);
         var siteId = TestWorld.DungeonIn(region);
 
-        // First clear.
-        var firstRun = await OpenRunAsync(instanceId, TestIds.Player, siteId);
-        await AgeRunAsync(firstRun, TimeSpan.FromMinutes(2));
-        var (_, first, worldAfterFirst) = await Service.ClaimAsync(
-            instanceId, TestIds.Player, "Mike", new PveClaimRequest(firstRun, Contract));
+        var first = await ClearAsync(instanceId, siteId);
+        Assert.True(first.WorldRewards);
+        Assert.Equal(RegionResolveRules.RestoredPerClear, first.ResolveRestored);
+        Assert.NotNull(first.LockedUntil);
 
-        Assert.Equal(RegionResolveRules.RestoredPerClear, first!.ResolveRestored);
-        await ReplaceStoredWorldAsync(instanceId, worldAfterFirst!);
+        // Past the lockout, inside the window.
+        await AgeClearAsync(siteId, SiteRotationRules.Lockout + TimeSpan.FromSeconds(5), SiteRotationRules.Lockout + TimeSpan.FromSeconds(5));
+        var second = await ClearAsync(instanceId, siteId);
+        Assert.False(second.WorldRewards);
+        Assert.Equal(0, second.ResolveRestored);
+        Assert.True(second.Experience > 0);
+        Assert.True(second.Gold > 0);
 
-        // Wind the clear back past the recovery window, as time passing would.
-        await EditStoredWorldAsync(instanceId, world =>
-        {
-            var entry = WorldRegionBlob.EnsureOverride(
-                WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId);
-            entry["ClearedAtUtcTicks"] = DateTime.UtcNow
-                .Subtract(SiteRespawnRules.RespawnAfter + TimeSpan.FromMinutes(1)).Ticks;
-        });
+        // Past the window: the realm is shaped again.
+        await AgeClearAsync(siteId, SiteRotationRules.Lockout + TimeSpan.FromSeconds(5), SiteRotationRules.WorldRewardWindow + TimeSpan.FromMinutes(1));
+        var third = await ClearAsync(instanceId, siteId);
+        Assert.True(third.WorldRewards);
+        Assert.Equal(RegionResolveRules.RestoredPerClear, third.ResolveRestored);
 
-        // Second clear of the same site.
-        var secondRun = await OpenRunAsync(instanceId, TestIds.Player, siteId);
-        await AgeRunAsync(secondRun, TimeSpan.FromMinutes(2));
-        var (outcome, second, worldAfterSecond) = await Service.ClaimAsync(
-            instanceId, TestIds.Player, "Mike", new PveClaimRequest(secondRun, Contract));
-
-        Assert.True(outcome.Succeeded, outcome.Message);
-        Assert.Equal(RegionResolveRules.RestoredPerClear, second!.ResolveRestored);
-        Assert.Equal(40 + (2 * RegionResolveRules.RestoredPerClear),
-            TestWorld.ReadRegion(worldAfterSecond, region.RegionId).Resolve);
+        var clears = await Service.ClearsAsync(instanceId, TestIds.Player);
+        var mine = Assert.Single(clears.Clears);
+        Assert.Equal(siteId, mine.SiteId);
+        Assert.True(mine.LockedUntil > DateTime.UtcNow);
     }
 
     [Fact]
@@ -424,7 +425,7 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ClearingADungeonMarksItSpentAndPaysForTheClear()
+    public async Task ClearingADungeonPaysForTheClearAndLeavesTheWorldAlone()
     {
         var region = TestWorld.Region();
         var instanceId = await SeedWorldAsync(region);
@@ -438,7 +439,10 @@ public class WorldPveServiceTests : IDisposable
         Assert.True(outcome.Succeeded, outcome.Message);
         Assert.Equal(nameof(ConquestOutcome.RemoveLocation), response!.ConquestOutcome);
         Assert.Equal(site.SiteId, response.SiteId);
-        Assert.True(TestWorld.IsCleared(world, site.SiteId));
+        // The clear is this player's alone (SiteRotationRules), not written into the shared world.
+        var stored = WorldRegionBlob.GetOverride(WorldRegionBlob.FindRegion(world, region.RegionId)!, site.SiteId);
+        Assert.True(stored?["Cleared"] == null);
+        Assert.Single(_db.PlayerSiteClears.Where(c => c.SiteId == site.SiteId && c.UserId == TestIds.Player));
         Assert.True(response.Experience > 0);
         Assert.NotNull((await _db.PveRuns.SingleAsync()).ClaimedAt);
     }
@@ -523,24 +527,6 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ASiteSomebodyElseClearedFirstCannotBeClaimedAgain()
-    {
-        var region = TestWorld.Region();
-        var instanceId = await SeedWorldAsync(region);
-        var siteId = TestWorld.DungeonIn(region);
-        var runId = await OpenRunAsync(instanceId, TestIds.Player, siteId);
-        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
-
-        await EditStoredWorldAsync(instanceId, world =>
-            WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId));
-
-        var (outcome, _, _) = await Service.ClaimAsync(
-            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
-
-        Assert.Equal(PveError.NotPveTarget, outcome.Error);
-    }
-
-    [Fact]
     public async Task ARunHeldOpenAcrossAWorldRegenerationIsClosedRatherThanLeftSpendable()
     {
         // If the site id ever came back — a new world, same ids — an unclosed run would be a stored
@@ -594,7 +580,6 @@ public class WorldPveServiceTests : IDisposable
             instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
 
         Assert.True(claimOutcome.Succeeded, claimOutcome.Message);
-        Assert.True(TestWorld.IsCleared(world, siteId));
         Assert.True(response!.Experience > 0);
 
         // And the region is still theirs afterwards.
@@ -734,6 +719,28 @@ public class WorldPveServiceTests : IDisposable
     /// A begin request from a company standing at <paramref name="siteId"/>: you fight where you stand
     /// (1.33.0), so each test stands its player's company there first.
     /// </summary>
+    /// <summary>Opens, ages and claims a run at a site for the player, persisting the world it returns.</summary>
+    private async Task<PveClaimResponse> ClearAsync(Guid instanceId, string siteId)
+    {
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, siteId);
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+        var (outcome, response, world) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+        Assert.True(outcome.Succeeded, outcome.Message);
+        await ReplaceStoredWorldAsync(instanceId, world!);
+        await _db.SaveChangesAsync();
+        return response!;
+    }
+
+    /// <summary>Winds the player's clear of a site back, as time passing would.</summary>
+    private async Task AgeClearAsync(string siteId, TimeSpan clearedAgo, TimeSpan worldRewardsAgo)
+    {
+        var clear = await _db.PlayerSiteClears.SingleAsync(c => c.SiteId == siteId && c.UserId == TestIds.Player);
+        clear.LastClearedAt = DateTime.UtcNow - clearedAgo;
+        if (worldRewardsAgo > TimeSpan.Zero) clear.WorldRewardsAt = DateTime.UtcNow - worldRewardsAgo;
+        await _db.SaveChangesAsync();
+    }
+
     private async Task<PveBeginRequest> HereAsync(Guid instanceId, string siteId, string userId = TestIds.Player)
     {
         var party = await _db.PlayerParties.FirstOrDefaultAsync(p => p.GameInstanceId == instanceId && p.UserId == userId);
