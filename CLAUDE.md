@@ -71,10 +71,19 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 
 - Capitals cannot be raided at all: a seat cannot be besieged, so wearing it down leads nowhere.
 - The defender's answer is `RegionResolveRules`: clearing a hostile site inside a region you hold
-  restores resolve, applied in `WorldPveService.ClaimAsync`. A cleared site **recovers after 8h**
-  (`SiteRespawnRules`), because otherwise that answer is finite while raiding is not and the attacker
-  wins by arithmetic. Ask `SiteRespawnRules.IsCleared`, never `SiteOverride.Cleared` — clearance is
-  time-dependent, and `WorldRegionBlob.MarkCleared` stamps `ClearedAtUtcTicks` for it.
+  restores resolve, applied in `WorldPveService.ClaimAsync`.
+- **Site rotation** (`SiteRotationRules`, shared 1.39.0; Mike 2026-10-03: players must never sit
+  waiting for respawns). A clear is **per player** (`PlayerSiteClear`, one row per player per site),
+  never written into the shared world, so nobody else's region empties.
+  - **Lockout:** the clearer may not begin that site again for **10 minutes** (`PveError.SiteLocked`,
+    409). Every clear pays full experience, gold, gear and materials: the rotation is the farming loop.
+  - **Realm rewards** come once per player per site every **8 hours** (`WorldRewardsAt`): the resolve
+    restore (so a defender restores one site's worth per site per 8h, the rate the old respawn was
+    tuned for), the Tavern recruit and its refresh reset, the Hiring Hall refresh reset, and the
+    season points (`PveController`, gated on `WorldRewards`). First Steps' clear counts every time.
+  - **No taper** on repeats; it would punish the rotation. It is the lever if farming outruns the economy.
+  - `GET pve/clears` returns the player's clears still locked or cooling. A season reset deletes them.
+  - `SiteOverride.Cleared`/`ClearedAtUtcTicks` are legacy (pre-1.39.0 worlds); nothing writes them.
 - A region's garrison sum, supply and hold come from `RegionHoldCalculator.AssessRegion` — one
   implementation, so the server judges a raid by the numbers the client's dossier showed the player.
 - **Sieges are not built.** The gate is displayed and nothing acts on it; it is blocked behind the

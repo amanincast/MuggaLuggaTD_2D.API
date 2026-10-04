@@ -14,8 +14,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// <para><b>The ceiling this used to have is gone.</b> Sites stayed cleared forever, so a
     /// defender could restore only (dungeons × <see cref="RestoredPerClear"/>) resolve <i>ever</i>,
     /// against unlimited raiding — the attacker won by arithmetic however well the defence was
-    /// played. Cleared sites now recover; see <see cref="SiteRespawnRules"/>, which carries the
-    /// rates and the reasoning.</para>
+    /// played. A site's clear now restores resolve once per player every eight hours; see
+    /// <see cref="SiteRotationRules"/>, which carries the rates and the reasoning.</para>
     /// </summary>
     public static class RegionResolveRules
     {

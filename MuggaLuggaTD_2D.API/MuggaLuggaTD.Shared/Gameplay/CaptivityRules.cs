@@ -21,7 +21,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// the army back for a counterattack and would rather pay than wait.</para>
     ///
     /// <para>Eight hours deliberately matches <see cref="SiegeAssaultRules"/>' muster window and
-    /// <see cref="SiteRespawnRules"/>' recovery: the game already asks a player to come back in eight
+    /// <see cref="SiteRotationRules"/>' window for a site's realm rewards: the game already asks a player to come back in eight
     /// hours for two other things, and a fourth number would be a fourth thing to learn.</para>
     ///
     /// <para><b>Nothing ticks.</b> Captivity is a stamp plus a rule, read on the spot, exactly like a

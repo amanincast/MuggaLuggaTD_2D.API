@@ -141,7 +141,6 @@ public class WorldRegionBlobTests
         Assert.Equal(dungeon.SiteId, resolved!.Site.SiteId);
         Assert.Equal(LocationType.Dungeon, resolved.Site.Type);
         Assert.Equal(region.RegionId, resolved.Region.RegionId);
-        Assert.False(resolved.IsCleared);
     }
 
     [Theory]
@@ -180,42 +179,10 @@ public class WorldRegionBlobTests
     // -----------------------------------------------------------------
 
     [Fact]
-    public void ClearingASite_IsRememberedForThatSiteAlone()
-    {
-        var region = TestWorld.Region();
-        var world = TestWorld.Blob(region);
-        var dungeons = TestWorld.SitesIn(region).Where(s => s.Type == LocationType.Dungeon).ToList();
-        Assert.True(dungeons.Count >= 2, "A tier 2 region should generate several dungeons.");
-
-        var regionNode = WorldRegionBlob.FindRegion(world, region.RegionId)!;
-        WorldRegionBlob.MarkCleared(regionNode, dungeons[0].SiteId);
-
-        var stored = TestWorld.RoundTrip(world);
-        Assert.True(TestWorld.IsCleared(stored, dungeons[0].SiteId));
-        Assert.False(TestWorld.IsCleared(stored, dungeons[1].SiteId));
-    }
-
-    [Fact]
-    public void ClearingASiteTwice_LeavesOneOverride()
-    {
-        var region = TestWorld.Region();
-        var world = TestWorld.Blob(region);
-        var siteId = TestWorld.DungeonIn(region);
-        var regionNode = WorldRegionBlob.FindRegion(world, region.RegionId)!;
-
-        WorldRegionBlob.MarkCleared(regionNode, siteId);
-        WorldRegionBlob.MarkCleared(regionNode, siteId);
-
-        var overrides = (JsonObject)regionNode["SiteOverrides"]!;
-        Assert.Single(overrides);
-        Assert.True(WorldRegionBlob.IsCleared(overrides[siteId]));
-    }
-
-    [Fact]
     public void AnOverrideKeepsWhateverElseIsAlreadyRecordedAgainstTheSite()
     {
-        // Garrisons are written by the client into the same override. Clearing a site must not wipe
-        // them, or a keep would lose its defenders the moment anything else happened there.
+        // Garrisons and yields share a site's override. Touching it again for anything else must not
+        // wipe them, or a keep would lose its defenders the moment anything else happened there.
         var region = TestWorld.Region();
         var world = TestWorld.Blob(region);
         var siteId = TestWorld.DungeonIn(region);
@@ -225,23 +192,12 @@ public class WorldRegionBlobTests
         entry["GarrisonPower"] = 250f;
         entry["StoredYield"] = 7;
 
-        WorldRegionBlob.MarkCleared(regionNode, siteId);
+        WorldRegionBlob.EnsureOverride(regionNode, siteId);
 
         var stored = TestWorld.RoundTrip(world);
         var after = WorldRegionBlob.GetOverride(WorldRegionBlob.FindRegion(stored, region.RegionId)!, siteId)!;
-        Assert.True(after["Cleared"]!.GetValue<bool>());
         Assert.Equal(250f, after["GarrisonPower"]!.GetValue<float>());
         Assert.Equal(7, after["StoredYield"]!.GetValue<int>());
-    }
-
-    [Fact]
-    public void ASiteWithNoOverride_IsNotCleared()
-    {
-        var region = TestWorld.Region();
-        var world = TestWorld.Blob(region);
-
-        Assert.False(TestWorld.IsCleared(world, TestWorld.DungeonIn(region)));
-        Assert.False(WorldRegionBlob.IsCleared(null));
     }
 
     // -----------------------------------------------------------------
@@ -369,12 +325,14 @@ public class WorldRegionBlobTests
     }
 
     [Fact]
-    public void AClearedSiteSurvivesBeingReadIntoTheModel()
+    public void ALegacyClearedSiteSurvivesBeingReadIntoTheModel()
     {
+        // Clears are no longer written to the world (SiteRotationRules), but worlds from before
+        // 1.39.0 still carry them, and reading one must not fail.
         var region = TestWorld.Region();
         var world = TestWorld.Blob(region);
         var siteId = TestWorld.DungeonIn(region);
-        WorldRegionBlob.MarkCleared(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId);
+        WorldRegionBlob.EnsureOverride(WorldRegionBlob.FindRegion(world, region.RegionId)!, siteId)["Cleared"] = true;
 
         var read = TestWorld.ReadRegion(TestWorld.RoundTrip(world), region.RegionId);
 

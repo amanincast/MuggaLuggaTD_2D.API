@@ -177,6 +177,10 @@ namespace MuggaLuggaTD.Shared
         // 1.38.0 - goods spent on war (Hiring Hall phases 3-4). Fortifying spends stone, timber and ore
         //   for a level of entrenchment (FortifyRules), and declaring a siege spends grain, timber, hides
         //   and ore scaled by the target's hold (SiegeSupplyRules); the dossier and the codex quote both.
-        public const string Version = "1.38.0";
+        // 1.39.0 - site rotation (SiteRotationRules). A clear is per player, not written into the shared
+        //   world: it locks that player out of the site for ten minutes, and its realm rewards (resolve,
+        //   a recruit, refresh resets, season points) come once per player per site every eight hours.
+        //   SiteRespawnRules is gone.
+        public const string Version = "1.39.0";
     }
 }

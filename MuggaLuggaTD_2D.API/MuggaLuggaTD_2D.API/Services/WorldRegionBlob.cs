@@ -201,37 +201,6 @@ public static class WorldRegionBlob
         return entry;
     }
 
-    /// <summary>
-    /// True when a site's fight has been spent and has not yet come back.
-    ///
-    /// <para>Time-dependent, by way of <see cref="SiteRespawnRules"/>: a cleared site recovers, so
-    /// that a region's own dungeons can keep answering raids rather than running out.</para>
-    /// </summary>
-    public static bool IsCleared(JsonNode? siteOverride)
-    {
-        if (siteOverride == null) return false;
-
-        return SiteRespawnRules.IsCleared(new SiteOverride
-        {
-            Cleared = siteOverride["Cleared"]?.GetValue<bool>() ?? false,
-            ClearedAtUtcTicks = siteOverride["ClearedAtUtcTicks"]?.GetValue<long>() ?? 0
-        });
-    }
-
-    /// <summary>
-    /// Marks a dungeon or portal as spent. The region map's answer to removing a location: the site
-    /// still generates from the seed, so it cannot simply be deleted, but it no longer offers a fight.
-    /// </summary>
-    public static void MarkCleared(JsonNode regionNode, string siteId)
-    {
-        var entry = EnsureOverride(regionNode, siteId);
-        entry["Cleared"] = true;
-
-        // Stamped so the site can come back. Without the timestamp it would read as cleared before
-        // this rule existed, which is treated as recovered — so a clear with no stamp does nothing.
-        entry["ClearedAtUtcTicks"] = DateTime.UtcNow.Ticks;
-    }
-
     // -----------------------------------------------------------------
     // Regions
     // -----------------------------------------------------------------
@@ -479,7 +448,4 @@ public static class WorldRegionBlob
 }
 
 /// <summary>A site found in the live world, with its region and whatever has happened to it.</summary>
-public record SiteResolution(JsonNode RegionNode, WorldRegionData Region, SiteSpec Site, JsonNode? Override)
-{
-    public bool IsCleared => WorldRegionBlob.IsCleared(Override);
-}
+public record SiteResolution(JsonNode RegionNode, WorldRegionData Region, SiteSpec Site, JsonNode? Override);

@@ -99,12 +99,6 @@ public static class TestWorld
         return WorldRegionBlob.ReadRegion(node!);
     }
 
-    public static bool IsCleared(JsonNode? world, string siteId)
-    {
-        var regionNode = WorldRegionBlob.FindRegion(world, SiteSpec.RegionIdOf(siteId));
-        return regionNode != null && WorldRegionBlob.IsCleared(WorldRegionBlob.GetOverride(regionNode, siteId));
-    }
-
     /// <summary>A blob as it is actually stored and re-read, so a test sees the persistence round trip.</summary>
     public static JsonNode? RoundTrip(JsonNode world) => JsonNode.Parse(world.ToJsonString());
 }
