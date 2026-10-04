@@ -151,8 +151,51 @@ business, so nothing here is broadcast.
   - `POST .../ambush/flee`: **Returning** — the cells it walked, reversed and timed as they took
     (`AmbushRules.RouteBack`: every walked leg reversed, crossings included). Arrival lands it
     at `ToSiteId` (the origin) in that site's region.
-  - A halted company **waits**: there is no auto-resolve (Mike 2026-09-27 — the design's auto-fight,
-    morale and fatigue were not asked for). `PartyService.Dice` is the ambush entropy; tests fix it.
+  - A halted company **waits**: there is no auto-resolve for a company its player steers (Mike
+    2026-09-27). `PartyService.Dice` is the ambush entropy; tests fix it.
+
+## Auto mode (`AutoFightService`; `docs/design/auto-fight.md` in the Unity repo, phase 2)
+- **A company toggled into auto mode fights on its own** (Mike 2026-10-04):
+  - `POST parties/{id}/auto {on}`. It must be at rest and have members.
+  - `POST parties/{id}/auto/order {order, regionId}`: Roam or Patrol, **only a region its player
+    holds**. A patrol is refused (`TooStrong`) unless the region's mobs are below the company's level.
+  - Both answer with the companies, and broadcast `PartyMoved`.
+- **Nothing ticks.** `SettleAsync` replays each auto company from `AutoSettledAt` to now:
+  - **What it replays:** walk (an ordinary journey, so the client draws it), fight, roll, pay, pick the
+    next site (`AutoFightRules.NextSite`).
+  - **When it stops:** caught up, out of provisions, nothing below its level, region lost, or nobody
+    free.
+  - **Reruns are safe:** each fight is rolled from `AutoFightCount` (`AutoFightRules.RollWin`, seeded),
+    so a rerun rolls nothing twice.
+  - **Bounded:** at most 48h is replayed.
+  - **Called from:** `PartyService.ListAsync`, before every auto order, and the reports read.
+- **Paid:**
+  - **Gold and materials** go straight to the purse and wallet.
+  - **Experience and gear** belong to the save, which only the client writes. They are banked in
+    `AutoFightReport`, and the gear goes into the item ledger at once.
+  - **The client collects the bank:** `GET parties/auto/reports`, then it applies the experience
+    (to `FighterIds`) and the items, saves, and calls `POST parties/auto/reports/collect`.
+- **The rules:**
+  - **Pay:** a third of a clear, gear a rarity down (`RunRewardCalculator` `rarityStepsDown`).
+  - **What it never does:** pay realm rewards, start a lockout, or count for First Steps.
+  - **Provisions** (`ProvisionRules`): spent from `PlayerMaterials` as each fight or 20-minute patrol
+    stint begins. Out of Grain, it **stops** (`OutOfProvisions`) until its player re-orders it.
+  - **A patrol stint** ends in a skirmish at the region's mob level, at an ambush's share of a third.
+- **Bloodied** (`BloodiedCharacter`, per character):
+  - **Cause:** a lost auto-fight. The fighters are barred for 30 min.
+  - **Who refuses them:** `WhyCannotFightAsync` (PvE begin, ambush fight) and `MarchingArmy.MusterAsync`
+    (raids, sieges).
+  - **The company** rests where it stands, then resumes by itself.
+  - **The client** sees `PartiesResponse.Bloodied`.
+- **While in auto mode its player cannot steer it:** travel, member changes and disband are refused
+  (`Busy`), and `CompanyAtAsync` will not open a hand run with it.
+  - **Toggled off mid-walk:** it lands as an ordinary journey.
+  - **Toggled off mid-fight:** the fight is dropped.
+  - `SettleArrival` skips auto companies.
+- **Season reset:** every company comes out of auto mode, and wounds heal. Uncollected reports stay.
+- **A patrol halves the ambush chance** on its player's journeys through its region (`TravelAsync`
+  passes it to `AmbushRules.ChanceForRoute`). The client's risk preview catches up in phase 4.
+- **Not yet:** an auto company on the road is never ambushed. That is phase 4.
 
 ## The equipment ledger (`ItemLedgerService`, `ItemGrant`)
 

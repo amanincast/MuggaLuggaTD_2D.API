@@ -41,6 +41,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerParty> PlayerParties => Set<PlayerParty>();
     public DbSet<InviteCode> InviteCodes => Set<InviteCode>();
     public DbSet<PlayerSiteClear> PlayerSiteClears => Set<PlayerSiteClear>();
+    public DbSet<BloodiedCharacter> BloodiedCharacters => Set<BloodiedCharacter>();
+    public DbSet<AutoFightReport> AutoFightReports => Set<AutoFightReport>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -117,6 +119,38 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             // One row per player per site, read on every begin and claim.
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.SiteId }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Bloodied characters (BloodiedRules): one row per character, asked before every fight.
+        builder.Entity<BloodiedCharacter>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.CharacterId }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Auto-fight reports, banked until the client collects their experience and gear.
+        builder.Entity<AutoFightReport>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.CollectedAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()

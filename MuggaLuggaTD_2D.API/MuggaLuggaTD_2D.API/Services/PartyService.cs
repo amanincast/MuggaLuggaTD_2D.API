@@ -73,11 +73,15 @@ public class PartyService
     /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
     private readonly FirstStepsService? _firstSteps;
 
+    /// <summary>Catches companies in auto mode up before they are read; optional so tests can build this without it.</summary>
+    private readonly AutoFightService? _auto;
+
     public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
         MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger,
-        ItemLedgerService items, FirstStepsService? firstSteps = null)
+        ItemLedgerService items, FirstStepsService? firstSteps = null, AutoFightService? auto = null)
     {
         _firstSteps = firstSteps;
+        _auto = auto;
         _items = items;
         _context = context;
         _tavern = tavern;
@@ -94,6 +98,8 @@ public class PartyService
         var world = await LoadWorldAsync(gameInstanceId);
         if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
 
+        // A company in auto mode has been busy since it was last read (auto-fight.md): catch it up first.
+        if (_auto != null) await _auto.SettleAsync(gameInstanceId, userId);
         await EnsureFirstAsync(gameInstanceId, userId, world);
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
@@ -216,6 +222,8 @@ public class PartyService
         if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
 
         // A company on the road keeps who it set out with; its name and colours may still change.
+        if (request.CharacterIds != null && party.AutoMode)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is in auto mode. Take it out of auto mode to change who marches with it."), null);
         if (request.CharacterIds != null && party.State != CompanyState.Idle)
             return (new PartyOutcome(PartyError.Busy, $"{party.Name} is away. Change who marches with it when it is at rest."), null);
 
@@ -242,6 +250,8 @@ public class PartyService
         var party = parties.FirstOrDefault(p => p.Id == partyId);
         if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
         if (parties.Count <= 1) return (new PartyOutcome(PartyError.LastCompany, "You always lead at least one company."), null);
+        if (party.AutoMode)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is in auto mode. Take it out of auto mode first."), null);
         if (party.State != CompanyState.Idle)
             return (new PartyOutcome(PartyError.Busy, "A company can only be disbanded when it is at rest."), null);
 
@@ -269,6 +279,8 @@ public class PartyService
         var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
         var party = parties.FirstOrDefault(p => p.Id == partyId);
         if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.AutoMode)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is in auto mode and goes where it chooses. Take it out of auto mode to lead it."), null);
         if (party.State != CompanyState.Idle)
             return (new PartyOutcome(PartyError.Busy, $"{party.Name} is already on the move."), null);
 
@@ -318,13 +330,16 @@ public class PartyService
         party.UpdatedAt = now;
 
         // The road is rolled now, once (§4): re-reading the journey cannot re-roll it, and the client
-        // is not told until it strikes. Every region walked is a chance of its own.
+        // is not told until it strikes. Every region walked is a chance of its own, and one of the
+        // player's companies patrolling it makes it safer (auto-fight.md §6).
         var byId = regions.ToDictionary(r => r.RegionId);
+        var patrolled = parties.Where(p => p.AutoMode && p.AutoOrder == AutoOrder.Patrol && p.AutoRegionId != null)
+            .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal);
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {
             var land = byId[leg.RegionId];
             var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
-            return (land.Tier, land.IsOwnedByPlayer(userId), walk);
+            return (land.Tier, land.IsOwnedByPlayer(userId), walk, patrolled.Contains(leg.RegionId));
         }));
         party.AmbushAt = AmbushRules.Roll(chance, Dice);
         party.HaltedAt = null;
@@ -348,7 +363,7 @@ public class PartyService
     {
         var party = await context.PlayerParties
             .FirstOrDefaultAsync(p => p.Id == partyId && p.GameInstanceId == gameInstanceId && p.UserId == userId);
-        if (party == null) return null;
+        if (party == null || party.AutoMode) return null;
         if (SettleArrival(party, DateTime.UtcNow)) await context.SaveChangesAsync();
         return party.State == CompanyState.Idle && string.Equals(party.SiteId, siteId, StringComparison.Ordinal)
             ? party
@@ -361,6 +376,8 @@ public class PartyService
     /// </summary>
     private static bool SettleArrival(PlayerParty party, DateTime now)
     {
+        // A company in auto mode walks by its own replay (AutoFightService), which lands it itself.
+        if (party.AutoMode) return false;
         if (party.State is not (CompanyState.Travelling or CompanyState.Returning)
             || party.DepartedAt == null || party.ArrivesAt == null)
             return false;
@@ -736,10 +753,13 @@ public class PartyService
                     ?? new HashSet<string>(StringComparer.Ordinal);
 
         var commitments = await CommitmentsAsync(context, world, gameInstanceId, userId);
+        var bloodied = await AutoFightService.BloodiedAsync(context, gameInstanceId, userId, DateTime.UtcNow);
         foreach (var id in fighters)
         {
             if (!owned.Contains(id)) return $"{id} is not one of your characters.";
             if (commitments.TryGetValue(id, out var why)) return $"{NameOf(save, id)} is {Describe(why)}.";
+            if (bloodied.TryGetValue(id, out var recovers))
+                return $"{NameOf(save, id)} is Bloodied and cannot fight for another {Minutes(recovers - DateTime.UtcNow)}.";
         }
         return null;
     }
@@ -765,6 +785,9 @@ public class PartyService
         }
         if (changed) await context.SaveChangesAsync();
     }
+
+    /// <summary>A recovery's time left, as the refusal says it: "12 min".</summary>
+    private static string Minutes(TimeSpan left) => $"{Math.Max(1, (int)Math.Ceiling(left.TotalMinutes))} min";
 
     private static string Describe((string Reason, string? SiteId) why) => why.Reason switch
     {
@@ -846,15 +869,25 @@ public class PartyService
             .ToListAsync();
         var standing = await _tavern.RosterStandingAsync(gameInstanceId, userId);
         var commitments = await CommitmentsAsync(_context, world, gameInstanceId, userId);
+        var now = DateTime.UtcNow;
+        var bloodied = await AutoFightService.BloodiedAsync(_context, gameInstanceId, userId, now);
 
         return new PartiesResponse(
             parties.Select(p => new PartyDto(p.Id, p.Name, p.Banner, MarchingArmy.ReadIds(p.CharacterIdsJson),
-                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world))).ToList(),
+                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world), AutoOf(p))).ToList(),
             CompanyRules.MaxCompanies(standing.Cap),
             CompanyRules.MaxSize,
             standing.Cap,
             commitments.Select(c => new CharacterCommitmentDto(c.Key, c.Value.Reason, c.Value.SiteId)).ToList(),
-            DateTime.UtcNow);
+            now,
+            bloodied.Select(b => new BloodiedDto(b.Key, b.Value)).ToList());
+    }
+
+    private static AutoStateDto? AutoOf(PlayerParty p)
+    {
+        if (!p.AutoMode) return null;
+        return new AutoStateDto(p.AutoOrder, p.AutoRegionId, p.AutoStatus, p.AutoTargetSiteId,
+            p.AutoStepEndsAt is DateTime ends ? DateTime.SpecifyKind(ends, DateTimeKind.Utc) : null);
     }
 
     private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId)
