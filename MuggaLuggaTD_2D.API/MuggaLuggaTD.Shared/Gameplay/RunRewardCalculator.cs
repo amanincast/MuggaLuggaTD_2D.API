@@ -52,14 +52,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>
         /// Rolls the rewards for clearing a location. <paramref name="random"/> is injected so the
-        /// caller owns the entropy and tests can be deterministic.
+        /// caller owns the entropy and tests can be deterministic. <paramref name="rarityStepsDown"/> lowers
+        /// every item's rarity before its attributes are rolled (an auto-fight's gear, <see cref="AutoFightRules"/>).
         /// </summary>
         public static RunRewards Calculate(
             int locationLevel,
             int locationTier,
             RunTuning tuning,
             IReadOnlyList<ItemTemplate> itemTemplates,
-            Random random)
+            Random random,
+            int rarityStepsDown = 0)
         {
             var rewards = new RunRewards();
             if (tuning == null)
@@ -92,7 +94,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     if (itemTemplates != null && itemTemplates.Count > 0
                         && ItemDropCalculator.ShouldDropItem(enemyLevel))
                     {
-                        var drop = RollItem(itemTemplates[random.Next(itemTemplates.Count)], enemyLevel);
+                        var drop = RollItem(itemTemplates[random.Next(itemTemplates.Count)], enemyLevel, rarityStepsDown);
                         if (drop != null) rewards.Items.Add(drop);
                     }
                 }
@@ -132,7 +134,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Builds a persisted item from a content template, running the same rarity/tier/attribute
         /// rolls the client's drop path uses.
         /// </summary>
-        private static ItemSaveData RollItem(ItemTemplate template, int enemyLevel)
+        private static ItemSaveData RollItem(ItemTemplate template, int enemyLevel, int rarityStepsDown)
         {
             if (template == null)
                 return null;
@@ -145,7 +147,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ItemCount = 1
             };
 
-            ItemDropCalculator.ApplyDropProperties(item, enemyLevel, template.ImplicitPool, template.ExplicitPool);
+            ItemRarityTypes? rarity = null;
+            if (rarityStepsDown > 0)
+                rarity = (ItemRarityTypes)Math.Max((int)ItemRarityTypes.Common,
+                    (int)ItemDropCalculator.CalculateRarity(enemyLevel) - rarityStepsDown);
+
+            ItemDropCalculator.ApplyDropProperties(item, enemyLevel, template.ImplicitPool, template.ExplicitPool, rarity);
             return item;
         }
     }
