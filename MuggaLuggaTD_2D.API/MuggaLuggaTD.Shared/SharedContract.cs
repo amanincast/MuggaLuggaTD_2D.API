@@ -181,6 +181,10 @@ namespace MuggaLuggaTD.Shared
         //   world: it locks that player out of the site for ten minutes, and its realm rewards (resolve,
         //   a recruit, refresh resets, season points) come once per player per site every eight hours.
         //   SiteRespawnRules is gone.
-        public const string Version = "1.39.0";
+        // 1.40.0 - auto-fight (docs/design/auto-fight.md, Unity repo). AutoFightRules: a side company
+        //   fights only sites below its average level, wins by the gap, pays a third and gear a rarity
+        //   down; BloodiedRules bar a loser from every fight for 30 minutes; ProvisionRules spend Grain
+        //   and Hides; a patrolled region halves the ambush chance.
+        public const string Version = "1.40.0";
     }
 }

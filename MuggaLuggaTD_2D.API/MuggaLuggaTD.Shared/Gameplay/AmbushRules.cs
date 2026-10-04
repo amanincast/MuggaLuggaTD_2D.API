@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MuggaLuggaTD.Shared.Gameplay
 {
@@ -60,12 +61,26 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// holds that land, and how long it is.
         /// </summary>
         public static double ChanceFor(int regionTier, bool heldByPlayer, TimeSpan duration)
+            => ChanceFor(regionTier, heldByPlayer, duration, patrolled: false);
+
+        /// <summary>
+        /// As above, and a region one of the player's companies patrols is safer still
+        /// (<see cref="PatrolFactor"/>; <c>docs/design/auto-fight.md</c> §6). A second patrol adds nothing.
+        /// </summary>
+        public static double ChanceFor(int regionTier, bool heldByPlayer, TimeSpan duration, bool patrolled)
         {
             double chance = BaseChance + ChancePerTier * Math.Max(0, regionTier - 1);
             if (!heldByPlayer) chance *= UnheldLandFactor;
             chance += ChancePerMinute * Math.Max(0, duration.TotalMinutes - 1);
+            if (patrolled) chance *= PatrolFactor;
             return Math.Max(0, Math.Min(MaximumChance, chance));
         }
+
+        /// <summary>What a patrolling company does to the chance of an ambush in its region.</summary>
+        public const double PatrolFactor = 0.5;
+
+        /// <summary>How often a patrol meets the mobs it keeps down: one skirmish in this much walking.</summary>
+        public static readonly TimeSpan PatrolSkirmishEvery = TimeSpan.FromMinutes(20);
 
         public static AmbushRisk RiskOf(double chance) =>
             chance >= HighFrom ? AmbushRisk.High
@@ -88,10 +103,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// quiet only if every one of them is. Still capped at <see cref="MaximumChance"/>.
         /// </summary>
         public static double ChanceForRoute(IEnumerable<(int Tier, bool Held, TimeSpan Walk)> legs)
+            => ChanceForRoute(legs?.Select(l => (l.Tier, l.Held, l.Walk, false)));
+
+        /// <summary>As above, with whether each region walked is patrolled by one of the player's companies.</summary>
+        public static double ChanceForRoute(IEnumerable<(int Tier, bool Held, TimeSpan Walk, bool Patrolled)> legs)
         {
             double quiet = 1;
             if (legs != null)
-                foreach (var leg in legs) quiet *= 1 - ChanceFor(leg.Tier, leg.Held, leg.Walk);
+                foreach (var leg in legs) quiet *= 1 - ChanceFor(leg.Tier, leg.Held, leg.Walk, leg.Patrolled);
             return Math.Min(MaximumChance, 1 - quiet);
         }
 
