@@ -18,6 +18,28 @@
   "ElitesFromWave": 3,
   "EliteIntervalWaves": 2,
 
+  // The open-field wave arena (WavePlan; Mike, 2026-10-04). The numbers above still size and pay
+  // placed fights (dungeons, ruins, a keep's road) and ambushes. Here each wave is a planned roster:
+  // (first + added x (wave - 1)) x the tier's factor, dealt in over DealSeconds. The next wave comes
+  // WaveSeconds after the last began, or BreatherSeconds after the field is clear, so a slow clearer
+  // is swamped. A run pays PayGrowth x what the old ten-a-wave run did, spread over its enemies.
+  "WaveArenaWavesTier1": 5,
+  "WaveArenaWavesTier2": 6,
+  "WaveArenaWavesTier3": 8,
+  "WaveArenaWavesTier4": 10,
+  "WaveArenaFirstWaveEnemies": 12,
+  "WaveArenaEnemiesAddedPerWave": 4,
+  "WaveArenaTierFactorTier1": 1.0,
+  "WaveArenaTierFactorTier2": 1.25,
+  "WaveArenaTierFactorTier3": 1.5,
+  "WaveArenaTierFactorTier4": 2.0,
+  "WaveArenaWaveSeconds": 30,
+  "WaveArenaDealSeconds": 12,
+  "WaveArenaBreatherSeconds": 2,
+  "WaveArenaPayGrowth": 1.75,
+  // The most enemies standing at once: dealing waits while the field is this full (a frame budget).
+  "WaveArenaMostStanding": 150,
+
   // A representative enemy, used to value a kill (see RunRewardCalculator.ExperienceForEnemy).
   "BaseEnemyHealth": 50,
   "EnemyHealthMultiplierPerLevel": 0.15

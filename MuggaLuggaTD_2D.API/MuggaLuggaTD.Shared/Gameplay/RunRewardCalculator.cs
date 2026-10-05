@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Enums;
 using Items.Models;
 using Items.Utilities;
+using MuggaLuggaTD.Shared.World;
 using StateManagement.Models;
 
 namespace MuggaLuggaTD.Shared.Gameplay
@@ -54,6 +55,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Rolls the rewards for clearing a location. <paramref name="random"/> is injected so the
         /// caller owns the entropy and tests can be deterministic. <paramref name="rarityStepsDown"/> lowers
         /// every item's rarity before its attributes are rolled (an auto-fight's gear, <see cref="AutoFightRules"/>).
+        /// <paramref name="site"/> is the kind of place fought: an open-field one is fought and paid by
+        /// <see cref="WavePlan"/>. Left out (an ambush), the run is priced as a placed fight.
         /// </summary>
         public static RunRewards Calculate(
             int locationLevel,
@@ -61,14 +64,17 @@ namespace MuggaLuggaTD.Shared.Gameplay
             RunTuning tuning,
             IReadOnlyList<ItemTemplate> itemTemplates,
             Random random,
-            int rarityStepsDown = 0)
+            int rarityStepsDown = 0,
+            LocationType? site = null)
         {
             var rewards = new RunRewards();
             if (tuning == null)
                 return rewards;
 
-            int waves = Math.Max(1, tuning.GetWavesRequiredForTier(locationTier));
-            int perWave = Math.Max(1, tuning.EnemiesRequiredPerWave);
+            bool open = site.HasValue && WavePlan.IsWaveArena(site.Value);
+            int waves = open ? WavePlan.Waves(tuning, locationTier) : Math.Max(1, tuning.GetWavesRequiredForTier(locationTier));
+            double share = open ? WavePlan.PayShare(tuning, locationTier) : 1.0;
+            double experience = 0;
             int levelInterval = Math.Max(1, tuning.EnemyLevelIncreaseInterval);
             int baseLevel = Math.Max(1, locationLevel);
 
@@ -81,6 +87,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 // Some of the wave is elite, on the same schedule the combat scene spawns them - an
                 // elite is tougher and worth more, and a run priced as if every enemy were a trash
                 // mob would pay for an easier fight than the one the location demands.
+                int perWave = open ? WavePlan.EnemiesInWave(tuning, locationTier, wave + 1) : Math.Max(1, tuning.EnemiesRequiredPerWave);
                 int elites = Math.Min(perWave, Math.Max(0, EliteRules.ElitesInWave(tuning, wave + 1)));
 
                 for (int i = 0; i < perWave; i++)
@@ -88,17 +95,21 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     bool isElite = i < elites;
 
                     long health = isElite ? EliteRules.EliteHealth(enemyHealth) : enemyHealth;
-                    long experience = ExperienceForEnemy(enemyLevel, health);
-                    rewards.Experience += isElite ? EliteRules.EliteExperience(experience) : experience;
+                    long enemyExperience = ExperienceForEnemy(enemyLevel, health);
+                    experience += (isElite ? EliteRules.EliteExperience(enemyExperience) : enemyExperience) * share;
 
+                    // An open-field enemy is one of many: it drops at its share of the usual odds.
                     if (itemTemplates != null && itemTemplates.Count > 0
-                        && ItemDropCalculator.ShouldDropItem(enemyLevel))
+                        && ItemDropCalculator.ShouldDropItem(enemyLevel)
+                        && (share >= 1.0 || random.NextDouble() < share))
                     {
                         var drop = RollItem(itemTemplates[random.Next(itemTemplates.Count)], enemyLevel, rarityStepsDown);
                         if (drop != null) rewards.Items.Add(drop);
                     }
                 }
             }
+
+            rewards.Experience = (long)Math.Round(experience);
 
             // From tier 3 up the run ends on a boss, and the wave does not end until it is dead. It
             // is most of the last wave's difficulty, so it has to be most of its price too.

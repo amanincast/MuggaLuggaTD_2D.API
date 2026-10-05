@@ -318,7 +318,8 @@ public class WorldPveService
             resolved.Site.Tier,
             _content.RunTuning,
             _content.DroppableItems,
-            Random.Shared);
+            Random.Shared,
+            site: resolved.Site.Type);
 
         // Materials are the Tavern's currency, so they are granted here and held server-side rather
         // than written by the client into its own save.
@@ -327,7 +328,8 @@ public class WorldPveService
             resolved.Site.Tier,
             _content.RunTuning,
             _content.Materials,
-            Random.Shared);
+            Random.Shared,
+            site: resolved.Site.Type);
 
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
 

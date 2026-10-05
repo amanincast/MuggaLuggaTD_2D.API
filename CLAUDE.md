@@ -81,6 +81,9 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
     restore (so a defender restores one site's worth per site per 8h, the rate the old respawn was
     tuned for), the Tavern recruit and its refresh reset, the Hiring Hall refresh reset, and the
     season points (`PveController`, gated on `WorldRewards`). First Steps' clear counts every time.
+  - **Open-field sites pay from planned waves** (`WavePlan`, 1.42.0; Mike 2026-10-04): 3-10x the
+    enemies, each at a share, so a run pays 1.75x the old one. `ClaimAsync` and auto-fight pass
+    `site:` to both calculators; dungeons, ruins, keeps and ambushes are priced as before.
   - **No taper** on repeats; it would punish the rotation. It is the lever if farming outruns the economy.
   - `GET pve/clears` returns the player's clears still locked or cooling. A season reset deletes them.
   - `SiteOverride.Cleared`/`ClearedAtUtcTicks` are legacy (pre-1.39.0 worlds); nothing writes them.
