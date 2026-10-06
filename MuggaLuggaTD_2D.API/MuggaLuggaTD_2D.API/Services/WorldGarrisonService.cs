@@ -59,6 +59,9 @@ public class WorldGarrisonService
     /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
     private readonly FirstStepsService? _firstSteps;
 
+    /// <summary>Banks a ransom paid to a faction as its strength; optional so tests can build this without it.</summary>
+    private readonly FactionService? _factions;
+
     public WorldGarrisonService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -66,9 +69,11 @@ public class WorldGarrisonService
         ISessionLog sessionLog,
         ILogger<WorldGarrisonService> logger,
         WarLogService warLog,
-        FirstStepsService? firstSteps = null)
+        FirstStepsService? firstSteps = null,
+        FactionService? factions = null)
     {
         _firstSteps = firstSteps;
+        _factions = factions;
         _context = context;
         _content = content;
         _gold = gold;
@@ -161,7 +166,8 @@ public class WorldGarrisonService
     ///
     /// <para><b>The gold goes to the captor</b> (Mike, 2026-09-29): the region's holder, who took them.
     /// A ransom that vanished would make holding prisoners worth nothing to the side that won the
-    /// siege. Nobody is paid when the region is a faction's or unowned, or somehow the payer's own.
+    /// siege. Nobody is paid when the region is unowned or somehow the payer's own. <b>A faction banks
+    /// it as strength</b> (Mike, 2026-10-06; <see cref="FactionStrengthRules.BankRansom"/>).
     /// The war log records it, so the captor learns they were paid.</para>
     /// </summary>
     public async Task<(GarrisonOutcome Outcome, RansomResponse? Response, JsonNode? UpdatedWorld)> RansomAsync(
@@ -216,6 +222,8 @@ public class WorldGarrisonService
         string? captor = CaptorOf(resolved.RegionNode, userId);
         if (captor != null)
             await _gold.GrantAsync(gameInstanceId, captor, cost, $"ransom-received site={request.SiteId} from={userId}");
+        else if (_factions != null && FactionHolding(resolved.RegionNode) is { } faction)
+            await _factions.BankRansomAsync(gameInstanceId, faction, cost);
 
         await _warLog.RecordAsync(gameInstanceId, WarLogKind.RansomPaid, userId, captor,
             resolved.RegionNode["RegionId"]?.GetValue<string>(), $"{freed}:{cost}");
@@ -226,6 +234,15 @@ public class WorldGarrisonService
         return (new GarrisonOutcome(GarrisonError.None),
             new RansomResponse(request.SiteId, mine, cost, balance),
             world);
+    }
+
+    /// <summary>The faction holding the region, if a faction does (it banks the ransom as strength).</summary>
+    private static FactionId? FactionHolding(JsonNode regionNode)
+    {
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        return FactionStrengthRules.IsFaction(region.Faction) && string.IsNullOrEmpty(region.OwnerUserId)
+            ? region.Faction
+            : null;
     }
 
     /// <summary>The player holding the region, if it is a player other than the payer.</summary>

@@ -92,6 +92,21 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 - **Sieges are not built.** The gate is displayed and nothing acts on it; it is blocked behind the
   win condition (design §8).
 
+## NPC factions (`docs/design/npc-factions.md`, Unity repo)
+
+`FactionService` + `FactionController` (`GET api/gameinstance/{id}/factions`), one `FactionState` row per
+faction per realm. Phase 1 is strength only; nothing spends it yet.
+
+- **Strength is settled lazily** by `FactionStrengthRules` (shared 1.43.0). Its cap is what the faction's
+  land supports (`HoldFloor(tier) × EntrenchmentMultiplier` per region), read from the world on every
+  settle, so a faction that loses land is at once no stronger than what is left. It refills over 24h,
+  at half that while Bloodied (8h).
+- A row is made on first read **at full strength**; a season reset deletes the rows (`ResetRealmAsync`).
+- **A ransom paid for heroes a faction holds is banked as its strength** (`WorldGarrisonService.RansomAsync`;
+  Mike, 2026-10-06), up to its cap.
+- `POST factions/debug` drives the Unity Combat Debug window (set strength, Bloody, clear, simulate N
+  hours). It returns 404 unless the API runs in **Development**.
+
 ## Companies (phase 1 of `docs/design/parties-and-travel.md`, Unity repo)
 
 `PartyService` + `PartyController` (`api/gameinstance/{id}/parties`: GET, POST, PUT/DELETE
