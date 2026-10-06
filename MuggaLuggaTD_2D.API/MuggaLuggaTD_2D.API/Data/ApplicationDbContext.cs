@@ -43,6 +43,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerSiteClear> PlayerSiteClears => Set<PlayerSiteClear>();
     public DbSet<BloodiedCharacter> BloodiedCharacters => Set<BloodiedCharacter>();
     public DbSet<AutoFightReport> AutoFightReports => Set<AutoFightReport>();
+    public DbSet<FactionState> FactionStates => Set<FactionState>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -138,6 +139,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlayerParty>().Property(e => e.AutoSettledAt).IsConcurrencyToken();
 
         // Bloodied characters (BloodiedRules): one row per character, asked before every fight.
+        // One row per faction per realm (docs/design/npc-factions.md).
+        builder.Entity<FactionState>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.Faction }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<BloodiedCharacter>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.CharacterId }).IsUnique();

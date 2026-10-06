@@ -194,6 +194,10 @@ namespace MuggaLuggaTD.Shared
         //   run ends on an empty field. Open-field sites are paid from that roster at a share per enemy
         //   (1.75x the old run in all); placed fights and ambushes are paid as before. Bosses have
         //   3x the health (BossRules.HealthMultiplier 12 -> 36), so a boss's experience rises with it.
-        public const string Version = "1.42.0";
+        // 1.43.0 - NPC factions have strength (docs/design/npc-factions.md phase 1; Mike, 2026-10-06).
+        //   FactionStrengthRules: a faction's cap is what its land supports (hold floor x entrenchment per
+        //   region), it refills over 24h (half while Bloodied for 8h), and a ransom paid for heroes a
+        //   faction holds is banked as its strength. Nothing acts on it yet.
+        public const string Version = "1.43.0";
     }
 }
