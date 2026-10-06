@@ -95,7 +95,7 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 ## NPC factions (`docs/design/npc-factions.md`, Unity repo)
 
 `FactionService` + `FactionController` (`GET api/gameinstance/{id}/factions`), one `FactionState` row per
-faction per realm. Phase 1 is strength only; nothing spends it yet.
+faction per realm, and `FactionRaid` rows for what they do.
 
 - **Strength is settled lazily** by `FactionStrengthRules` (shared 1.43.0). Its cap is what the faction's
   land supports (`HoldFloor(tier) × EntrenchmentMultiplier` per region), read from the world on every
@@ -104,8 +104,21 @@ faction per realm. Phase 1 is strength only; nothing spends it yet.
 - A row is made on first read **at full strength**; a season reset deletes the rows (`ResetRealmAsync`).
 - **A ransom paid for heroes a faction holds is banked as its strength** (`WorldGarrisonService.RansomAsync`;
   Mike, 2026-10-06), up to its cap.
-- `POST factions/debug` drives the Unity Combat Debug window (set strength, Bloody, clear, simulate N
-  hours). It returns 404 unless the API runs in **Development**.
+- **They raid** (phase 2, shared 1.44.0, `FactionDecisionRules`).
+  - `SiegeScheduler` calls `ActAllAsync` every 15 minutes. A ready (60%+), unbloodied faction acts by chance
+    and temperament.
+  - It raids a **bordering** player region (never a seat or land under truce) or the other faction's, with
+    30% of its strength, through `RaidResolver`, taking resolve only.
+  - It costs a tenth of the march, or half and Bloodied (8h) if repelled. The 4h cooldown per region
+    applies.
+  - The war log line uses `actorUserId = "faction:Grimjaw"` and the faction's name
+    (`WarLogService.RecordAsync(actorName:, subjectName:)`). The world is persisted and broadcast.
+- **Temperament is server-only content:** `GameContent/Server/FactionData.json` (`IGameContentProvider.Factions`).
+  It is deliberately not in `DocumentNames`: the client fails its content sync closed on a document it
+  does not know.
+- `POST factions/debug` drives the Unity Combat Debug window: set strength, Bloody, clear, `ForceAct`, and
+  `SimulateHours`, which replays the factions' turns through those hours. It returns 404 unless the API
+  runs in **Development**.
 
 ## Companies (phase 1 of `docs/design/parties-and-travel.md`, Unity repo)
 

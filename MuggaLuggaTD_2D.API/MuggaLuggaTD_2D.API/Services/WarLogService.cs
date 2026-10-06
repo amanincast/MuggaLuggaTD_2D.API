@@ -39,7 +39,9 @@ public class WarLogService
         string? subjectUserId,
         string? regionId,
         string? detail = null,
-        DateTime? at = null)
+        DateTime? at = null,
+        string? actorName = null,
+        string? subjectName = null)
     {
         WarLogEntry? entry = null;
         try
@@ -58,9 +60,10 @@ public class WarLogService
                 RecordedTicks = NextRecordedTicks(),
                 Kind = kind.ToString(),
                 ActorUserId = actorUserId,
-                ActorName = await NameOfAsync(actorUserId),
+                // A faction is not a user: its name is given (actorName), never looked up.
+                ActorName = actorName ?? await NameOfAsync(actorUserId),
                 SubjectUserId = subjectUserId,
-                SubjectName = await NameOfAsync(subjectUserId),
+                SubjectName = subjectName ?? await NameOfAsync(subjectUserId),
                 RegionId = regionId,
                 Detail = detail
             };

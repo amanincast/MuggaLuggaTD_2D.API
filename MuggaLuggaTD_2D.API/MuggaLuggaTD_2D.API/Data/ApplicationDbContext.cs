@@ -44,6 +44,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BloodiedCharacter> BloodiedCharacters => Set<BloodiedCharacter>();
     public DbSet<AutoFightReport> AutoFightReports => Set<AutoFightReport>();
     public DbSet<FactionState> FactionStates => Set<FactionState>();
+    public DbSet<FactionRaid> FactionRaids => Set<FactionRaid>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -143,6 +144,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<FactionState>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.Faction }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A faction's raids, found by realm and time for the cooldown.
+        builder.Entity<FactionRaid>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.RaidedAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()

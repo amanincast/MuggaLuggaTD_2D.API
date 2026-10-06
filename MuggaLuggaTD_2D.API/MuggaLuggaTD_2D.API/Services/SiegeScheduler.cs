@@ -1,3 +1,5 @@
+using MuggaLuggaTD.Shared.Gameplay;
+
 namespace MuggaLuggaTD_2D.API.Services;
 
 /// <summary>
@@ -18,6 +20,12 @@ public class SiegeScheduler : BackgroundService
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<SiegeScheduler> _logger;
+
+    /// <summary>
+    /// When the factions last took a turn. Starts at a restart, so a restart is a quarter hour of
+    /// quiet rather than a burst.
+    /// </summary>
+    private DateTime _lastFactionTurn = DateTime.UtcNow;
 
     public SiegeScheduler(IServiceScopeFactory scopes, ILogger<SiegeScheduler> logger)
     {
@@ -48,6 +56,18 @@ public class SiegeScheduler : BackgroundService
                 int raised = await fortify.CompleteAllDueAsync();
                 if (raised > 0)
                     _logger.LogInformation("Fortify sweep finished {Count} work(s).", raised);
+
+                // The NPC factions take their turn every quarter hour, not every minute
+                // (docs/design/npc-factions.md §4).
+                var now = DateTime.UtcNow;
+                if (now - _lastFactionTurn >= FactionDecisionRules.SweepInterval)
+                {
+                    _lastFactionTurn = now;
+                    var factions = scope.ServiceProvider.GetRequiredService<FactionService>();
+                    int acted = await factions.ActAllAsync(now, _logger);
+                    if (acted > 0)
+                        _logger.LogInformation("Faction turn: {Count} thing(s) done.", acted);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
