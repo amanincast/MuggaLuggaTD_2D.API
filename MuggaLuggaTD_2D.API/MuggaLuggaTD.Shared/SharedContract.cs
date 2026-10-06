@@ -198,6 +198,11 @@ namespace MuggaLuggaTD.Shared
         //   FactionStrengthRules: a faction's cap is what its land supports (hold floor x entrenchment per
         //   region), it refills over 24h (half while Bloodied for 8h), and a ransom paid for heroes a
         //   faction holds is banked as its strength. Nothing acts on it yet.
-        public const string Version = "1.43.0";
+        // 1.44.0 - NPC factions raid (npc-factions.md phase 2). FactionDecisionRules: every 15 minutes a
+        //   ready, unbloodied faction may act, by chance and its temperament; its raid marches 30% of its
+        //   strength on a bordering region (a player's, never a seat or land under truce, or another
+        //   faction's) through RaidResolver, takes resolve only, and costs a tenth of the march, or half
+        //   and Bloodied if repelled. A Bloodied faction's land holds at a quarter less.
+        public const string Version = "1.44.0";
     }
 }

@@ -38,6 +38,13 @@ public class FakeGameContent : IGameContentProvider
     /// <summary>Empty by default: only the Tavern tests care what a recruit can be rolled onto.</summary>
     public IReadOnlyList<RecruitSheet> RecruitSheets { get; set; } = Array.Empty<RecruitSheet>();
 
+    /// <summary>Both factions, raiding and nothing else, at aggression 1. Tests override as they need.</summary>
+    public IReadOnlyList<FactionTemperament> Factions { get; set; } = new[]
+    {
+        new FactionTemperament { Id = MuggaLuggaTD.Shared.World.FactionId.Grimjaw, Name = "The Grimjaw", Lean = "raids often" },
+        new FactionTemperament { Id = MuggaLuggaTD.Shared.World.FactionId.Ashkin, Name = "The Ashkin", Lean = "entrenches" }
+    };
+
     /// <summary>Content offering <paramref name="upgrades"/> for the named ability and nothing else.</summary>
     public static FakeGameContent WithUpgradePool(string abilityLinkName, params AbilityUpgrade[] upgrades)
     {

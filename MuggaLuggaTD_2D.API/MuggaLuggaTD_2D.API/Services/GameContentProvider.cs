@@ -56,6 +56,13 @@ public interface IGameContentProvider
     IReadOnlyList<RecruitSheet> RecruitSheets { get; }
 
     /// <summary>
+    /// The NPC factions' temperament, from the <b>server-only</b> <c>GameContent/Server/FactionData.json</c>
+    /// (docs/design/npc-factions.md). Not one of <see cref="Documents"/>: the client never decides for a
+    /// faction, and a document it does not know would fail its content sync closed.
+    /// </summary>
+    IReadOnlyList<FactionTemperament> Factions { get; }
+
+    /// <summary>
     /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
     /// validated against these so an upgrade outside the pool can't be persisted.
     /// </summary>
@@ -104,6 +111,38 @@ public class GameContentProvider : IGameContentProvider
         _contentRoot = Path.Combine(environment.ContentRootPath, "GameContent");
         _logger = logger;
         _snapshot = Load();
+        _factions = LoadFactions();
+    }
+
+    private readonly IReadOnlyList<FactionTemperament> _factions;
+
+    public IReadOnlyList<FactionTemperament> Factions => _factions;
+
+    private sealed class FactionDocument
+    {
+        public List<FactionTemperament> Factions { get; set; } = new();
+    }
+
+    private IReadOnlyList<FactionTemperament> LoadFactions()
+    {
+        var path = Path.Combine(_contentRoot, "Server", "FactionData.json");
+        if (!File.Exists(path))
+        {
+            throw new InvalidOperationException(
+                $"Server content 'FactionData.json' not found at '{path}'. Content files must be deployed alongside the API.");
+        }
+
+        try
+        {
+            var document = JsonConvert.DeserializeObject<FactionDocument>(File.ReadAllText(path))
+                           ?? throw new InvalidOperationException("FactionData.json is empty.");
+            _logger.LogInformation("Loaded {Count} faction temperament(s).", document.Factions.Count);
+            return document.Factions;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("FactionData.json could not be parsed.", ex);
+        }
     }
 
     public string Version => _snapshot.Version;

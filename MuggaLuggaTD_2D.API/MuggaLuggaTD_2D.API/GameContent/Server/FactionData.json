@@ -1,0 +1,30 @@
+{
+  // The NPC factions' temperament (docs/design/npc-factions.md, Unity repo). Server-only: the client
+  // never decides for a faction, so this is not one of the documents it syncs.
+  //
+  // Aggression: how often it acts, against an average of 1 (a full-strength faction of 1 acts about
+  // once every six hours). Raid/Siege/Expand/Fortify: its lean, as relative weights. A lean, not a
+  // limit (Mike, 2026-10-06). A lean toward an action not built yet is a turn spent on nothing.
+  "Factions": [
+    {
+      "Id": "Grimjaw",
+      "Name": "The Grimjaw",
+      "Lean": "raids often",
+      "Aggression": 1.25,
+      "Raid": 0.7,
+      "Siege": 0.1,
+      "Expand": 0.15,
+      "Fortify": 0.05
+    },
+    {
+      "Id": "Ashkin",
+      "Name": "The Ashkin",
+      "Lean": "entrenches, strikes hard",
+      "Aggression": 0.8,
+      "Raid": 0.35,
+      "Siege": 0.3,
+      "Expand": 0.1,
+      "Fortify": 0.25
+    }
+  ]
+}
