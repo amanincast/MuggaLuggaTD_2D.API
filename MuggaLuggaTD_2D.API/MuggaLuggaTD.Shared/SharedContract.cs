@@ -192,7 +192,8 @@ namespace MuggaLuggaTD.Shared
         // 1.42.0 - Planned waves in the open field (WavePlan; Mike, 2026-10-04). Each wave is a roster
         //   that grows by wave and tier, the next comes on a clock or when the field is clear, and the
         //   run ends on an empty field. Open-field sites are paid from that roster at a share per enemy
-        //   (1.75x the old run in all); placed fights and ambushes are paid as before.
+        //   (1.75x the old run in all); placed fights and ambushes are paid as before. Bosses have
+        //   3x the health (BossRules.HealthMultiplier 12 -> 36), so a boss's experience rises with it.
         public const string Version = "1.42.0";
     }
 }
