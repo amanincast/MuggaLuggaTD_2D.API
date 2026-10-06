@@ -707,8 +707,8 @@ public class AutoFightService
         if (won)
         {
             var full = RunRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.DroppableItems,
-                Dice, AutoFightRules.RarityStepsDown);
-            var materials = MaterialRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.Materials, Dice)
+                Dice, AutoFightRules.RarityStepsDown, site: site.Type);
+            var materials = MaterialRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.Materials, Dice, site: site.Type)
                 .Select(m => (m.MaterialName, (int)AutoFightRules.Share(m.Quantity, Dice)));
             Pay(report, day, AutoFightRules.Share(full.Experience, Dice),
                 full.Items.Where(_ => Dice.NextDouble() < AutoFightRules.RewardShare).ToList(), materials);

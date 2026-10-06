@@ -76,7 +76,7 @@ public class BossRulesTests
     [Fact]
     public void ABossIsFarTougherThanAnElite()
     {
-        Assert.Equal(1200, BossRules.BossHealth(100));
+        Assert.Equal(3600, BossRules.BossHealth(100));
         Assert.True(BossRules.BossHealth(100) > EliteRules.EliteHealth(100));
     }
 

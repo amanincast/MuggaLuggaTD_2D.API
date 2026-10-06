@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Enums;
+using MuggaLuggaTD.Shared.World;
 
 namespace MuggaLuggaTD.Shared.Gameplay
 {
@@ -54,21 +55,25 @@ namespace MuggaLuggaTD.Shared.Gameplay
             int locationTier,
             RunTuning tuning,
             IReadOnlyList<MaterialTemplate> materials,
-            Random random)
+            Random random,
+            LocationType? site = null)
         {
             var granted = new Dictionary<string, int>();
             if (tuning == null || materials == null || materials.Count == 0 || random == null)
                 return new List<MaterialGrant>();
 
-            int waves = Math.Max(1, tuning.GetWavesRequiredForTier(locationTier));
-            int enemiesPerWave = Math.Max(1, tuning.EnemiesRequiredPerWave);
+            // An open-field site is fought and paid by WavePlan: more enemies, each at a share of the odds.
+            bool open = site.HasValue && WavePlan.IsWaveArena(site.Value);
+            int waves = open ? WavePlan.Waves(tuning, locationTier) : Math.Max(1, tuning.GetWavesRequiredForTier(locationTier));
+            double share = open ? WavePlan.PayShare(tuning, locationTier) : 1.0;
             int levelInterval = Math.Max(1, tuning.EnemyLevelIncreaseInterval);
             int baseLevel = Math.Max(1, locationLevel);
 
             for (int wave = 0; wave < waves; wave++)
             {
                 int enemyLevel = baseLevel + (wave / levelInterval);
-                float dropChance = DropChanceFor(enemyLevel);
+                double dropChance = DropChanceFor(enemyLevel) * share;
+                int enemiesPerWave = open ? WavePlan.EnemiesInWave(tuning, locationTier, wave + 1) : Math.Max(1, tuning.EnemiesRequiredPerWave);
 
                 for (int enemy = 0; enemy < enemiesPerWave; enemy++)
                 {

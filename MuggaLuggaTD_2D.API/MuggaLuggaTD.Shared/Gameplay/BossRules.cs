@@ -12,14 +12,20 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// <para><b>Shared</b> for the same reason <see cref="EliteRules"/> is: the server prices a run
     /// from the fight the location demands, and a boss is a large part of that fight.</para>
     ///
-    /// <para>The phases are what make it a fight rather than a wall of health. The boss opens with
-    /// one ability and gains another at each threshold, so the same enemy asks a different question
-    /// as it goes down.</para>
+    /// <para>The phases are what make it a fight rather than a wall of health. On the client the boss
+    /// throws patterns to dodge (volleys, barrages, rings, shockwaves; <c>BossPatterns</c>), and each
+    /// threshold makes them bigger and quicker, so the same enemy asks a different question as it
+    /// goes down.</para>
     /// </summary>
     public static class BossRules
     {
-        /// <summary>A boss has this much of an ordinary enemy's health. It is meant to take a while.</summary>
-        public const float HealthMultiplier = 12f;
+        /// <summary>
+        /// A boss has this much of an ordinary enemy's health. It is meant to take a while: at 12 a
+        /// tier-III boss fell to one hero in ~20s, before its later phases had time to show (Mike,
+        /// 2026-10-05, chose x3 for a fight of about a minute). Its experience follows, being priced
+        /// from health.
+        /// </summary>
+        public const float HealthMultiplier = 36f;
 
         /// <summary>And hits this much harder.</summary>
         public const float DamageMultiplier = 1.5f;
