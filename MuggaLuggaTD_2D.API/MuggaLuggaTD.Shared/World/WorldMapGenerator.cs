@@ -52,6 +52,7 @@ namespace MuggaLuggaTD.Shared.World
             }
 
             SeatPlayers(regions, players, ref random);
+            SoftenAroundCapitals(regions);
             SeatFactions(regions, ref random);
 
             return regions;
@@ -188,6 +189,30 @@ namespace MuggaLuggaTD.Shared.World
             }
         }
 
+        /// <summary>The hardest tier a region touching a capital may be.</summary>
+        public const int CapitalNeighbourMaxTier = 2;
+
+        /// <summary>
+        /// A capital's neighbours are at most tier 2 (Mike's first solo playthrough, 2026-10-05: a
+        /// seat on the outer edge of the band bordered tier-3 country and warband banners, so a
+        /// level-1 company had one gentle region and then a cliff). Factions are kept off them too
+        /// (<see cref="SeatFactions"/>).
+        /// </summary>
+        private static void SoftenAroundCapitals(List<WorldRegionData> regions)
+        {
+            foreach (var region in regions)
+                if (!region.IsCapital && region.Tier > CapitalNeighbourMaxTier && BordersCapital(region, regions))
+                    region.Tier = CapitalNeighbourMaxTier;
+        }
+
+        private static bool BordersCapital(WorldRegionData region, List<WorldRegionData> regions)
+        {
+            foreach (var other in regions)
+                if (other.IsCapital && HexCoord.Distance(other.Hex, region.Hex) == 1)
+                    return true;
+            return false;
+        }
+
         private static int NearestDistance(HexCoord hex, List<HexCoord> others)
         {
             int nearest = int.MaxValue;
@@ -211,6 +236,7 @@ namespace MuggaLuggaTD.Shared.World
             {
                 if (region.Ownership != LocationOwnership.Neutral) continue;
                 if (region.Tier < 3) continue;
+                if (BordersCapital(region, regions)) continue; // no banner on a seat's doorstep
 
                 // Roughly half the dangerous ground has a banner over it; the rest is wild.
                 if (!random.Chance(5000)) continue;
