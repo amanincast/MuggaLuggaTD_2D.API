@@ -113,10 +113,23 @@ faction per realm, and `FactionRaid` rows for what they do.
     applies.
   - The war log line uses `actorUserId = "faction:Grimjaw"` and the faction's name
     (`WarLogService.RecordAsync(actorName:, subjectName:)`). The world is persisted and broadcast.
+- **They lay sieges** (phase 3, shared 1.45.0, `FactionSiegeRules`, `FactionService.Sieges.cs`, `FactionSiege` rows).
+  - A siege lean declares on a bordering player region at resolve 50 or below whose gate 60% of strength clears;
+    with nothing ripe it raids instead. One siege per region across players and factions
+    (`WorldSiegeService.DeclareAsync` asks `IsBesiegedByFactionAsync`); a mustering faction does nothing else.
+  - `SettleDueSiegesAsync` settles at muster close (minute sweep in `SiegeScheduler`, and on reads): a hold past the
+    gate turns it away, else `PassivePvPResolver`. Falling: `WorldRegionBlob.CaptureWreckedForFaction`, garrison
+    captured, a tenth of the march lost. Failing: the whole march lost, Bloodied, resolve +15 to the region.
+  - Break the siege: `POST siege/{id}/sortie/begin|claim` in `SiegeController` (defender only, once, during the
+    muster; a sortie in the field holds settlement until claimed or its 2h grace ends). Won: broken (`SiegeBroken`
+    in the war log). Lost: the party is Bloodied.
+  - `WorldSiegeService.LiveSiegesAsync` appends them as `SiegeResponse` (`AttackerFaction`, `Broken`, `SortieBegun`),
+    and they broadcast as `SiegeUpdated`, so the client treats them as sieges.
 - **Temperament is server-only content:** `GameContent/Server/FactionData.json` (`IGameContentProvider.Factions`).
   It is deliberately not in `DocumentNames`: the client fails its content sync closed on a document it
   does not know.
-- `POST factions/debug` drives the Unity Combat Debug window: set strength, Bloody, clear, `ForceAct`, and
+- `POST factions/debug` drives the Unity Combat Debug window: set strength, Bloody, clear, `ForceAct` (with `Action`
+  "Siege" to lay one), `CloseMuster`, and
   `SimulateHours`, which replays the factions' turns through those hours. It returns 404 unless the API
   runs in **Development**.
 

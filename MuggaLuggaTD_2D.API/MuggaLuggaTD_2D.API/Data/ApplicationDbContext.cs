@@ -45,6 +45,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AutoFightReport> AutoFightReports => Set<AutoFightReport>();
     public DbSet<FactionState> FactionStates => Set<FactionState>();
     public DbSet<FactionRaid> FactionRaids => Set<FactionRaid>();
+    public DbSet<FactionSiege> FactionSieges => Set<FactionSiege>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -155,6 +156,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<FactionRaid>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.RaidedAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A faction's sieges, found by realm and state (live ones) and by when their muster closes.
+        builder.Entity<FactionSiege>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.State });
+            entity.HasIndex(e => new { e.State, e.MusterEndsAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany()

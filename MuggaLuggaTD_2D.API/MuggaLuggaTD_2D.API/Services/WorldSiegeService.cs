@@ -103,8 +103,10 @@ public class WorldSiegeService
         SeasonScoreService seasons,
         WarLogService warLog,
         MaterialWalletService wallet,
-        HiringService? hiring = null)
+        HiringService? hiring = null,
+        FactionService? factions = null)
     {
+        _factions = factions;
         _wallet = wallet;
         _hiring = hiring;
         _context = context;
@@ -119,6 +121,9 @@ public class WorldSiegeService
 
     private readonly MaterialWalletService _wallet;
     private readonly HiringService? _hiring;
+
+    /// <summary>The NPC factions, whose sieges share "one siege per region" and the realm's list.</summary>
+    private readonly FactionService? _factions;
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
 
@@ -157,6 +162,8 @@ public class WorldSiegeService
         bool regionBesieged = await _context.Sieges.AnyAsync(s =>
             s.GameInstanceId == gameInstanceId && s.RegionId == request.RegionId
             && (s.State == SiegeState.Mustering || s.State == SiegeState.Assault));
+        if (!regionBesieged && _factions != null)
+            regionBesieged = await _factions.IsBesiegedByFactionAsync(gameInstanceId, request.RegionId);
         if (regionBesieged)
         {
             return new SiegeOutcome(SiegeError.RegionAlreadyBesieged, Message:
@@ -292,6 +299,10 @@ public class WorldSiegeService
         var result = new List<SiegeResponse>();
         foreach (var siege in sieges)
             result.Add(await ToResponseAsync(siege, requesterUserId));
+
+        // The factions' sieges, in the same shape, so the board, Dispatches and the codex show them.
+        if (_factions != null)
+            result.AddRange(await _factions.LiveSiegesAsync(gameInstanceId, Now));
 
         return result;
     }

@@ -26,8 +26,11 @@ namespace MuggaLuggaTD_2D.API.Services;
 /// So far the one action built is the <b>raid</b>: on a region bordering its land, held by a player
 /// or by another faction, through the same <see cref="RaidResolver"/> a player's raid uses. It takes
 /// resolve only, costs the faction a tenth of its march, or half and Bloodied if repelled.</para>
+///
+/// <para><b>Sieges</b> (phase 3) are in <c>FactionService.Sieges.cs</c>. A faction leaning toward a
+/// siege with nothing ripe on its border raids instead, which is what ripens one.</para>
 /// </summary>
-public class FactionService
+public partial class FactionService
 {
     /// <summary>The prefix a faction's id wears in the war log, where a user id would be.</summary>
     public const string WarLogPrefix = "faction:";
@@ -39,6 +42,7 @@ public class FactionService
     private readonly SeasonScoreService? _seasons;
     private readonly IHubContext<GameHub>? _hub;
     private readonly Random _random;
+    private readonly ILogger<FactionService>? _logger;
 
     public FactionService(
         ApplicationDbContext context,
@@ -47,8 +51,10 @@ public class FactionService
         WarLogService? warLog = null,
         SeasonScoreService? seasons = null,
         IHubContext<GameHub>? hub = null,
-        Random? random = null)
+        Random? random = null,
+        ILogger<FactionService>? logger = null)
     {
+        _logger = logger;
         _context = context;
         _sessionLog = sessionLog;
         _content = content;
@@ -62,12 +68,13 @@ public class FactionService
     public async Task<FactionsResponse?> ReadAsync(Guid gameInstanceId, DateTime? utcNow = null)
     {
         var now = utcNow ?? DateTime.UtcNow;
-        var regions = await RegionsAsync(gameInstanceId);
-        if (regions == null) return null;
+        if (await RegionsAsync(gameInstanceId) == null) return null;
+        await SettleDueSiegesAsync(gameInstanceId, now);
+        var regions = (await RegionsAsync(gameInstanceId))!;
 
         var rows = await SettleAsync(gameInstanceId, regions, now);
         await _context.SaveChangesAsync();
-        return Describe(rows, regions, now);
+        return Describe(rows, regions, now, await MusteringAsync(gameInstanceId));
     }
 
     /// <summary>
@@ -118,6 +125,13 @@ public class FactionService
                 row.SettledAtUtc -= span;
                 if (row.BloodiedUntilUtc.HasValue) row.BloodiedUntilUtc -= span;
             }
+            foreach (var siege in await _context.FactionSieges
+                         .Where(s => s.GameInstanceId == gameInstanceId && s.State == SiegeState.Mustering).ToListAsync())
+            {
+                siege.DeclaredAt -= span;
+                siege.MusterEndsAt -= span;
+                if (siege.SortieStartedAt.HasValue) siege.SortieStartedAt -= span;
+            }
             await _context.SaveChangesAsync();
 
             for (var at = now - span + FactionDecisionRules.SweepInterval; at <= now; at += FactionDecisionRules.SweepInterval)
@@ -146,16 +160,30 @@ public class FactionService
         }
         await _context.SaveChangesAsync();
 
-        if (request.ForceAct)
+        if (request.CloseMuster)
         {
             foreach (var faction in FactionStrengthRules.All.Where(f => all || f == only))
-                report.AddRange(await ActAsync(gameInstanceId, now, force: faction));
+            {
+                var lines = await SettleDueSiegesAsync(gameInstanceId, now, force: faction);
+                report.AddRange(lines.Count > 0 ? lines : new List<string> { $"{TemperamentOf(faction).Name} has no siege mustering." });
+            }
             regions = await RegionsAsync(gameInstanceId) ?? regions;
             rows = await SettleAsync(gameInstanceId, regions, now);
             await _context.SaveChangesAsync();
         }
 
-        var response = Describe(rows, regions, now);
+        if (request.ForceAct)
+        {
+            var action = string.Equals(request.Action, nameof(FactionAction.Siege), StringComparison.OrdinalIgnoreCase)
+                ? FactionAction.Siege : FactionAction.Raid;
+            foreach (var faction in FactionStrengthRules.All.Where(f => all || f == only))
+                report.AddRange(await ActAsync(gameInstanceId, now, force: faction, forceAction: action));
+            regions = await RegionsAsync(gameInstanceId) ?? regions;
+            rows = await SettleAsync(gameInstanceId, regions, now);
+            await _context.SaveChangesAsync();
+        }
+
+        var response = Describe(rows, regions, now, await MusteringAsync(gameInstanceId));
         return response with { Report = report.Count > 0 ? report : new List<string> { "Nothing happened." } };
     }
 
@@ -185,15 +213,18 @@ public class FactionService
     }
 
     /// <summary>
-    /// One turn for the factions of one realm, at <paramref name="utcNow"/>. Each faction may act by
-    /// chance and temperament; <paramref name="force"/> makes that one act now (a raid, if it can
-    /// beat anyone) whatever its readiness. Returns a line for each thing done.
+    /// One turn for the factions of one realm, at <paramref name="utcNow"/>. Sieges whose muster has
+    /// closed are settled first. Then each faction may act by chance and temperament;
+    /// <paramref name="force"/> makes that one act now with <paramref name="forceAction"/> (a raid by
+    /// default), whatever its readiness. Returns a line for each thing done.
     /// </summary>
-    public async Task<List<string>> ActAsync(Guid gameInstanceId, DateTime utcNow, FactionId? force = null)
+    public async Task<List<string>> ActAsync(Guid gameInstanceId, DateTime utcNow, FactionId? force = null,
+        FactionAction forceAction = FactionAction.Raid)
     {
-        var done = new List<string>();
+        var done = await SettleDueSiegesAsync(gameInstanceId, utcNow);
+        var instance = await _context.GameInstances.FirstOrDefaultAsync(g => g.Id == gameInstanceId);
         var worldRow = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
-        if (worldRow == null || string.IsNullOrEmpty(worldRow.GameData)) return done;
+        if (instance == null || worldRow == null || string.IsNullOrEmpty(worldRow.GameData)) return done;
 
         var world = JsonNode.Parse(worldRow.GameData);
         var regions = WorldRegionBlob.ReadAllRegions(world);
@@ -207,6 +238,8 @@ public class FactionService
 
         bool worldChanged = false;
         var lines = new List<(WarLogKind Kind, FactionRaid Raid, string Detail)>();
+        var declared = new List<FactionSiege>();
+        var mustering = await MusteringAsync(gameInstanceId);
 
         foreach (var row in rows.OrderBy(_ => _random.Next()))
         {
@@ -216,10 +249,17 @@ public class FactionService
 
             bool forced = force == row.Faction;
             bool bloodied = FactionStrengthRules.IsBloodied(row.BloodiedUntilUtc, utcNow);
+            if (mustering.TryGetValue(row.Faction, out var musteringAgainst))
+            {
+                // One army: while its siege musters, a faction does nothing else.
+                if (forced) done.Add($"{temperament.Name} is mustering against {musteringAgainst}; it does nothing else.");
+                continue;
+            }
+
             FactionAction action;
             if (forced)
             {
-                action = FactionAction.Raid;
+                action = forceAction;
             }
             else
             {
@@ -227,6 +267,29 @@ public class FactionService
                     FactionStrengthRules.Readiness(row.Strength, cap), temperament.Aggression, bloodied);
                 if (_random.NextDouble() >= chance) continue;
                 action = FactionDecisionRules.PickAction(temperament, _random.NextDouble());
+            }
+
+            if (action == FactionAction.Siege)
+            {
+                var siege = await BesiegeAsync(instance, row, regions, utcNow);
+                if (siege != null)
+                {
+                    _context.FactionSieges.Add(siege);
+                    declared.Add(siege);
+                    mustering[row.Faction] = siege.RegionId;
+                    done.Add($"{temperament.Name} laid siege to {siege.RegionId} (march {siege.March:N0}; " +
+                             $"the muster closes {siege.MusterEndsAt:HH:mm} UTC).");
+                    continue;
+                }
+
+                // Nothing ripe for a siege: it raids instead, which is what ripens one.
+                if (forced)
+                {
+                    done.Add($"{temperament.Name} found nothing on its border ripe for a siege " +
+                             $"(resolve {SiegeRules.DeclareResolveThreshold} or below, and a gate its march clears).");
+                    continue;
+                }
+                action = FactionAction.Raid;
             }
 
             if (action != FactionAction.Raid)
@@ -266,6 +329,9 @@ public class FactionService
             await _hub.Clients.Group(gameInstanceId.ToString())
                 .SendAsync("WorldViewGameDataUpdated", new WorldViewGameDataUpdated(gameInstanceId, payload, worldRow.UpdatedAt));
         }
+
+        foreach (var siege in declared)
+            await AnnounceDeclaredAsync(siege);
 
         foreach (var (kind, raid, detail) in lines)
         {
@@ -354,6 +420,7 @@ public class FactionService
     {
         context.FactionStates.RemoveRange(context.FactionStates.Where(f => f.GameInstanceId == realmId));
         context.FactionRaids.RemoveRange(context.FactionRaids.Where(f => f.GameInstanceId == realmId));
+        context.FactionSieges.RemoveRange(context.FactionSieges.Where(f => f.GameInstanceId == realmId));
         return Task.CompletedTask;
     }
 
@@ -393,7 +460,20 @@ public class FactionService
         return rows;
     }
 
-    private FactionsResponse Describe(List<FactionState> rows, IReadOnlyCollection<WorldRegionData> regions, DateTime now)
+    /// <summary>The region each faction's live siege musters against.</summary>
+    private async Task<Dictionary<FactionId, string>> MusteringAsync(Guid gameInstanceId)
+    {
+        var live = await _context.FactionSieges
+            .Where(s => s.GameInstanceId == gameInstanceId && s.State == SiegeState.Mustering)
+            .Select(s => new { s.Faction, s.RegionId })
+            .ToListAsync();
+        var map = new Dictionary<FactionId, string>();
+        foreach (var s in live) map[s.Faction] = s.RegionId;
+        return map;
+    }
+
+    private FactionsResponse Describe(List<FactionState> rows, IReadOnlyCollection<WorldRegionData> regions, DateTime now,
+        IReadOnlyDictionary<FactionId, string> mustering)
     {
         var list = new List<FactionStrengthResponse>();
         foreach (var faction in FactionStrengthRules.All)
@@ -406,10 +486,11 @@ public class FactionService
                 (long)Math.Round(Math.Min(row.Strength, cap)),
                 (long)Math.Round(cap),
                 Math.Round(FactionStrengthRules.Readiness(row.Strength, cap), 3),
-                FactionStrengthRules.Word(row.Strength, cap, bloodied).ToString(),
+                FactionStrengthRules.Word(row.Strength, cap, bloodied, mustering.ContainsKey(faction)).ToString(),
                 FactionStrengthRules.RegionsHeld(faction, regions),
                 bloodied ? row.BloodiedUntilUtc : null,
-                TemperamentOf(faction).Lean));
+                TemperamentOf(faction).Lean,
+                mustering.TryGetValue(faction, out var against) ? against : null));
         }
         return new FactionsResponse(list, now);
     }

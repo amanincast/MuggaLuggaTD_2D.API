@@ -29,7 +29,13 @@ public enum WarLogKind
     RansomPaid,
 
     /// <summary>A region's works finished and its entrenchment rose. <c>Detail</c> is the new level.</summary>
-    Fortified
+    Fortified,
+
+    /// <summary>
+    /// A defender's sortie broke a faction's siege (npc-factions.md phase 3). The actor is the defender,
+    /// the subject the faction.
+    /// </summary>
+    SiegeBroken
 }
 
 /// <summary>

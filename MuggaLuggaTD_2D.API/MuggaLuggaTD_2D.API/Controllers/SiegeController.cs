@@ -14,6 +14,9 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 ///
 /// <para>Once muster closes the attacker gets one assault: <c>assault/begin</c> hands them the fight
 /// the server specified from the frozen hold, and <c>assault/claim</c> reports how it went.</para>
+///
+/// <para>A faction's siege is listed here too (npc-factions.md phase 3). Its defender may break it once
+/// with <c>sortie/begin</c> and <c>sortie/claim</c>.</para>
 /// </summary>
 [ApiController]
 [Route("api/gameinstance/{gameInstanceId:guid}/siege")]
@@ -24,14 +27,17 @@ public class SiegeController : ControllerBase
     private readonly WorldSiegeService _sieges;
     private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
+    private readonly FactionService _factions;
 
     public SiegeController(
-        ApplicationDbContext context, WorldSiegeService sieges, SeasonScoreService seasons, ISessionLog sessionLog)
+        ApplicationDbContext context, WorldSiegeService sieges, SeasonScoreService seasons, ISessionLog sessionLog,
+        FactionService factions)
     {
         _context = context;
         _sieges = sieges;
         _seasons = seasons;
         _sessionLog = sessionLog;
+        _factions = factions;
     }
 
     /// <summary>Every live siege in the realm.</summary>
@@ -116,6 +122,44 @@ public class SiegeController : ControllerBase
         if (!outcome.Succeeded)
         {
             _sessionLog.Log("SIEGE-DENY", $"user={userId} siege={siegeId} assault-claim {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>The defender of a faction's siege sallies out to break it: the fight comes back.</summary>
+    [HttpPost("{siegeId:guid}/sortie/begin")]
+    public async Task<ActionResult<SiegeAssaultResponse>> BeginSortie(
+        Guid gameInstanceId, Guid siegeId, [FromBody] FactionSortieRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, sortie) = await _factions.BeginSortieAsync(gameInstanceId, userId, siegeId, request);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("SIEGE-DENY", $"user={userId} siege={siegeId} sortie-begin {outcome.Error}: {outcome.Message}");
+            return ToError(outcome);
+        }
+
+        return Ok(sortie);
+    }
+
+    /// <summary>The defender reports the sortie: a win breaks the siege, a loss lets it go on.</summary>
+    [HttpPost("{siegeId:guid}/sortie/claim")]
+    public async Task<ActionResult<SiegeAssaultResult>> ClaimSortie(
+        Guid gameInstanceId, Guid siegeId, [FromBody] SiegeAssaultClaimRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, result) = await _factions.ClaimSortieAsync(gameInstanceId, userId, siegeId, request);
+        if (!outcome.Succeeded)
+        {
+            _sessionLog.Log("SIEGE-DENY", $"user={userId} siege={siegeId} sortie-claim {outcome.Error}: {outcome.Message}");
             return ToError(outcome);
         }
 

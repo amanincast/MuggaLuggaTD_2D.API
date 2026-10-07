@@ -373,6 +373,41 @@ public static class WorldRegionBlob
     /// </summary>
     public static int CaptureWrecked(JsonNode regionNode, string userId, string? displayName, DateTime claimedAt)
     {
+        int captured = TakePrisoners(regionNode, claimedAt);
+
+        CaptureRegion(regionNode, userId, displayName, claimedAt);
+        regionNode["Entrenchment"] = 0;
+        regionNode["Resolve"] = SiegeAssaultRules.WreckedResolve;
+
+        return captured;
+    }
+
+    /// <summary>
+    /// Hands a region to an NPC faction whose siege took it (npc-factions.md phase 3), wrecked and with
+    /// its garrison captured, exactly as a player's siege would. It is under truce for the same day,
+    /// so its old owner cannot take it straight back, and any ransom for the prisoners is banked as
+    /// the faction's strength (<see cref="FactionService.BankRansomAsync"/>).
+    /// </summary>
+    public static int CaptureWreckedForFaction(JsonNode regionNode, FactionId faction, string displayName, DateTime claimedAt)
+    {
+        int captured = TakePrisoners(regionNode, claimedAt);
+
+        regionNode["Ownership"] = (int)LocationOwnership.Enemy;
+        regionNode["OwnerUserId"] = string.Empty;
+        regionNode["OwnerDisplayName"] = displayName;
+        regionNode["Faction"] = (int)faction;
+        regionNode["IsCapital"] = false;
+        regionNode["ClaimedAtUtcTicks"] = claimedAt.Ticks;
+        ClearFortifying(regionNode);
+        regionNode["Entrenchment"] = 0;
+        regionNode["Resolve"] = SiegeAssaultRules.WreckedResolve;
+
+        return captured;
+    }
+
+    /// <summary>Every champion stationed in the region becomes a prisoner where they stood. Returns how many.</summary>
+    private static int TakePrisoners(JsonNode regionNode, DateTime claimedAt)
+    {
         int captured = 0;
 
         if (regionNode["SiteOverrides"] is JsonObject overrides)
@@ -398,10 +433,6 @@ public static class WorldRegionBlob
                 entry["GarrisonPower"] = 0f;
             }
         }
-
-        CaptureRegion(regionNode, userId, displayName, claimedAt);
-        regionNode["Entrenchment"] = 0;
-        regionNode["Resolve"] = SiegeAssaultRules.WreckedResolve;
 
         return captured;
     }
