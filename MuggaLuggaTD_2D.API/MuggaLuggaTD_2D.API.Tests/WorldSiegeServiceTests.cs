@@ -283,6 +283,31 @@ public class WorldSiegeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ARegionAFactionBesieges_IsNotBesiegedByAPlayerToo_AndIsListedWithTheRest()
+    {
+        var instanceId = await SeedAsync();
+        _db.FactionSieges.Add(new FactionSiege
+        {
+            GameInstanceId = instanceId, Faction = FactionId.Ashkin, RegionId = Target, DefenderUserId = TestIds.Rival,
+            March = 5000, DeclaredAt = _clock.UtcNow, MusterEndsAt = _clock.UtcNow + SiegeRules.Muster
+        });
+        await _db.SaveChangesAsync();
+        var service = new WorldSiegeService(
+            _db, _content, _hub, _log, NullLogger<WorldSiegeService>.Instance, _clock,
+            new SeasonScoreService(_db, new GoldService(_db, _log, NullLogger<GoldService>.Instance),
+                new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance), _hub, _log,
+                NullLogger<SeasonScoreService>.Instance),
+            WarLog, Wallet, factions: new FactionService(_db, _log));
+
+        var outcome = await service.DeclareAsync(instanceId, TestIds.Player, Request());
+        Assert.Equal(SiegeError.RegionAlreadyBesieged, outcome.Error);
+
+        var listed = Assert.Single(await service.LiveSiegesAsync(instanceId, TestIds.Player));
+        Assert.Equal("faction:Ashkin", listed.AttackerUserId);
+        Assert.Equal("Ashkin", listed.AttackerFaction);
+    }
+
+    [Fact]
     public async Task AnAttackerLaysOneSiegeAtATime()
     {
         var other = TestWorld.OwnedBy(TestIds.Rival, "r2");

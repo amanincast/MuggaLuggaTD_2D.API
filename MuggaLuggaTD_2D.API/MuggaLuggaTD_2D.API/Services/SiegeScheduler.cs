@@ -57,13 +57,19 @@ public class SiegeScheduler : BackgroundService
                 if (raised > 0)
                     _logger.LogInformation("Fortify sweep finished {Count} work(s).", raised);
 
+                // A faction's siege is settled at its muster's close, so it is swept every minute as a
+                // player's muster is (npc-factions.md phase 3).
+                var factions = scope.ServiceProvider.GetRequiredService<FactionService>();
+                int settled = await factions.SettleAllDueSiegesAsync(DateTime.UtcNow, _logger);
+                if (settled > 0)
+                    _logger.LogInformation("Faction sieges settled: {Count}.", settled);
+
                 // The NPC factions take their turn every quarter hour, not every minute
                 // (docs/design/npc-factions.md §4).
                 var now = DateTime.UtcNow;
                 if (now - _lastFactionTurn >= FactionDecisionRules.SweepInterval)
                 {
                     _lastFactionTurn = now;
-                    var factions = scope.ServiceProvider.GetRequiredService<FactionService>();
                     int acted = await factions.ActAllAsync(now, _logger);
                     if (acted > 0)
                         _logger.LogInformation("Faction turn: {Count} thing(s) done.", acted);

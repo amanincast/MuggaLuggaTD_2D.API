@@ -203,6 +203,13 @@ namespace MuggaLuggaTD.Shared
         //   strength on a bordering region (a player's, never a seat or land under truce, or another
         //   faction's) through RaidResolver, takes resolve only, and costs a tenth of the march, or half
         //   and Bloodied if repelled. A Bloodied faction's land holds at a quarter less.
-        public const string Version = "1.44.0";
+        // 1.45.0 - NPC factions lay sieges (npc-factions.md phase 3). FactionSiegeRules: a faction may
+        //   besiege a bordering player region worn to resolve 50 or below, marching 60% of its strength,
+        //   when that clears the gate. The 8h muster is settled by the server at its close: a hold raised
+        //   past the gate turns it away, otherwise PassivePvPResolver decides. Falling, the region goes
+        //   to the faction wrecked, its garrison captured, and the faction loses a tenth of its march;
+        //   failing, it loses all of it and is Bloodied. The defender may BREAK THE SIEGE once: a sortie
+        //   fought as a siege assault turned round (SortieEncounter). A mustering faction does not act.
+        public const string Version = "1.45.0";
     }
 }

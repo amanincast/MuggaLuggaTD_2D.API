@@ -60,7 +60,16 @@ public record SiegeResponse(
     DateTime? ResolvedAt,
     List<string> ArmyCharacterIds,
     /// <summary>True once the attacker has begun the siege's one assault. Visible to both sides.</summary>
-    bool AssaultBegun = false
+    bool AssaultBegun = false,
+    /// <summary>
+    /// The besieging faction, when a faction lays it (npc-factions.md phase 3). Its attacker id is then
+    /// "faction:{name}", and it settles at muster close with no assault window.
+    /// </summary>
+    string? AttackerFaction = null,
+    /// <summary>True when the defender's sortie broke it.</summary>
+    bool Broken = false,
+    /// <summary>True once the defender has sallied out against a faction's siege. One per siege.</summary>
+    bool SortieBegun = false
 );
 
 /// <summary>Every live siege in a realm.</summary>

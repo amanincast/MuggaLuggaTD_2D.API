@@ -11,7 +11,6 @@ namespace MuggaLuggaTD.Shared.Gameplay
         None = 0,
         Raid = 1,
 
-        /// <summary>Phase 3.</summary>
         Siege = 2,
 
         /// <summary>Phase 4.</summary>
@@ -91,15 +90,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const double LostRaidLoss = 0.50;
 
         /// <summary>The actions built so far. A lean toward one not yet built is a turn spent on nothing.</summary>
-        public static readonly IReadOnlyList<FactionAction> Built = new[] { FactionAction.Raid };
+        public static readonly IReadOnlyList<FactionAction> Built = new[] { FactionAction.Raid, FactionAction.Siege };
 
         /// <summary>
-        /// The chance of acting on one sweep. Nothing below the threshold or while Bloodied; from there
-        /// it rises from half to the full base chance as readiness reaches 100%, times aggression.
+        /// The chance of acting on one sweep. Nothing below the threshold, while Bloodied, or while its
+        /// own siege musters (one army); from there it rises from half to the full base chance as
+        /// readiness reaches 100%, times aggression.
         /// </summary>
-        public static double ChanceToAct(double readiness, double aggression, bool bloodied)
+        public static double ChanceToAct(double readiness, double aggression, bool bloodied, bool mustering = false)
         {
-            if (bloodied || readiness < FactionStrengthRules.ActThreshold) return 0;
+            if (bloodied || mustering || readiness < FactionStrengthRules.ActThreshold) return 0;
             double span = 1.0 - FactionStrengthRules.ActThreshold;
             double over = span <= 0 ? 1 : Math.Min(1, (readiness - FactionStrengthRules.ActThreshold) / span);
             return Math.Min(1, BaseChancePerSweep * Math.Max(0, aggression) * (0.5 + 0.5 * over));
