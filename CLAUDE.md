@@ -125,11 +125,22 @@ faction per realm, and `FactionRaid` rows for what they do.
     in the war log). Lost: the party is Bloodied.
   - `WorldSiegeService.LiveSiegesAsync` appends them as `SiegeResponse` (`AttackerFaction`, `Broken`, `SortieBegun`),
     and they broadcast as `SiegeUpdated`, so the client treats them as sieges.
+- **They grow and fight each other** (phase 4, shared 1.46.0, `FactionGrowthRules`).
+  - **Expand:** wild land on the border, tier 3+, touching no capital (`WorldRegionBlob.ClaimForFaction`, no truce),
+    for 20% of strength; war log `Expanded`. With none left, a lean to expand fortifies instead.
+  - **Fortify:** the most threatened own region (frontier, then most worn, then least walled), walls +1 and
+    resolve +15 at once, for 15% of strength; war log `Fortified` with the faction as actor. It is how a
+    faction's land recovers from raids, since nobody clears its sites.
+  - **Faction against faction:** a faction besieges the other's worn land as a player's. The `FactionSiege`
+    row's `DefenderUserId` is then "faction:{name}" (`DefenderFaction` parses it; no migration), nobody may
+    sally out, and a Bloodied defender holds at a quarter less.
+  - `FactionBalanceSimulation` (tests) runs a week of turns on three generated worlds against absent players
+    and prints the report; `FACTION_SIM_DAYS=28` for a season.
 - **Temperament is server-only content:** `GameContent/Server/FactionData.json` (`IGameContentProvider.Factions`).
   It is deliberately not in `DocumentNames`: the client fails its content sync closed on a document it
   does not know.
 - `POST factions/debug` drives the Unity Combat Debug window: set strength, Bloody, clear, `ForceAct` (with `Action`
-  "Siege" to lay one), `CloseMuster`, and
+  "Siege", "Expand" or "Fortify"; a raid otherwise), `CloseMuster`, and
   `SimulateHours`, which replays the factions' turns through those hours. It returns 404 unless the API
   runs in **Development**.
 

@@ -13,10 +13,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         Siege = 2,
 
-        /// <summary>Phase 4.</summary>
+        /// <summary>Claims wild land on its border (<see cref="FactionGrowthRules"/>).</summary>
         Expand = 3,
 
-        /// <summary>Phase 4.</summary>
+        /// <summary>Raises the walls and steadies the people of its own most threatened land.</summary>
         Fortify = 4
     }
 
@@ -89,8 +89,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>A repelled raid costs this share of the march, and Bloodies the faction.</summary>
         public const double LostRaidLoss = 0.50;
 
-        /// <summary>The actions built so far. A lean toward one not yet built is a turn spent on nothing.</summary>
-        public static readonly IReadOnlyList<FactionAction> Built = new[] { FactionAction.Raid, FactionAction.Siege };
+        /// <summary>The actions built. A lean toward one not built is a turn spent on nothing (all four are, since phase 4).</summary>
+        public static readonly IReadOnlyList<FactionAction> Built = new[]
+            { FactionAction.Raid, FactionAction.Siege, FactionAction.Expand, FactionAction.Fortify };
 
         /// <summary>
         /// The chance of acting on one sweep. Nothing below the threshold, while Bloodied, or while its
@@ -134,7 +135,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>
         /// The regions next to <paramref name="faction"/>'s land that it does not hold itself. Neutral
-        /// land is among them (expansion, phase 4); a raid narrows them further.
+        /// land is among them (<see cref="FactionGrowthRules.PickExpansion"/>); a raid narrows them further.
         /// </summary>
         public static List<WorldRegionData> Bordering(FactionId faction, IReadOnlyCollection<WorldRegionData> regions)
         {

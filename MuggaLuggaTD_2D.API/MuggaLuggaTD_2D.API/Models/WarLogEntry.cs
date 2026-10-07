@@ -32,6 +32,12 @@ public enum WarLogKind
     Fortified,
 
     /// <summary>
+    /// A faction claimed wild land on its border (npc-factions.md phase 4). The actor is the faction;
+    /// there is no subject.
+    /// </summary>
+    Expanded,
+
+    /// <summary>
     /// A defender's sortie broke a faction's siege (npc-factions.md phase 3). The actor is the defender,
     /// the subject the faction.
     /// </summary>

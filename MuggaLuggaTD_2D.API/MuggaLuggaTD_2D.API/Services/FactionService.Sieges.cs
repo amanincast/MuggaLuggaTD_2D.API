@@ -18,7 +18,8 @@ namespace MuggaLuggaTD_2D.API.Services;
 ///             the defender reinforces, and may sally out once: BREAK THE SIEGE
 /// </code>
 ///
-/// <para>A faction declares on a bordering player region worn to the resolve gate, marching
+/// <para>A faction declares on a bordering region worn to the resolve gate, a player's or (phase 4)
+/// another faction's, marching
 /// <see cref="FactionStrengthRules.SiegeShare"/> of its strength. Nobody fights its assault, so when the
 /// muster closes the server settles it (<see cref="FactionSiegeRules.Settle"/>): falling, the region goes
 /// to the faction wrecked with its garrison captured; failing, the faction loses the march and is
@@ -37,11 +38,12 @@ public partial class FactionService
     // -----------------------------------------------------------------
 
     /// <summary>
-    /// Picks a bordering player region whose resolve is worn to the gate and whose gate the siege march
-    /// clears, and declares on it. Null when nothing is ripe. Not saved; the caller saves and records.
+    /// Picks a bordering region, a player's or another faction's, whose resolve is worn to the gate and
+    /// whose gate the siege march clears, and declares on it. Null when nothing is ripe. Not saved; the
+    /// caller saves and records.
     /// </summary>
     private async Task<FactionSiege?> BesiegeAsync(
-        GameInstance instance, FactionState row, List<WorldRegionData> regions, DateTime now)
+        GameInstance instance, FactionState row, List<FactionState> rows, List<WorldRegionData> regions, DateTime now)
     {
         if (SiegeRules.SeasonIsClosing(now, instance.SeasonEndsAt)) return null;
 
@@ -60,13 +62,14 @@ public partial class FactionService
             if (!FactionSiegeRules.IsBesiegeable(row.Faction, region, now)) continue;
             if (besieged.Contains(region.RegionId) || cooling.Contains(region.RegionId)) continue;
 
-            long hold = RegionHoldCalculator.AssessRegion(region, regions, march).Hold;
+            long hold = DefendingHold(region, regions, rows, march, now);
             candidates.Add(new FactionRaidTarget { Region = region, Hold = hold, March = march });
         }
 
         var pick = FactionSiegeRules.PickSiegeTarget(candidates, _random.NextDouble());
         if (pick == null) return null;
 
+        var defender = pick.Value.Region;
         row.LastActedAtUtc = now;
         return new FactionSiege
         {
@@ -74,13 +77,30 @@ public partial class FactionService
             SeasonNumber = instance.SeasonNumber,
             Faction = row.Faction,
             RegionId = pick.Value.Region.RegionId,
-            DefenderUserId = pick.Value.Region.OwnerUserId!,
+            DefenderUserId = string.IsNullOrEmpty(defender.OwnerUserId) ? WarLogPrefix + defender.Faction : defender.OwnerUserId,
             March = Math.Round(march),
             State = SiegeState.Mustering,
             DeclaredAt = now,
             MusterEndsAt = now + SiegeRules.Muster
         };
     }
+
+    /// <summary>
+    /// A region's hold against a faction's march: a Bloodied faction's land holds at a quarter less
+    /// (<see cref="FactionDecisionRules.DefendingHold"/>), a player's as it stands.
+    /// </summary>
+    private static long DefendingHold(WorldRegionData region, IReadOnlyCollection<WorldRegionData> regions,
+        List<FactionState> rows, double march, DateTime now)
+    {
+        long hold = RegionHoldCalculator.AssessRegion(region, regions, march).Hold;
+        if (!string.IsNullOrEmpty(region.OwnerUserId)) return hold;
+        var defender = rows.FirstOrDefault(r => r.Faction == region.Faction);
+        return FactionDecisionRules.DefendingHold(hold, defender != null && FactionStrengthRules.IsBloodied(defender.BloodiedUntilUtc, now));
+    }
+
+    /// <summary>The name a siege's defender goes by in the war log: null for a player (the log looks them up).</summary>
+    private string? DefenderName(FactionSiege siege) =>
+        siege.DefenderFaction == FactionId.None ? null : TemperamentOf(siege.DefenderFaction).Name;
 
     /// <summary>Regions under any live siege, a player's or a faction's: one siege per region.</summary>
     private async Task<HashSet<string>> BesiegedRegionsAsync(Guid gameInstanceId)
@@ -108,7 +128,7 @@ public partial class FactionService
         {
             await _warLog.RecordAsync(siege.GameInstanceId, WarLogKind.SiegeDeclared, WarLogPrefix + siege.Faction,
                 siege.DefenderUserId, siege.RegionId, $"an army of {siege.March:N0}", siege.DeclaredAt,
-                actorName: TemperamentOf(siege.Faction).Name);
+                actorName: TemperamentOf(siege.Faction).Name, subjectName: DefenderName(siege));
         }
         _sessionLog.Log("FACTION-SIEGE-DECLARE",
             $"instance={siege.GameInstanceId} siege={siege.Id} faction={siege.Faction} region={siege.RegionId} " +
@@ -151,7 +171,10 @@ public partial class FactionService
 
             var region = regions.FirstOrDefault(r => r.RegionId == siege.RegionId);
             var node = WorldRegionBlob.FindRegion(world, siege.RegionId);
-            if (region == null || node == null || !region.IsOwnedByPlayer(siege.DefenderUserId))
+            bool stillHeld = region != null && (siege.DefenderFaction == FactionId.None
+                ? region.IsOwnedByPlayer(siege.DefenderUserId)
+                : FactionStrengthRules.Holds(siege.DefenderFaction, region));
+            if (region == null || node == null || !stillHeld)
             {
                 siege.State = SiegeState.Cancelled;
                 siege.ResolvedAt = at;
@@ -161,7 +184,7 @@ public partial class FactionService
             }
 
             var row = rows.First(r => r.Faction == siege.Faction);
-            long hold = RegionHoldCalculator.AssessRegion(region, regions, siege.March).Hold;
+            long hold = DefendingHold(region, regions, rows, siege.March, at);
             var result = FactionSiegeRules.Settle(siege.March, hold, _random.Next(1, 21));
             siege.FrozenHold = hold;
             siege.D20Roll = result.D20Roll;
@@ -214,9 +237,10 @@ public partial class FactionService
             if (_warLog != null)
             {
                 await _warLog.RecordAsync(gameInstanceId, kind, WarLogPrefix + siege.Faction, siege.DefenderUserId,
-                    siege.RegionId, detail, siege.ResolvedAt, actorName: TemperamentOf(siege.Faction).Name);
+                    siege.RegionId, detail, siege.ResolvedAt, actorName: TemperamentOf(siege.Faction).Name,
+                    subjectName: DefenderName(siege));
             }
-            if (siege.State == SiegeState.Repelled && _seasons != null)
+            if (siege.State == SiegeState.Repelled && siege.DefenderFaction == FactionId.None && _seasons != null)
                 await _seasons.AwardAsync(gameInstanceId, siege.DefenderUserId, SeasonDeed.SiegeRepelled);
 
             _sessionLog.Log("FACTION-SIEGE-SETTLE",
