@@ -129,11 +129,12 @@ public class FactionSiegeTests : IDisposable
         truce.ClaimedAtUtcTicks = (Noon - TimeSpan.FromHours(2)).Ticks;
         Assert.False(FactionSiegeRules.IsBesiegeable(FactionId.Grimjaw, truce, Noon));
 
-        // Another faction's land waits for phase 4.
+        // Another faction's worn land is besiegeable too (phase 4); its own is not.
         var ashkin = Grimjaw("a");
         ashkin.Faction = FactionId.Ashkin;
         ashkin.Resolve = 10;
-        Assert.False(FactionSiegeRules.IsBesiegeable(FactionId.Grimjaw, ashkin, Noon));
+        Assert.True(FactionSiegeRules.IsBesiegeable(FactionId.Grimjaw, ashkin, Noon));
+        Assert.False(FactionSiegeRules.IsBesiegeable(FactionId.Ashkin, ashkin, Noon));
     }
 
     [Fact]

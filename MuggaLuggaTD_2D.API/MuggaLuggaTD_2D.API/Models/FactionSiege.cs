@@ -33,7 +33,10 @@ public class FactionSiege
     [MaxLength(32)]
     public string RegionId { get; set; } = string.Empty;
 
-    /// <summary>The player who held the region when it was declared. If that changes, it is cancelled.</summary>
+    /// <summary>
+    /// Who held the region when it was declared: a player's id, or "faction:{name}" when it was
+    /// another faction's land (phase 4), as the war log names a faction. If that changes, it is cancelled.
+    /// </summary>
     [Required]
     [MaxLength(450)]
     public string DefenderUserId { get; set; } = string.Empty;
@@ -82,6 +85,17 @@ public class FactionSiege
 
     [NotMapped]
     public bool IsLive => State == SiegeState.Mustering;
+
+    /// <summary>The defending faction, when the land was another faction's; <see cref="FactionId.None"/> for a player.</summary>
+    [NotMapped]
+    public FactionId DefenderFaction =>
+        DefenderUserId.StartsWith(FactionPrefix, StringComparison.Ordinal)
+        && Enum.TryParse<FactionId>(DefenderUserId.Substring(FactionPrefix.Length), out var faction)
+            ? faction
+            : FactionId.None;
+
+    /// <summary>The prefix a faction's id wears where a user id would be (as <c>FactionService.WarLogPrefix</c>).</summary>
+    private const string FactionPrefix = "faction:";
 
     /// <summary>Broken by the defender's sortie, rather than turned away at the walls.</summary>
     [NotMapped]

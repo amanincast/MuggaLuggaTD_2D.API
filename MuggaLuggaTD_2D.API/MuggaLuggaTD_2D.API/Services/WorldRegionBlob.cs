@@ -405,6 +405,22 @@ public static class WorldRegionBlob
         return captured;
     }
 
+    /// <summary>
+    /// Hands wild land to the faction that expanded into it (npc-factions.md phase 4). Nobody held it,
+    /// so there is no truce, no wreck and nobody to capture: it simply flies the faction's banner now.
+    /// </summary>
+    public static void ClaimForFaction(JsonNode regionNode, FactionId faction, string displayName)
+    {
+        regionNode["Ownership"] = (int)LocationOwnership.Enemy;
+        regionNode["OwnerUserId"] = string.Empty;
+        regionNode["OwnerDisplayName"] = displayName;
+        regionNode["Faction"] = (int)faction;
+    }
+
+    /// <summary>Raises a region's walls to <paramref name="entrenchment"/> at once (a faction's fortify).</summary>
+    public static void SetEntrenchment(JsonNode regionNode, int entrenchment) =>
+        regionNode["Entrenchment"] = Math.Clamp(entrenchment, 0, FortifyRules.MaxLevel);
+
     /// <summary>Every champion stationed in the region becomes a prisoner where they stood. Returns how many.</summary>
     private static int TakePrisoners(JsonNode regionNode, DateTime claimedAt)
     {

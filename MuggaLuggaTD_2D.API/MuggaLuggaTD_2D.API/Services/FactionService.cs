@@ -29,6 +29,10 @@ namespace MuggaLuggaTD_2D.API.Services;
 ///
 /// <para><b>Sieges</b> (phase 3) are in <c>FactionService.Sieges.cs</c>. A faction leaning toward a
 /// siege with nothing ripe on its border raids instead, which is what ripens one.</para>
+///
+/// <para><b>Growing</b> (phase 4): a faction may <b>expand</b> into wild hard country on its border,
+/// or <b>fortify</b> its most threatened land (<see cref="FactionGrowthRules"/>). One with no wild land
+/// left to claim fortifies instead. It raids and besieges other factions as it does players.</para>
 /// </summary>
 public partial class FactionService
 {
@@ -174,8 +178,8 @@ public partial class FactionService
 
         if (request.ForceAct)
         {
-            var action = string.Equals(request.Action, nameof(FactionAction.Siege), StringComparison.OrdinalIgnoreCase)
-                ? FactionAction.Siege : FactionAction.Raid;
+            var action = Enum.TryParse<FactionAction>(request.Action, ignoreCase: true, out var asked) && asked != FactionAction.None
+                ? asked : FactionAction.Raid;
             foreach (var faction in FactionStrengthRules.All.Where(f => all || f == only))
                 report.AddRange(await ActAsync(gameInstanceId, now, force: faction, forceAction: action));
             regions = await RegionsAsync(gameInstanceId) ?? regions;
@@ -238,8 +242,10 @@ public partial class FactionService
 
         bool worldChanged = false;
         var lines = new List<(WarLogKind Kind, FactionRaid Raid, string Detail)>();
+        var grown = new List<(WarLogKind Kind, FactionId Faction, string RegionId, string? Detail)>();
         var declared = new List<FactionSiege>();
         var mustering = await MusteringAsync(gameInstanceId);
+        var besieged = await BesiegedRegionsAsync(gameInstanceId);
 
         foreach (var row in rows.OrderBy(_ => _random.Next()))
         {
@@ -271,11 +277,12 @@ public partial class FactionService
 
             if (action == FactionAction.Siege)
             {
-                var siege = await BesiegeAsync(instance, row, regions, utcNow);
+                var siege = await BesiegeAsync(instance, row, rows, regions, utcNow);
                 if (siege != null)
                 {
                     _context.FactionSieges.Add(siege);
                     declared.Add(siege);
+                    besieged.Add(siege.RegionId);
                     mustering[row.Faction] = siege.RegionId;
                     done.Add($"{temperament.Name} laid siege to {siege.RegionId} (march {siege.March:N0}; " +
                              $"the muster closes {siege.MusterEndsAt:HH:mm} UTC).");
@@ -292,13 +299,47 @@ public partial class FactionService
                 action = FactionAction.Raid;
             }
 
-            if (action != FactionAction.Raid)
+            if (action == FactionAction.Expand)
             {
-                // A lean toward something not built yet: the turn passes, and it still counts as acting.
-                row.LastActedAtUtc = utcNow;
-                done.Add($"{temperament.Name} kept to its own land ({action}, not built yet).");
+                var claimed = Expand(row, temperament, regions, world, utcNow);
+                if (claimed != null)
+                {
+                    worldChanged = true;
+                    grown.Add((WarLogKind.Expanded, row.Faction, claimed.RegionId, null));
+                    done.Add($"{temperament.Name} claimed {claimed.RegionId} (tier {claimed.Tier}; strength now {row.Strength:N0}).");
+                    continue;
+                }
+
+                // No wild land left on its border: it tends what it has instead.
+                if (forced)
+                {
+                    done.Add($"{temperament.Name} found no wild land on its border to claim " +
+                             $"(tier {FactionGrowthRules.ExpandMinimumTier}+, touching no capital).");
+                    continue;
+                }
+                action = FactionAction.Fortify;
+            }
+
+            if (action == FactionAction.Fortify)
+            {
+                var works = Fortify(row, regions, world, besieged, utcNow);
+                if (works != null)
+                {
+                    var (region, resolveBefore) = works.Value;
+                    worldChanged = true;
+                    grown.Add((WarLogKind.Fortified, row.Faction, region.RegionId,
+                        RegionHoldCalculator.EntrenchmentLabel(region.Entrenchment)));
+                    done.Add($"{temperament.Name} fortified {region.RegionId} (walls {RegionHoldCalculator.EntrenchmentLabel(region.Entrenchment)}, " +
+                             $"resolve {resolveBefore} → {region.Resolve}; strength now {row.Strength:N0}).");
+                }
+                else if (forced)
+                {
+                    done.Add($"{temperament.Name} has nothing to fortify: its land is whole, or under siege.");
+                }
                 continue;
             }
+
+            if (action != FactionAction.Raid) continue;
 
             var raid = Raid(gameInstanceId, row, temperament, regions, rows, recent, world, utcNow);
             if (raid == null)
@@ -332,6 +373,17 @@ public partial class FactionService
 
         foreach (var siege in declared)
             await AnnounceDeclaredAsync(siege);
+
+        foreach (var (kind, faction, regionId, detail) in grown)
+        {
+            if (_warLog != null)
+            {
+                await _warLog.RecordAsync(gameInstanceId, kind, WarLogPrefix + faction, null, regionId, detail, utcNow,
+                    actorName: TemperamentOf(faction).Name);
+            }
+            _sessionLog.Log(kind == WarLogKind.Expanded ? "FACTION-EXPAND" : "FACTION-FORTIFY",
+                $"instance={gameInstanceId} faction={faction} region={regionId} detail={detail}");
+        }
 
         foreach (var (kind, raid, detail) in lines)
         {
@@ -413,6 +465,52 @@ public partial class FactionService
             ResolveDamage = result.ResolveDamage,
             ResolveAfter = result.ResolveAfter
         };
+    }
+
+    /// <summary>
+    /// Claims wild land on the faction's border (<see cref="FactionGrowthRules.PickExpansion"/>) and
+    /// charges it. Applies to the world node and to <paramref name="regions"/>, so the rest of this
+    /// turn sees the new border. Null when there is none to claim.
+    /// </summary>
+    private WorldRegionData? Expand(FactionState row, FactionTemperament temperament, List<WorldRegionData> regions,
+        JsonNode? world, DateTime now)
+    {
+        var pick = FactionGrowthRules.PickExpansion(row.Faction, regions, _random.NextDouble());
+        var node = pick == null ? null : WorldRegionBlob.FindRegion(world, pick.RegionId);
+        if (pick == null || node == null) return null;
+
+        WorldRegionBlob.ClaimForFaction(node, row.Faction, temperament.Name);
+        pick.Ownership = LocationOwnership.Enemy;
+        pick.OwnerUserId = string.Empty;
+        pick.OwnerDisplayName = temperament.Name;
+        pick.Faction = row.Faction;
+
+        row.Strength = Math.Max(0, row.Strength - FactionGrowthRules.ExpandCost(row.Strength));
+        row.LastActedAtUtc = now;
+        return pick;
+    }
+
+    /// <summary>
+    /// Fortifies the faction's most threatened region (<see cref="FactionGrowthRules.PickFortify"/>):
+    /// walls up a level, resolve restored by a step. Returns the region and its resolve before, or null
+    /// when nothing needs it.
+    /// </summary>
+    private (WorldRegionData Region, int ResolveBefore)? Fortify(FactionState row, List<WorldRegionData> regions,
+        JsonNode? world, ICollection<string> besieged, DateTime now)
+    {
+        var pick = FactionGrowthRules.PickFortify(row.Faction, regions, besieged);
+        var node = pick == null ? null : WorldRegionBlob.FindRegion(world, pick.RegionId);
+        if (pick == null || node == null) return null;
+
+        int resolveBefore = pick.Resolve;
+        var (entrenchment, resolve) = FactionGrowthRules.Fortified(pick);
+        WorldRegionBlob.SetEntrenchment(node, entrenchment);
+        pick.Entrenchment = entrenchment;
+        pick.Resolve = WorldRegionBlob.SetResolve(node, resolve);
+
+        row.Strength = Math.Max(0, row.Strength - FactionGrowthRules.FortifyCost(row.Strength));
+        row.LastActedAtUtc = now;
+        return (pick, resolveBefore);
     }
 
     /// <summary>A new season's map seats its factions anew, so their rows and raids go with the old one.</summary>

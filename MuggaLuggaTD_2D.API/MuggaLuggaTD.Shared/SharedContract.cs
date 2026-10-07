@@ -210,6 +210,10 @@ namespace MuggaLuggaTD.Shared
         //   to the faction wrecked, its garrison captured, and the faction loses a tenth of its march;
         //   failing, it loses all of it and is Bloodied. The defender may BREAK THE SIEGE once: a sortie
         //   fought as a siege assault turned round (SortieEncounter). A mustering faction does not act.
-        public const string Version = "1.45.0";
+        // 1.46.0 - NPC factions grow and fight each other (npc-factions.md phase 4). FactionGrowthRules: a
+        //   faction may expand into wild tier-3+ land on its border that touches no capital (20% of its
+        //   strength), or fortify its most threatened region (15%: walls +1, resolve +15). It may besiege
+        //   another faction's land as it does a player's, and a Bloodied faction defends a siege at a quarter less.
+        public const string Version = "1.46.0";
     }
 }

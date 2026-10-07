@@ -54,12 +54,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>
         /// Whether a faction may besiege this bordering region: a player's land that is not their seat,
-        /// not under truce, and worn to the resolve gate. Other factions' land waits for phase 4.
+        /// or another faction's (phase 4), not under truce, and worn to the resolve gate.
         /// </summary>
         public static bool IsBesiegeable(FactionId faction, WorldRegionData region, DateTime utcNow)
         {
             if (region == null || FactionStrengthRules.Holds(faction, region)) return false;
-            if (region.Ownership != LocationOwnership.Player || string.IsNullOrEmpty(region.OwnerUserId)) return false;
+            bool player = region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId);
+            bool rival = FactionStrengthRules.IsFaction(region.Faction) && string.IsNullOrEmpty(region.OwnerUserId);
+            if (!player && !rival) return false;
             if (region.IsCapital) return false;
             if (SiegeRules.IsUnderTruce(region, utcNow)) return false;
             return region.Resolve <= SiegeRules.DeclareResolveThreshold;

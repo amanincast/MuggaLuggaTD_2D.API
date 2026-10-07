@@ -82,11 +82,12 @@ public class FactionRaidTests : IDisposable
     }
 
     [Fact]
-    public void ALeanTowardSomethingNotBuilt_IsATurnSpentOnNothing()
+    public void ItPicksAnActionByItsLean_AndEveryActionIsBuilt()
     {
         var ashkin = new FactionTemperament { Raid = 1, Fortify = 3 };
         Assert.Equal(FactionAction.Raid, FactionDecisionRules.PickAction(ashkin, 0.1));
-        Assert.Equal(FactionAction.None, FactionDecisionRules.PickAction(ashkin, 0.9));
+        Assert.Equal(FactionAction.Fortify, FactionDecisionRules.PickAction(ashkin, 0.9));
+        Assert.Equal(FactionAction.None, FactionDecisionRules.PickAction(new FactionTemperament { Raid = 0 }, 0.5));
     }
 
     [Fact]
