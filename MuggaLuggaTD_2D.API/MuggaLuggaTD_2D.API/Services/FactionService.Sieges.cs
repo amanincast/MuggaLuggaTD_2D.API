@@ -223,6 +223,8 @@ public partial class FactionService
             worldRow.UpdatedAt = DateTime.UtcNow;
         }
         await _context.SaveChangesAsync();
+        // A fallen region changes what its old and new holders earn (see ActAsync).
+        if (worldChanged && _seasons != null) await _seasons.SettleAllAsync(gameInstanceId, world, utcNow);
         if (worldChanged) await BroadcastWorldAsync(worldRow);
 
         foreach (var (siege, detail, _) in settled)

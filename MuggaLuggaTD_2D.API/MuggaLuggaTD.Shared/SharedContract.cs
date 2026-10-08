@@ -214,6 +214,9 @@ namespace MuggaLuggaTD.Shared
         //   faction may expand into wild tier-3+ land on its border that touches no capital (20% of its
         //   strength), or fortify its most threatened region (15%: walls +1, resolve +15). It may besiege
         //   another faction's land as it does a player's, and a Bloodied faction defends a siege at a quarter less.
-        public const string Version = "1.46.0";
+        // 1.47.0 - The season's end (season-end.md). SeasonEndRules: a finish earns a chest whose rarity follows
+        //   the season's average points an hour, and the factions score their land at the players' rates.
+        //   FirstStepsRules.RollPiece rolls a chest piece of any rarity.
+        public const string Version = "1.47.0";
     }
 }

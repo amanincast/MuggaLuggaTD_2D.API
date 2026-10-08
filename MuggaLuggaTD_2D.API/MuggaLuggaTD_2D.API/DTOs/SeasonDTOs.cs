@@ -18,7 +18,9 @@ public record SeasonStandingEntry(
     double RaidingPoints,
     /// <summary>What their current holdings are earning per hour, right now.</summary>
     double PointsPerHour,
-    int RegionsHeld
+    int RegionsHeld,
+    /// <summary>Seasons this player has won, anywhere: the crown beside their name. Factions have none.</summary>
+    int Crowns = 0
 );
 
 /// <summary>The table, plus the clock it is being played against.</summary>
@@ -48,8 +50,34 @@ public record SeasonResultEntry(
     DateTime SeasonStartedAt,
     DateTime SeasonEndedAt,
     /// <summary>The realm's name, for a history spanning several of them.</summary>
-    string? RealmName
+    string? RealmName,
+    /// <summary>Seasons this player has won, anywhere. Factions have none.</summary>
+    int Crowns = 0
 );
+
+/// <summary>
+/// A season that has closed, as its end page shows it (<c>docs/design/season-end.md</c> §5): the final
+/// table, players and factions together, and the asking player's own finish and chest.
+/// </summary>
+public record SeasonEndedResponse(
+    Guid GameInstanceId,
+    int SeasonNumber,
+    DateTime SeasonStartedAt,
+    DateTime SeasonEndedAt,
+    IReadOnlyList<SeasonResultEntry> FinalTable,
+    /// <summary>The asking player's row; null if they had none in that season.</summary>
+    SeasonResultEntry? Mine,
+    /// <summary>The chest their finish earned ("Rare"), or null for none.</summary>
+    string? ChestRarity,
+    bool ChestOpened,
+    /// <summary>What the chest held, once opened.</summary>
+    string? ChestItemName,
+    /// <summary>Whether they had already seen this page before this reply.</summary>
+    bool Seen
+);
+
+/// <summary>A season chest, opened: the piece it held, already granted.</summary>
+public record SeasonChestResponse(int SeasonNumber, string Rarity, StateManagement.Models.ItemSaveData Item);
 
 /// <summary>
 /// Broadcast when a season closes. Carries the final table, because the moment a realm resets is

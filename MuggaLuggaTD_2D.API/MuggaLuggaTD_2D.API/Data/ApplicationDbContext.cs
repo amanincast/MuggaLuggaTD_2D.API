@@ -46,6 +46,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<FactionState> FactionStates => Set<FactionState>();
     public DbSet<FactionRaid> FactionRaids => Set<FactionRaid>();
     public DbSet<FactionSiege> FactionSieges => Set<FactionSiege>();
+    public DbSet<FactionSeasonScore> FactionSeasonScores => Set<FactionSeasonScore>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -142,6 +143,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         // Bloodied characters (BloodiedRules): one row per character, asked before every fight.
         // One row per faction per realm (docs/design/npc-factions.md).
+        // One running score per faction per season of a realm; ranked at the close.
+        builder.Entity<FactionSeasonScore>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Faction }).IsUnique();
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<FactionState>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.Faction }).IsUnique();

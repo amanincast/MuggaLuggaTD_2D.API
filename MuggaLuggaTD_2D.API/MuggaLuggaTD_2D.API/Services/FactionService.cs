@@ -364,6 +364,11 @@ public partial class FactionService
         }
         await _context.SaveChangesAsync();
 
+        // Land that changed hands, or walls raised, change what everyone earns: settle the scoreboard (and
+        // gold) at the old rates first, as every other land change does. Without it a player away from the
+        // game went on earning for a region a faction had taken until they next looked.
+        if (worldChanged && _seasons != null) await _seasons.SettleAllAsync(gameInstanceId, world, utcNow);
+
         if (worldChanged && _hub != null)
         {
             var payload = JsonSerializer.Deserialize<object>(worldRow.GameData) ?? new { };

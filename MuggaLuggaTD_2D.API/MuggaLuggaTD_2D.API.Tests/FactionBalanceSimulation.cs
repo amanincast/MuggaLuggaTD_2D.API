@@ -114,6 +114,13 @@ public class FactionBalanceSimulation
         }
 
         var end = WorldRegionBlob.ReadAllRegions(await db.ReadWorldAsync(instance.Id));
+
+        // What each side earns an hour on the season's scoreboard, at the start and the end: the chest
+        // bands (SeasonEndRules.ChestBands) are measured against these.
+        string Rates(List<WorldRegionData> rs) =>
+            string.Join(", ", Players.Select(p => $"{p} {SeasonScoreRules.RateForHoldings(p, rs):F0}")
+                .Concat(FactionStrengthRules.All.Select(f => $"{f} {SeasonEndRules.RateForFaction(f, rs):F0}")));
+        _output.WriteLine($"points an hour: start {Rates(regions)}; end {Rates(end)}");
         _output.WriteLine("between factions: " + string.Join(", ", db.WarLog.AsNoTracking()
             .Where(e => e.SubjectUserId != null && e.SubjectUserId.StartsWith(FactionService.WarLogPrefix)).AsEnumerable()
             .GroupBy(e => e.Kind).Select(g => $"{g.Key} {g.Count()}")));

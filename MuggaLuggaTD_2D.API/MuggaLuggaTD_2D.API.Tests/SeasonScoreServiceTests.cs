@@ -431,7 +431,7 @@ public class SeasonScoreServiceTests : IDisposable
         await JoinAsync(instance.Id, TestIds.Rival);
 
         var standings = await Service.StandingsAsync(instance.Id);
-        var tied = standings.Standings.Where(s => s.UserId != TestIds.Owner).ToList();
+        var tied = standings.Standings.Where(s => s.UserId != TestIds.Owner && !s.UserId.StartsWith("faction:")).ToList();
 
         Assert.Equal(2, tied.Count);
         Assert.Equal(tied[0].Rank, tied[1].Rank);

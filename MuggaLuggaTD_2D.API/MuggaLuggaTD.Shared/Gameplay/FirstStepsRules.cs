@@ -46,7 +46,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         }
 
         /// <summary>The chest's item: one piece of equipment, rolled like a drop but always Rare.</summary>
-        public static ItemSaveData RollChest(IList<ItemTemplate> templates, Random random)
+        public static ItemSaveData RollChest(IList<ItemTemplate> templates, Random random) =>
+            RollPiece(templates, random, ChestLevel, ChestRarity);
+
+        /// <summary>
+        /// One piece of equipment of a set rarity, rolled as if dropped at <paramref name="level"/>. Every
+        /// chest uses it: First Steps' and the season's end.
+        /// </summary>
+        public static ItemSaveData RollPiece(IList<ItemTemplate> templates, Random random, int level, ItemRarityTypes rarity)
         {
             if (templates == null || templates.Count == 0) return null;
             var template = templates[random.Next(templates.Count)];
@@ -58,7 +65,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ItemCount = 1
             };
             Items.Utilities.ItemDropCalculator.ApplyDropProperties(
-                item, ChestLevel, template.ImplicitPool, template.ExplicitPool, ChestRarity);
+                item, level, template.ImplicitPool, template.ExplicitPool, rarity);
             return item;
         }
     }
