@@ -18,7 +18,8 @@ public enum HiringError
     NotYourLand,
     WrongTrade,
     SiteFull,
-    NoWorld
+    NoWorld,
+    KeepFull
 }
 
 public record HiringOutcome(HiringError Error, string? Message = null)
@@ -269,6 +270,11 @@ public class HiringService
         var pay = new Dictionary<string, Dictionary<string, int>>();
         var guarded = await GuardedAsync(gameInstanceId, onlyUserId);
         string realm = gameInstanceId.ToString();
+        int season = await SeasonAsync(gameInstanceId);
+
+        // Mentors lift the experience of the others at their site; computed before anyone changes.
+        var mentorsAt = workers.Where(w => w.PerkList.Contains(WorkerPerk.Mentor))
+            .GroupBy(w => w.SiteId!).ToDictionary(g => g.Key, g => g.Select(w => w.Id).ToHashSet());
 
         foreach (var worker in workers)
         {
@@ -277,26 +283,38 @@ public class HiringService
                 // Raiders harry the diggings of a region nobody patrols, now and then (auto-fight.md §7).
                 string regionId = SiteSpec.RegionIdOf(worker.SiteId!);
                 bool patrolled = guarded.Contains((worker.UserId, regionId));
-                double gathered = worker.Carry + HiringRules.Gathered(worker.RatePerHour, worker.LastSettledAt, until,
-                    worker.TraitList.Contains(WorkerTrait.Lucky), worker.Id.ToString(),
-                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h));
+                byId.TryGetValue(regionId, out var siteRegion);
+                var sheet = worker.Sheet();
+                double gathered = worker.Carry + WorkerLevelRules.Gathered(worker.RatePerHour, worker.LastSettledAt, until,
+                    sheet, worker.Id.ToString(),
+                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h), worker.AssignedAt);
                 int whole = (int)Math.Floor(gathered);
                 worker.Carry = gathered - whole;
-                worker.LastSettledAt = until;
+                worker.LifetimeOutput += whole;
 
-                if (whole > 0)
+                if (!pay.TryGetValue(worker.UserId, out var goods)) pay[worker.UserId] = goods = new();
+                var trade = SiteTrade(worker.SiteId!, byId);
+                if (whole > 0 && trade.HasValue)
                 {
-                    var trade = SiteTrade(worker.SiteId!, byId);
-                    if (trade.HasValue)
-                    {
-                        string good = ResourceNodeRules.GoodOf(trade.Value);
-                        if (!pay.TryGetValue(worker.UserId, out var goods)) pay[worker.UserId] = goods = new();
-                        goods[good] = goods.GetValueOrDefault(good) + whole;
-                    }
+                    string good = ResourceNodeRules.GoodOf(trade.Value);
+                    goods[good] = goods.GetValueOrDefault(good) + whole;
                 }
+                // Keen Eye and Lucky Strike turn things up now and then.
+                if (siteRegion != null)
+                    foreach (var (find, count) in WorkerLevelRules.Finds(sheet, worker.Id.ToString(), worker.LastSettledAt, until, siteRegion.Biome))
+                        goods[find] = goods.GetValueOrDefault(find) + count;
+
+                // Experience is time at work. A level gained re-rates the site; a roll level rolls.
+                bool mentorBeside = mentorsAt.TryGetValue(worker.SiteId!, out var mentors) && mentors.Any(id => id != worker.Id);
+                int before = worker.Level;
+                worker.HoursWorked += (until - worker.LastSettledAt).TotalHours * WorkerLevelRules.ExperienceFactor(sheet, mentorBeside);
+                worker.LastSettledAt = until;
+                if (RollUp(worker, season)) touched.Add(worker.SiteId);
+                if (worker.Level != before) touched.Add(worker.SiteId);
             }
 
-            // Land lost: home to the Hall, with what they had gathered already paid above.
+            // Land lost: home to the Hall, with what they had gathered already paid above. The fraction
+            // they carry is kept for their next site.
             byId.TryGetValue(SiteSpec.RegionIdOf(worker.SiteId!), out var region);
             if (region == null || !region.IsOwnedByPlayer(worker.UserId))
             {
@@ -304,14 +322,17 @@ public class HiringService
                 worker.SiteId = null;
                 worker.AssignedAt = null;
                 worker.RatePerHour = 0;
-                worker.Carry = 0;
                 _sessionLog.Log("HIRING-HOME", $"user={worker.UserId} worker={worker.Id} region lost");
             }
         }
 
+        foreach (var goods in pay.Values)
+            foreach (var key in goods.Where(g => g.Value <= 0).Select(g => g.Key).ToList())
+                goods.Remove(key);
+
         await _context.SaveChangesAsync();
 
-        foreach (var (userId, goods) in pay)
+        foreach (var (userId, goods) in pay.Where(p => p.Value.Count > 0))
             await _wallet.GrantAsync(gameInstanceId, userId,
                 goods.Select(g => new MaterialGrant { MaterialName = g.Key, Quantity = g.Value }).ToList(), "hiring-output");
 
@@ -337,13 +358,184 @@ public class HiringService
     public async Task SettlePlayerAsync(Guid gameInstanceId, string userId)
         => await SettleAllAsync(gameInstanceId, await RegionsAsync(gameInstanceId), Clock(), userId);
 
+    // -----------------------------------------------------------------
+    // Veterancy (Workers spec)
+    // -----------------------------------------------------------------
+
+    /// <summary>Debug: the next promotion roll per player is forced to succeed (true) or fail (false).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> ForcedPromotions = new();
+
     /// <summary>
-    /// A season reset: the workers, the board and the goods all go (Mike, 2026-10-01). Players hire
-    /// again on the new map, and goods gathered for the old one fortify nothing on the new.
+    /// Makes the rolls for every roll level a worker has reached and not yet rolled, in order, and
+    /// applies them: a perk, a promotion's tier and trait, a second trade. True if anything changed
+    /// their rate.
+    /// </summary>
+    private bool RollUp(HiredWorker worker, int season)
+    {
+        int level = worker.Level;
+        if (level <= worker.LevelRolledTo) return false;
+
+        var rolls = worker.RollList;
+        bool changed = false;
+        for (int l = worker.LevelRolledTo + 1; l <= level; l++)
+        {
+            if (!WorkerLevelRules.RollsAt(l)) continue;
+            bool? force = null;
+            if (WorkerLevelRules.IsPromotionLevel(l) && ForcedPromotions.TryRemove(worker.UserId, out var forced)) force = forced;
+
+            var sheet = worker.Sheet();
+            var roll = WorkerLevelRules.Roll(worker.Id.ToString(), l, season, sheet, force);
+            if (roll == null) continue;
+            WorkerLevelRules.Apply(sheet, roll);
+            worker.Tier = sheet.Tier;
+            worker.Traits = HiringTraits.Write(sheet.Traits);
+            worker.SecondTrade = sheet.SecondTrade;
+            rolls.Add(roll);
+            changed = true;
+            _sessionLog.Log("HIRING-ROLL", $"user={worker.UserId} worker={worker.Id} level={l} {roll.Kind} " +
+                $"perk={roll.Perk} tier={roll.NewTier} trait={roll.NewTrait}");
+        }
+        worker.Rolls = WorkerRollLog.Write(rolls);
+        worker.LevelRolledTo = level;
+        return changed;
+    }
+
+    /// <summary>★ KEEP: marks a worker to go with the player into the next season. At most two.</summary>
+    public async Task<HiringOutcome> KeepAsync(Guid gameInstanceId, string userId, Guid workerId, bool keep)
+    {
+        var workers = await WorkersAsync(gameInstanceId, userId);
+        var worker = workers.FirstOrDefault(w => w.Id == workerId);
+        if (worker == null) return new HiringOutcome(HiringError.NoSuchWorker, "You employ nobody by that name.");
+        if (keep && !worker.Keep && workers.Count(w => w.Keep) >= WorkerLevelRules.VeteransKept)
+            return new HiringOutcome(HiringError.KeepFull,
+                $"You can keep only {WorkerLevelRules.VeteransKept} workers into the next season. Unmark one first.");
+        worker.Keep = keep;
+        await _context.SaveChangesAsync();
+        return new HiringOutcome(HiringError.None);
+    }
+
+    /// <summary>DISMISS: a worker leaves for good (no refund), freeing their bed. What they gathered is paid first.</summary>
+    public async Task<HiringOutcome> DismissAsync(Guid gameInstanceId, string userId, Guid workerId)
+    {
+        var worker = await _context.HiredWorkers.FirstOrDefaultAsync(w =>
+            w.Id == workerId && w.GameInstanceId == gameInstanceId && w.UserId == userId);
+        if (worker == null) return new HiringOutcome(HiringError.NoSuchWorker, "You employ nobody by that name.");
+
+        var regions = await RegionsAsync(gameInstanceId);
+        await SettleAllAsync(gameInstanceId, regions, Clock(), userId);
+        string? site = worker.SiteId;
+        _context.HiredWorkers.Remove(worker);
+        await _context.SaveChangesAsync();
+        await RerateAsync(gameInstanceId, regions, new[] { site });
+        _sessionLog.Log("HIRING-DISMISS", $"user={userId} worker={worker.Id} {worker.Name} level={worker.Level}");
+        return new HiringOutcome(HiringError.None);
+    }
+
+    /// <summary>The reveals have played: every roll so far is seen.</summary>
+    public async Task MarkRollsSeenAsync(Guid gameInstanceId, string userId)
+    {
+        foreach (var worker in await WorkersAsync(gameInstanceId, userId))
+            worker.RollsSeen = worker.RollList.Count;
+        await _context.SaveChangesAsync();
+    }
+
+    /// <summary>Debug: adds hours of work to every worker of this player (assigned or not), rolling any levels crossed.</summary>
+    public async Task DebugAddHoursAsync(Guid gameInstanceId, string userId, double hours)
+    {
+        var regions = await RegionsAsync(gameInstanceId);
+        await SettleAllAsync(gameInstanceId, regions, Clock(), userId);
+        int season = await SeasonAsync(gameInstanceId);
+        var sites = new HashSet<string?>();
+        foreach (var worker in await WorkersAsync(gameInstanceId, userId))
+        {
+            worker.HoursWorked += hours;
+            RollUp(worker, season);
+            sites.Add(worker.SiteId);
+        }
+        await _context.SaveChangesAsync();
+        await RerateAsync(gameInstanceId, regions, sites);
+    }
+
+    /// <summary>Debug: sets a worker's level (its hours to that level's start), rolling any levels crossed.</summary>
+    public async Task<HiringOutcome> DebugSetLevelAsync(Guid gameInstanceId, string userId, Guid workerId, int level)
+    {
+        var worker = await _context.HiredWorkers.FirstOrDefaultAsync(w =>
+            w.Id == workerId && w.GameInstanceId == gameInstanceId && w.UserId == userId);
+        if (worker == null) return new HiringOutcome(HiringError.NoSuchWorker, "You employ nobody by that name.");
+        worker.HoursWorked = WorkerLevelRules.HoursAt(level);
+        RollUp(worker, await SeasonAsync(gameInstanceId));
+        await _context.SaveChangesAsync();
+        await RerateAsync(gameInstanceId, await RegionsAsync(gameInstanceId), new[] { worker.SiteId });
+        return new HiringOutcome(HiringError.None);
+    }
+
+    /// <summary>Debug: this player's next promotion roll succeeds (true), fails (false), or is left to chance (null).</summary>
+    public static void DebugForcePromotion(string userId, bool? succeed)
+    {
+        if (succeed.HasValue) ForcedPromotions[userId] = succeed.Value;
+        else ForcedPromotions.TryRemove(userId, out _);
+    }
+
+    /// <summary>Debug: every roll is unseen again, so the reveals replay.</summary>
+    public async Task DebugReplayRevealsAsync(Guid gameInstanceId, string userId)
+    {
+        foreach (var worker in await WorkersAsync(gameInstanceId, userId)) worker.RollsSeen = 0;
+        await _context.SaveChangesAsync();
+    }
+
+    /// <summary>Who would go with this player into the next season, and at what level.</summary>
+    public async Task<List<(HiredWorker Worker, int Level)>> CarryOverPreviewAsync(Guid gameInstanceId, string userId)
+    {
+        var workers = await WorkersAsync(gameInstanceId, userId);
+        var ids = WorkerLevelRules.Veterans(workers.Select(Candidate));
+        return ids.Select(id => workers.First(w => w.Id.ToString() == id))
+            .Select(w => (w, WorkerLevelRules.CarriedLevel(w.Level))).ToList();
+    }
+
+    private static WorkerLevelRules.Candidate Candidate(HiredWorker w) => new() { Id = w.Id.ToString(), Keep = w.Keep, Hours = w.HoursWorked };
+
+    /// <summary>
+    /// Readies a veteran for the new season (spec §3.4): half their level, hours reset to its start;
+    /// tier and traits kept, promotions included; perks rolled above the new level dropped, to be
+    /// rolled afresh when reached again; at the Hall, nothing carried.
+    /// </summary>
+    public static void CarryOver(HiredWorker worker, DateTime now)
+    {
+        int level = WorkerLevelRules.CarriedLevel(worker.Level);
+        var kept = worker.RollList.Where(r => r.Level <= level).ToList();
+        worker.HoursWorked = WorkerLevelRules.HoursAt(level);
+        worker.Rolls = WorkerRollLog.Write(kept);
+        worker.RollsSeen = kept.Count;
+        worker.LevelRolledTo = level;
+        // A second trade from a Jack of Trades who no longer has the perk goes with it.
+        if (!worker.TraitList.Contains(WorkerTrait.Versatile) && !kept.Any(r => r.Perk == WorkerPerk.JackOfTrades))
+            worker.SecondTrade = null;
+        worker.SiteId = null;
+        worker.AssignedAt = null;
+        worker.RatePerHour = 0;
+        worker.Carry = 0;
+        worker.LastSettledAt = now;
+        worker.SeasonsServed++;
+    }
+
+    /// <summary>
+    /// A season reset: the board and the goods go, and every worker but each player's two veterans
+    /// (★ KEEP first, then the highest levels), who come back at half their level (Workers spec §3.4).
+    /// Goods gathered for the old map still fortify nothing on the new.
     /// </summary>
     public static async Task ResetRealmAsync(ApplicationDbContext context, Guid realmId)
     {
-        context.HiredWorkers.RemoveRange(context.HiredWorkers.Where(w => w.GameInstanceId == realmId));
+        var now = DateTime.UtcNow;
+        var workers = await context.HiredWorkers.Where(w => w.GameInstanceId == realmId).ToListAsync();
+        foreach (var employer in workers.GroupBy(w => w.UserId))
+        {
+            var veterans = WorkerLevelRules.Veterans(employer.Select(Candidate)).ToHashSet();
+            foreach (var worker in employer)
+            {
+                if (veterans.Contains(worker.Id.ToString())) CarryOver(worker, now);
+                else context.HiredWorkers.Remove(worker);
+            }
+        }
         context.HiringCandidates.RemoveRange(context.HiringCandidates.Where(c => c.GameInstanceId == realmId));
         context.HiringStates.RemoveRange(context.HiringStates.Where(s => s.GameInstanceId == realmId));
         var goods = ResourceNodeRules.Trades.Select(ResourceNodeRules.GoodOf).ToList();
@@ -362,12 +554,13 @@ public class HiringService
             var crew = await _context.HiredWorkers.Where(w => w.GameInstanceId == gameInstanceId && w.SiteId == siteId).ToListAsync();
             byId.TryGetValue(SiteSpec.RegionIdOf(siteId!), out var region);
             var trade = SiteTrade(siteId!, byId);
+            var sheets = crew.ToDictionary(w => w.Id, w => w.Sheet());
             foreach (var worker in crew)
             {
-                int foremen = crew.Count(o => o.Id != worker.Id && o.TraitList.Contains(WorkerTrait.Foreman));
-                worker.RatePerHour = region == null || !trade.HasValue ? 0 : HiringRules.RateAt(
-                    worker.Tier, worker.Trade, worker.SecondTrade, worker.TraitList, worker.HomeBiome,
-                    trade.Value, region.Biome, region.Tier, foremen);
+                // A Foreman (or an Overseer) lifts everyone else at the site.
+                double bonus = crew.Where(o => o.Id != worker.Id).Sum(o => WorkerLevelRules.ForemanBonusOf(sheets[o.Id]));
+                worker.RatePerHour = region == null || !trade.HasValue ? 0
+                    : WorkerLevelRules.RateAt(sheets[worker.Id], trade.Value, region.Biome, region.Tier, bonus);
             }
         }
         await _context.SaveChangesAsync();
@@ -420,6 +613,11 @@ public class HiringService
         _context.HiringStates.Add(state);
         return state;
     }
+
+    /// <summary>The realm's season number, which seeds the workers' rolls (a veteran re-rolls afresh).</summary>
+    private async Task<int> SeasonAsync(Guid gameInstanceId)
+        => await _context.GameInstances.AsNoTracking().Where(g => g.Id == gameInstanceId)
+            .Select(g => g.SeasonNumber).FirstOrDefaultAsync();
 
     private async Task<IReadOnlyList<WorldRegionData>> RegionsAsync(Guid gameInstanceId)
     {

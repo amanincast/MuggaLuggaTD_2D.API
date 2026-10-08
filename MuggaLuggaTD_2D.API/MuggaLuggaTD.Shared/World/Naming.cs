@@ -489,6 +489,44 @@ namespace MuggaLuggaTD.Shared.World
             return $"{PlaceWord(biome, ref random)} {Pick(BandWords, ref random)}";
         }
 
+        /// <summary>A veteran worker's by-name, in their trade's voice ("the Steady Axe", "Stonejaw").</summary>
+        private static readonly Dictionary<ResourceTrade, string[]> TradeByNames = new Dictionary<ResourceTrade, string[]>
+        {
+            [ResourceTrade.Miner] = new[] { "the Deep Pick", "Stonelung", "the Lamp", "Ironhand", "the Mole", "Seamfinder" },
+            [ResourceTrade.Forester] = new[] { "the Steady Axe", "Oakarm", "the Feller", "Barkhide", "the Long Saw", "Greenwood" },
+            [ResourceTrade.Farmer] = new[] { "the Sower", "Goldsheaf", "the Early Riser", "Furrowfoot", "the Scythe", "Rainwise" },
+            [ResourceTrade.Quarrier] = new[] { "Stonejaw", "the Hammer", "Flintback", "the Wedge", "Granite", "the Mason" },
+            [ResourceTrade.Trapper] = new[] { "the Quiet Snare", "Quickhands", "the Fox", "Longstride", "the Tracker", "Hideclaw" }
+        };
+
+        /// <summary>By-names a trait leans toward, whatever the trade.</summary>
+        private static readonly Dictionary<WorkerTrait, string[]> TraitByNames = new Dictionary<WorkerTrait, string[]>
+        {
+            [WorkerTrait.Steady] = new[] { "the Steady", "Neverstop" },
+            [WorkerTrait.Hometown] = new[] { "the Homegrown", "Hearthborn" },
+            [WorkerTrait.Versatile] = new[] { "Twohands", "the Handy" },
+            [WorkerTrait.Prospector] = new[] { "the Prospector", "Richvein" },
+            [WorkerTrait.Lucky] = new[] { "the Lucky", "Fortune's Friend" },
+            [WorkerTrait.Foreman] = new[] { "the Boss", "Loudvoice" }
+        };
+
+        /// <summary>
+        /// A veteran worker's by-name (Workers spec §3.5): mostly their trade's, one in three their
+        /// traits'. A function of the worker's id and traits. The trade's word and the one-in-three
+        /// draw come from streams of their own, so a trait gained by promotion changes the by-name
+        /// only when that draw already fell to the traits.
+        /// </summary>
+        public static string WorkerByName(ResourceTrade trade, IReadOnlyCollection<WorkerTrait> traits, ulong seed)
+        {
+            var tradeRandom = DeterministicRandom.ForSubject(seed, 0x77726B72);
+            string tradeWord = TradeByNames.TryGetValue(trade, out var words) ? Pick(words, ref tradeRandom) : "the Hand";
+            var traitRandom = DeterministicRandom.ForSubject(seed, 0x74726169);
+            if (traitRandom.Next(3) != 0) return tradeWord;
+            var traitWords = (traits ?? Array.Empty<WorkerTrait>()).OrderBy(t => t)
+                .Where(TraitByNames.ContainsKey).SelectMany(t => TraitByNames[t]).ToArray();
+            return traitWords.Length > 0 ? Pick(traitWords, ref traitRandom) : tradeWord;
+        }
+
         #endregion
     }
 }
