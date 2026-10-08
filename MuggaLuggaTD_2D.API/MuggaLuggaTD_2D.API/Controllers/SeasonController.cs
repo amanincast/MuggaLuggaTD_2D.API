@@ -78,7 +78,10 @@ public class SeasonController : ControllerBase
         return ended == null ? NoContent() : Ok(ended);
     }
 
-    /// <summary>A season's end page again, seen or not (LAST SEASON on the standings).</summary>
+    /// <summary>
+    /// A season's end page again, seen or not (LAST SEASON on the standings). 204 when the player had no
+    /// finish in it, as for <see cref="Ended"/>: the client asks without knowing.
+    /// </summary>
     [HttpGet("ended/{seasonNumber:int}")]
     public async Task<ActionResult<SeasonEndedResponse>> EndedSeason(Guid gameInstanceId, int seasonNumber)
     {
@@ -87,7 +90,7 @@ public class SeasonController : ControllerBase
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var ended = await _seasons.EndedForAsync(gameInstanceId, userId, unseenOnly: false, seasonNumber);
-        return ended == null ? NotFound(new { message = "You have no finish in that season." }) : Ok(ended);
+        return ended == null ? NoContent() : Ok(ended);
     }
 
     /// <summary>The player has seen the page; it is not shown on their return again.</summary>
