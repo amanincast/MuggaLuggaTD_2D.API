@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Abilities.Models;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD.Shared.World;
 using Newtonsoft.Json;
 
 namespace MuggaLuggaTD_2D.API.Services;
@@ -61,6 +62,13 @@ public interface IGameContentProvider
     /// faction, and a document it does not know would fail its content sync closed.
     /// </summary>
     IReadOnlyList<FactionTemperament> Factions { get; }
+
+    /// <summary>
+    /// The peoples each biome's enemies belong to ("Goblin", "Drakan"), from CharacterData's enemies via
+    /// <c>Naming.Race</c>. A Slay quest asks only for a people that can spawn in its region (quests.md §4),
+    /// and a reported kill tally is held to them.
+    /// </summary>
+    IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> EnemyPeoples { get; }
 
     /// <summary>
     /// Legal ability upgrades keyed by ability link name, from AbilityUpgradeData. Player saves are
@@ -162,6 +170,8 @@ public class GameContentProvider : IGameContentProvider
     public IReadOnlyList<SignatureDefinition> Signatures => _snapshot.Signatures;
 
     public IReadOnlyList<RecruitSheet> RecruitSheets => _snapshot.RecruitSheets;
+
+    public IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> EnemyPeoples => _snapshot.EnemyPeoples;
 
     /// <summary>
     /// Reads AbilityUpgradeData into the per-ability legal upgrade pools used to validate saves.
@@ -403,10 +413,42 @@ public class GameContentProvider : IGameContentProvider
         }
     }
 
+    /// <summary>The peoples of each biome's enemies, in the order they first appear in CharacterData.</summary>
+    private IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> ParseEnemyPeoples(string rawCharacterData)
+    {
+        try
+        {
+            var document = JsonConvert.DeserializeObject<CharacterContentDocument>(rawCharacterData);
+            var peoples = new Dictionary<BiomeType, IReadOnlyList<string>>();
+            foreach (var group in (document?.Enemies ?? new List<EnemyEntry>())
+                         .Where(e => e != null && !string.IsNullOrEmpty(e.LinkName))
+                         .GroupBy(e => e.Biome ?? BiomeType.Grassland))
+            {
+                var names = group.Select(e => Naming.Race(e.LinkName))
+                    .Where(r => !string.IsNullOrEmpty(r)).Distinct(StringComparer.Ordinal).ToList();
+                if (names.Count > 0) peoples[group.Key] = names;
+            }
+
+            _logger.LogInformation("Parsed enemy peoples for {Count} biome(s).", peoples.Count);
+            return peoples;
+        }
+        catch (Newtonsoft.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("CharacterData.json could not be parsed into enemy peoples.", ex);
+        }
+    }
+
     /// <summary>Only the slice of CharacterData the server needs. The client owns the rest.</summary>
     private sealed class CharacterContentDocument
     {
         public List<AllyEntry> Allies { get; set; } = new();
+        public List<EnemyEntry> Enemies { get; set; } = new();
+    }
+
+    private sealed class EnemyEntry
+    {
+        public string LinkName { get; set; } = string.Empty;
+        public BiomeType? Biome { get; set; }
     }
 
     private sealed class AllyEntry
@@ -475,7 +517,7 @@ public class GameContentProvider : IGameContentProvider
         return new Snapshot(version, documents, ParseAbilityTemplates(rawAbilityData),
             ParseRunTuning(rawSurvivalData), ParseDroppableItems(rawItemData),
             ParseUpgradePools(rawUpgradeData), ParseMaterials(rawMaterialData),
-            ParseSignatures(rawSignatureData), ParseRecruitSheets(rawCharacterData));
+            ParseSignatures(rawSignatureData), ParseRecruitSheets(rawCharacterData), ParseEnemyPeoples(rawCharacterData));
     }
 
     private sealed record Snapshot(
@@ -487,5 +529,6 @@ public class GameContentProvider : IGameContentProvider
         IReadOnlyDictionary<string, List<AbilityUpgrade>> AbilityUpgradePools,
         IReadOnlyList<MaterialTemplate> Materials,
         IReadOnlyList<SignatureDefinition> Signatures,
-        IReadOnlyList<RecruitSheet> RecruitSheets);
+        IReadOnlyList<RecruitSheet> RecruitSheets,
+        IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> EnemyPeoples);
 }

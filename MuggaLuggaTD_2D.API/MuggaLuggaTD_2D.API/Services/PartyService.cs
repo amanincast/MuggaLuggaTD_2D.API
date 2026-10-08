@@ -73,13 +73,18 @@ public class PartyService
     /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
     private readonly FirstStepsService? _firstSteps;
 
+    /// <summary>Counts an ambush fought off toward the player's quests. Optional so tests can leave it out.</summary>
+    private readonly QuestService? _quests;
+
     /// <summary>Catches companies in auto mode up before they are read; optional so tests can build this without it.</summary>
     private readonly AutoFightService? _auto;
 
     public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
         MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger,
-        ItemLedgerService items, FirstStepsService? firstSteps = null, AutoFightService? auto = null)
+        ItemLedgerService items, FirstStepsService? firstSteps = null, AutoFightService? auto = null,
+        QuestService? quests = null)
     {
+        _quests = quests;
         _firstSteps = firstSteps;
         _auto = auto;
         _items = items;
@@ -599,6 +604,20 @@ public class PartyService
 
         party.UpdatedAt = now;
         await _context.SaveChangesAsync();
+
+        // Quests: an ambush fought off, where it struck, and the kills, held to a skirmish's plan.
+        if (won && _quests != null)
+        {
+            var struck = WorldRegionBlob.ReadAllRegions(world)
+                .FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(ambush!.SiteId));
+            await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
+            {
+                RegionId = struck?.RegionId,
+                AmbushWon = true,
+                Kills = struck == null ? new Dictionary<string, int>()
+                    : new Dictionary<string, int>(_quests.ClampKills(request.Kills, struck.Biome, AmbushRules.SkirmishTier, null))
+            });
+        }
 
         _sessionLog.Log("AMBUSH-CLAIM",
             $"user={userId} party={party.Id} run={run.Id} won={won} xp={experience} gold={gold} items={items.Count} materials={materials.Sum(m => m.Quantity)}");

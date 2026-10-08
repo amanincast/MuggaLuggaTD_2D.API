@@ -38,6 +38,13 @@ public class FakeGameContent : IGameContentProvider
     /// <summary>Empty by default: only the Tavern tests care what a recruit can be rolled onto.</summary>
     public IReadOnlyList<RecruitSheet> RecruitSheets { get; set; } = Array.Empty<RecruitSheet>();
 
+    public IReadOnlyDictionary<MuggaLuggaTD.Shared.World.BiomeType, IReadOnlyList<string>> EnemyPeoples { get; set; } =
+        new Dictionary<MuggaLuggaTD.Shared.World.BiomeType, IReadOnlyList<string>>
+        {
+            [MuggaLuggaTD.Shared.World.BiomeType.Grassland] = new[] { "Goblin", "Drakan" },
+            [MuggaLuggaTD.Shared.World.BiomeType.Forest] = new[] { "Wolf", "Troll" }
+        };
+
     /// <summary>Both factions, raiding and nothing else, at aggression 1. Tests override as they need.</summary>
     public IReadOnlyList<FactionTemperament> Factions { get; set; } = new[]
     {

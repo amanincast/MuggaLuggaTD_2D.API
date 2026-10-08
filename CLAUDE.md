@@ -145,6 +145,25 @@ faction per realm, and `FactionRaid` rows for what they do.
   runs in **Development**.
 - **They race the players on the scoreboard** (season end, shared 1.47.0): see the next section.
 
+## Quests (`QuestService`, `QuestController`; `docs/design/quests.md` in the Unity repo)
+
+- **The board is never stored.** `QuestRules.Board(realm, user, hour, set, world, peoples, tuning)` works it
+  out: up to 4 village offers (villages, `NeutralHome`, in lit regions not held by a rival) and 2 Hall offers.
+  Each village is rolled on its own seed, so new land in sight can displace an offer but never rewrite one.
+- **What is stored:** `QuestBoardState` (per player per realm) holds the set number and, for the current hour,
+  the offers taken and the givers seen (the client's gold "?"). A new hour empties both lists. `PlayerQuest`
+  holds a taken offer frozen as JSON, with its progress. Both are wiped by the season reset.
+- **A fresh set at once:** once every offer on the board has a handed-in row, `Set` is raised.
+- **Deeds** go through `QuestService.RecordAsync` (idempotent, never throws), called from the PvE claim (a
+  fightable site's clear plus kills), the ambush claim (a win plus kills) and auto mode (at its share).
+- **Kills are client-reported and clamped.** `PveClaimRequest.Kills` and `AmbushClaimRequest.Kills` give a
+  tally by people. `QuestRules.ClampKills` keeps only the fight's biome's peoples (`IGameContentProvider.EnemyPeoples`,
+  from CharacterData via `Naming.Race`), up to 1.5 times `RunRewardCalculator.PlannedEnemies`.
+- **Hand-in:** a Gather quest spends its goods from the wallet (workers are settled first). Others need their
+  count. Pays `QuestRules.RollChest` (one piece of the tier, the rest lower), gold and materials, marked
+  handed in before the grant.
+- **Debug (Development only):** `POST quests/debug/fresh` and `quests/debug/finish`.
+
 ## The season's end (`docs/design/season-end.md`, Unity repo)
 
 - **Factions score their land** at the players' rates (`SeasonEndRules.RateForFaction`), nothing for deeds. One

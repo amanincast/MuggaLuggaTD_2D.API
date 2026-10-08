@@ -89,6 +89,7 @@ builder.Services.AddScoped<GoldService>();
 builder.Services.AddScoped<TavernService>();
 builder.Services.AddScoped<BazaarService>();
 builder.Services.AddScoped<FirstStepsService>();
+builder.Services.AddScoped<QuestService>();
 builder.Services.AddScoped<HiringService>();
 builder.Services.AddScoped<FortifyService>();
 builder.Services.AddScoped<TalentService>();

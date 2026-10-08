@@ -61,6 +61,9 @@ public class AutoFightService
     /// <summary>Brings this player's workers' goods in before provisions are counted; optional so tests can leave it out.</summary>
     private readonly HiringService? _hiring;
 
+    /// <summary>Counts auto mode's wins toward the player's quests, at its share (quests.md §4).</summary>
+    private readonly QuestService? _quests;
+
     /// <summary>Where spoils are rolled from. Tests fix it.</summary>
     public Random Dice { get; set; } = Random.Shared;
 
@@ -78,8 +81,9 @@ public class AutoFightService
 
     public AutoFightService(ApplicationDbContext context, IGameContentProvider content, MaterialWalletService wallet,
         GoldService gold, ItemLedgerService items, ISessionLog sessionLog, ILogger<AutoFightService> logger,
-        HiringService? hiring = null)
+        HiringService? hiring = null, QuestService? quests = null)
     {
+        _quests = quests;
         _context = context;
         _content = content;
         _wallet = wallet;
@@ -433,6 +437,8 @@ public class AutoFightService
         if (day.Gold > 0) await _gold.GrantAsync(gameInstanceId, userId, day.Gold, source);
 
         if (transaction != null) await transaction.CommitAsync();
+
+        if (_quests != null) await RecordQuestDeedsAsync(day);
 
         if (day.Fights > 0 || day.Eaten.Count > 0)
             _sessionLog.Log("AUTO-SETTLE",
@@ -837,6 +843,30 @@ public class AutoFightService
     {
         try { return JsonSerializer.Deserialize<List<string>>(party.AutoRecentJson) ?? new List<string>(); }
         catch (JsonException) { return new List<string>(); }
+    }
+
+    /// <summary>
+    /// Auto mode's wins count toward quests at the share it is paid at (Mike, 2026-10-07): its kills at a
+    /// third of the plan, and a clear or an ambush counts one time in three.
+    /// </summary>
+    private async Task RecordQuestDeedsAsync(Day day)
+    {
+        foreach (var report in day.Reports.Where(r => r.Won))
+        {
+            var regionId = SiteSpec.RegionIdOf(report.SiteId ?? "");
+            if (regionId == null || !day.Regions.TryGetValue(regionId, out var region)) continue;
+            var site = report.Skirmish ? null : day.LayoutOf(region).FindSite(report.SiteId!);
+
+            bool counts = Dice.NextDouble() < AutoFightRules.RewardShare;
+            await _quests!.RecordAsync(day.Instance, day.UserId, new QuestDeed
+            {
+                RegionId = regionId,
+                ClearedSiteId = counts && site != null && site.IsFightable ? site.SiteId : null,
+                AmbushWon = counts && report.Ambush,
+                Kills = new Dictionary<string, int>(_quests.EstimatedKills(region.Biome,
+                    site?.Tier ?? AmbushRules.SkirmishTier, site?.Type, AutoFightRules.RewardShare))
+            });
+        }
     }
 
     /// <summary>The level of a region's mobs (<see cref="AutoFightRules.MobLevel"/>).</summary>
