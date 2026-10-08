@@ -803,7 +803,7 @@ public class PartyService
     {
         // A starter nobody named is called what the client calls it, so a refusal names a person.
         var character = save?.Characters?.FirstOrDefault(c => c?.Id == id);
-        return MuggaLuggaTD.Shared.World.Naming.ForCharacter(character?.CharacterName, character?.LinkName, id) ?? id;
+        return MuggaLuggaTD.Shared.World.Naming.ForCharacter(character?.CharacterName, character?.LinkName, id, character?.TypeName) ?? id;
     }
 
     /// <summary>
