@@ -62,7 +62,9 @@ public record AmbushFightResponse(
 public record AmbushClaimRequest(
     [Required] Guid RunId,
     bool Won,
-    [Required] string SharedContractVersion
+    [Required] string SharedContractVersion,
+    // Enemies slain by people, for Slay quests (QuestRules.ClampKills).
+    Dictionary<string, int>? Kills = null
 );
 
 /// <summary>What fighting an ambush came to. A loss pays nothing and turns the company back.</summary>

@@ -32,7 +32,9 @@ public record PveBeginResponse(Guid RunId);
 /// </summary>
 public record PveClaimRequest(
     [Required] Guid RunId,
-    [Required] string SharedContractVersion
+    [Required] string SharedContractVersion,
+    // Enemies slain by people ("Goblin": 9), for Slay quests. Clamped by the server (QuestRules.ClampKills).
+    Dictionary<string, int>? Kills = null
 );
 
 /// <summary>

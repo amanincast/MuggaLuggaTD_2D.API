@@ -72,6 +72,9 @@ public class WorldPveService
     /// <summary>A clear resets the refresh price at the Hiring Hall; optional so tests can build this without it.</summary>
     private readonly HiringService? _hiring;
 
+    /// <summary>Counts the clear and the kills toward the player's quests. Optional so tests can leave it out.</summary>
+    private readonly QuestService? _quests;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -81,8 +84,10 @@ public class WorldPveService
         ILogger<WorldPveService> logger,
         ItemLedgerService items,
         FirstStepsService? firstSteps = null,
-        HiringService? hiring = null)
+        HiringService? hiring = null,
+        QuestService? quests = null)
     {
+        _quests = quests;
         _hiring = hiring;
         _firstSteps = firstSteps;
         _items = items;
@@ -362,6 +367,18 @@ public class WorldPveService
 
             // The same sites count for First Steps' "clear a dungeon" (a dungeon or a portal).
             if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
+        }
+
+        // Quests: the clear of a fightable site, and the kills the client reports, held to the fight.
+        if (_quests != null)
+        {
+            await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
+            {
+                RegionId = resolved.Region.RegionId,
+                ClearedSiteId = resolved.Site.IsFightable ? run.LocationId : null,
+                Kills = new Dictionary<string, int>(_quests.ClampKills(
+                    request.Kills, resolved.Region.Biome, resolved.Site.Tier, resolved.Site.Type))
+            });
         }
 
         _logger.LogInformation(

@@ -129,6 +129,23 @@ namespace MuggaLuggaTD.Shared.Gameplay
         }
 
         /// <summary>
+        /// How many enemies a run at this tier puts in front of the party: every wave's count, plus the
+        /// boss from the tier that has one. It is the plan <see cref="Calculate"/> prices, so a kill tally
+        /// a client reports can be held to it (<see cref="QuestRules.ClampKills"/>).
+        /// </summary>
+        public static int PlannedEnemies(int locationTier, RunTuning tuning, LocationType? site = null)
+        {
+            if (tuning == null) return 0;
+            bool open = site.HasValue && WavePlan.IsWaveArena(site.Value);
+            int waves = open ? WavePlan.Waves(tuning, locationTier) : Math.Max(1, tuning.GetWavesRequiredForTier(locationTier));
+            int total = 0;
+            for (int wave = 0; wave < waves; wave++)
+                total += open ? WavePlan.EnemiesInWave(tuning, locationTier, wave + 1) : Math.Max(1, tuning.EnemiesRequiredPerWave);
+            if (BossRules.HasBoss(tuning, locationTier)) total += 1;
+            return total;
+        }
+
+        /// <summary>
         /// The enemy the reward is priced from. Via <see cref="EnemyStatScaling"/> so this is the same
         /// health the client gives that enemy - the two used to differ by one level of scaling, and the
         /// payout was 7-15% light as a result.

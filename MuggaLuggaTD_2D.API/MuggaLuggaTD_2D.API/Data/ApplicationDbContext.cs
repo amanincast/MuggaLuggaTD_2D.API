@@ -33,6 +33,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TavernLure> TavernLures => Set<TavernLure>();
     public DbSet<TavernState> TavernStates => Set<TavernState>();
     public DbSet<FirstStepsProgress> FirstStepsProgress => Set<FirstStepsProgress>();
+    public DbSet<QuestBoardState> QuestBoardStates => Set<QuestBoardState>();
+    public DbSet<PlayerQuest> PlayerQuests => Set<PlayerQuest>();
     public DbSet<HiringCandidate> HiringCandidates => Set<HiringCandidate>();
     public DbSet<HiredWorker> HiredWorkers => Set<HiredWorker>();
     public DbSet<HiringState> HiringStates => Set<HiringState>();
@@ -318,6 +320,16 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(e => new { e.State, e.CompletesAt });
             entity.HasIndex(e => new { e.GameInstanceId, e.RegionId });
+        });
+
+        // Quests: one board per player per realm, and one row per offer taken (taken twice would pay twice)
+        builder.Entity<QuestBoardState>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();
+        });
+        builder.Entity<PlayerQuest>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.OfferId }).IsUnique();
         });
 
         // Configure FirstStepsProgress (one row per player per realm: a second row would be a second chest)

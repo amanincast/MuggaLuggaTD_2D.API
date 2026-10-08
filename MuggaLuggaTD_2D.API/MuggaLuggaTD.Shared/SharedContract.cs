@@ -217,6 +217,9 @@ namespace MuggaLuggaTD.Shared
         // 1.47.0 - The season's end (season-end.md). SeasonEndRules: a finish earns a chest whose rarity follows
         //   the season's average points an hour, and the factions score their land at the players' rates.
         //   FirstStepsRules.RollPiece rolls a chest piece of any rarity.
-        public const string Version = "1.47.0";
+        // 1.48.0 - Quests (quests.md). QuestRules: village elders and the Hall offer a seeded board that turns over
+        //   hourly; a PvE or ambush claim carries a kill tally by people, clamped to the run's plan
+        //   (RunRewardCalculator.PlannedEnemies); a finished quest pays a chest of a weighted tier.
+        public const string Version = "1.48.0";
     }
 }

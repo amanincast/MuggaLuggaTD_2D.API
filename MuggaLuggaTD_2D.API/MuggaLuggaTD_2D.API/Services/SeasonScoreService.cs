@@ -449,6 +449,9 @@ public class SeasonScoreService
         // A new map is a new world, so everyone walks its First Steps (and earns its chest) again.
         await FirstStepsService.ResetRealmAsync(_context, instance.Id);
 
+        // Quests name the old map's sites and regions, so they go with it.
+        await QuestService.ResetRealmAsync(_context, instance.Id);
+
         // Workers, the board and the goods go with the map (Mike, 2026-10-01): hire again.
         await HiringService.ResetRealmAsync(_context, instance.Id);
         await FortifyService.ResetRealmAsync(_context, instance.Id);
