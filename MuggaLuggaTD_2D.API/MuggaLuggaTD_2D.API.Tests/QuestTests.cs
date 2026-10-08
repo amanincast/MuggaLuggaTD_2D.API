@@ -139,6 +139,40 @@ public class QuestTests : IDisposable
             Assert.InRange(kinds.GetValueOrDefault(kind) / (double)total, 0.2, 0.5);
     }
 
+    [Fact]
+    public void WanderingGiversOfferBesideTheVillages_EachAskingAfterItsCalling()
+    {
+        var board = BoardOf();
+        var npcs = board.Where(o => QuestRules.IsNpcGiver(o.GiverId)).ToList();
+
+        Assert.Equal(QuestRules.NpcOffers, npcs.Count);
+        Assert.All(npcs, o => Assert.Equal(SiteSpec.RegionIdOf(o.GiverId), o.RegionId));
+        Assert.All(npcs, o => Assert.Contains(o.RegionId, new[] { "r0", "r1" }));
+        Assert.All(board.Where(o => !QuestRules.IsNpcGiver(o.GiverId)), o => Assert.Null(o.Calling));
+
+        var asks = new Dictionary<string, QuestKind>
+        {
+            [QuestRules.Hunter] = QuestKind.Slay, [QuestRules.Pilgrim] = QuestKind.Clear,
+            [QuestRules.Pedlar] = QuestKind.Gather, [QuestRules.Scout] = QuestKind.Ambush
+        };
+        var callings = new HashSet<string>();
+        for (long hour = 0; hour < 100; hour++)
+            foreach (var o in BoardOf(hour: hour).Where(o => QuestRules.IsNpcGiver(o.GiverId)))
+            {
+                Assert.Equal(asks[o.Calling], o.Kind);
+                callings.Add(o.Calling);
+            }
+        Assert.Equal(QuestRules.Callings.Count, callings.Count);
+    }
+
+    [Fact]
+    public void AScoutsAmbushCountsOnlyOnTheRoadsOfItsRegion()
+    {
+        var scout = new QuestOffer { Kind = QuestKind.Ambush, RegionId = "r1", Count = 1, Calling = QuestRules.Scout };
+        Assert.Equal(0, QuestRules.Advance(scout, 0, new QuestDeed { RegionId = "r0", AmbushWon = true }));
+        Assert.Equal(1, QuestRules.Advance(scout, 0, new QuestDeed { RegionId = "r1", AmbushWon = true }));
+    }
+
     // -----------------------------------------------------------------
     // Deeds, kills and the chest
     // -----------------------------------------------------------------

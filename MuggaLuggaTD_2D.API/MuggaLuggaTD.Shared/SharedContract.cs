@@ -220,6 +220,8 @@ namespace MuggaLuggaTD.Shared
         // 1.48.0 - Quests (quests.md). QuestRules: village elders and the Hall offer a seeded board that turns over
         //   hourly; a PvE or ambush claim carries a kill tally by people, clamped to the run's plan
         //   (RunRewardCalculator.PlannedEnemies); a finished quest pays a chest of a weighted tier.
-        public const string Version = "1.48.0";
+        // 1.49.0 - Quest-givers in the regions (quests.md §13). QuestRules: up to 3 wandering givers (a hunter, pilgrim,
+        //   pedlar or scout, "r12:npc1") offer beside the villages; the calling shapes the ask. The board changes.
+        public const string Version = "1.49.0";
     }
 }
