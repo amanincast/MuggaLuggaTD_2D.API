@@ -129,6 +129,16 @@ public class QuestTests : IDisposable
         Assert.Contains(QuestKind.Gather, kinds);
     }
 
+    [Fact]
+    public void AVillagesAskAreMixed_NotAllOfOneKind()
+    {
+        var kinds = Enumerable.Range(0, 300).SelectMany(h => BoardOf(hour: h)).Where(o => o.GiverId != QuestRules.HallGiver)
+            .GroupBy(o => o.Kind).ToDictionary(g => g.Key, g => g.Count());
+        int total = kinds.Values.Sum();
+        foreach (var kind in new[] { QuestKind.Slay, QuestKind.Clear, QuestKind.Gather })
+            Assert.InRange(kinds.GetValueOrDefault(kind) / (double)total, 0.2, 0.5);
+    }
+
     // -----------------------------------------------------------------
     // Deeds, kills and the chest
     // -----------------------------------------------------------------
