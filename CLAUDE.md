@@ -148,7 +148,9 @@ faction per realm, and `FactionRaid` rows for what they do.
 ## Quests (`QuestService`, `QuestController`; `docs/design/quests.md` in the Unity repo)
 
 - **The board is never stored.** `QuestRules.Board(realm, user, hour, set, world, peoples, tuning)` works it
-  out: up to 4 village offers (villages, `NeutralHome`, in lit regions not held by a rival) and 2 Hall offers.
+  out: up to 4 village offers (villages, `NeutralHome`, in lit regions not held by a rival), up to 3 wandering givers
+  (`r12:npc0`/`npc1`, 2 slots a region, each with a calling: Hunter→Slay, Pilgrim→Clear, Pedlar→Gather, Scout→an ambush
+  in that region; `QuestOffer.Calling`, 1.49.0) and 2 Hall offers.
   Each village is rolled on its own seed, so new land in sight can displace an offer but never rewrite one.
 - **What is stored:** `QuestBoardState` (per player per realm) holds the set number and, for the current hour,
   the offers taken and the givers seen (the client's gold "?"). A new hour empties both lists. `PlayerQuest`

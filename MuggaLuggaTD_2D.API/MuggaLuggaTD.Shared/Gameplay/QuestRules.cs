@@ -34,8 +34,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>"{hour}.{set}.{giver}", unique per player: the hour and set it was offered in, and who offers it.</summary>
         public string Id { get; set; }
 
-        /// <summary>The village's site id, or <see cref="QuestRules.HallGiver"/>.</summary>
+        /// <summary>
+        /// The village's site id, a wandering quest-giver's id ("r12:npc1", <see cref="QuestRules.NpcGiverId"/>), or
+        /// <see cref="QuestRules.HallGiver"/>.
+        /// </summary>
         public string GiverId { get; set; }
+
+        /// <summary>A wandering giver's calling (<see cref="QuestRules.Callings"/>): what they look like and ask. Null for a village or the Hall.</summary>
+        public string Calling { get; set; }
 
         /// <summary>The region the deed must be done in; null for a Hall quest, which counts anywhere.</summary>
         public string RegionId { get; set; }
@@ -101,6 +107,31 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>How many quests the Hall's board offers at once. <i>(tune)</i></summary>
         public const int HallOffers = 2;
 
+        /// <summary>
+        /// How many wandering quest-givers offer a quest at once (Mike, 2026-10-08: NPCs in the regions as well as
+        /// villages, on top of them). A giver stands in the region only while it has an offer or a quest of it is
+        /// in hand. <i>(tune)</i>
+        /// </summary>
+        public const int NpcOffers = 3;
+
+        /// <summary>How many wandering givers a region can have at once.</summary>
+        public const int NpcSlotsPerRegion = 2;
+
+        public const string Hunter = "Hunter";
+        public const string Pilgrim = "Pilgrim";
+        public const string Pedlar = "Pedlar";
+        public const string Scout = "Scout";
+
+        /// <summary>A wandering giver's calling shapes the ask: a hunter wants a people slain, a pilgrim sites cleared, a pedlar goods, a scout an ambush fought off.</summary>
+        public static readonly IReadOnlyList<string> Callings = new[] { Hunter, Pilgrim, Pedlar, Scout };
+
+        /// <summary>A wandering giver's id: its region and slot ("r12:npc1"), so <see cref="SiteSpec.RegionIdOf"/> reads its region.</summary>
+        public static string NpcGiverId(string regionId, int slot) => $"{regionId}:npc{slot}";
+
+        /// <summary>Whether a giver id is a wandering giver's.</summary>
+        public static bool IsNpcGiver(string giverId) =>
+            giverId != null && giverId.IndexOf(":npc", StringComparison.Ordinal) > 0;
+
         /// <summary>How many quests a player may have taken and not yet handed in. <i>(tune)</i></summary>
         public const int MaxActive = 3;
 
@@ -149,6 +180,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             ulong seed = Naming.Hash($"quests|{realmId}|{userId}|{hour}|{set}");
 
             var givers = new List<(ulong Score, WorldRegionData Region, RegionLayout Layout, SiteSpec Village)>();
+            var wanderers = new List<(ulong Score, WorldRegionData Region, RegionLayout Layout, string Id)>();
             var levels = new List<int>();
             foreach (var region in all.Where(r => lit.Contains(r.RegionId)).OrderBy(r => r.RegionId, StringComparer.Ordinal))
             {
@@ -159,6 +191,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 {
                     var scorer = DeterministicRandom.ForSubject(seed, Naming.Hash(site.SiteId));
                     givers.Add((scorer.NextUInt64(), region, layout, site));
+                }
+                for (int slot = 0; slot < NpcSlotsPerRegion; slot++)
+                {
+                    string npc = NpcGiverId(region.RegionId, slot);
+                    var scorer = DeterministicRandom.ForSubject(seed, Naming.Hash(npc));
+                    wanderers.Add((scorer.NextUInt64(), region, layout, npc));
                 }
             }
 
@@ -175,6 +213,19 @@ namespace MuggaLuggaTD.Shared.Gameplay
             {
                 var random = DeterministicRandom.ForSubject(seed, Naming.Hash(g.Village.SiteId) + 1);
                 offers.Add(VillageOffer(ref random, $"{hour}.{set}.{g.Village.SiteId}", g.Region, g.Layout, g.Village, peoples, tuning));
+            }
+
+            // Wanderers the same way: the highest scores, one to a region first.
+            var walking = new List<(ulong Score, WorldRegionData Region, RegionLayout Layout, string Id)>();
+            var byScore = wanderers.OrderByDescending(w => w.Score).ToList();
+            foreach (var w in byScore)
+                if (walking.Count < NpcOffers && walking.All(c => c.Region.RegionId != w.Region.RegionId)) walking.Add(w);
+            foreach (var w in byScore)
+                if (walking.Count < NpcOffers && !walking.Contains(w)) walking.Add(w);
+            foreach (var w in walking)
+            {
+                var random = DeterministicRandom.ForSubject(seed, Naming.Hash(w.Id) + 1);
+                offers.Add(NpcOffer(ref random, $"{hour}.{set}.{w.Id}", w.Region, w.Layout, w.Id, peoples, tuning));
             }
 
             int hallLevel = levels.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(levels.Average()));
@@ -212,16 +263,56 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 fightable.Count > 0 ? 30 : 0,
                 35
             };
-            switch (random.NextWeighted(weights))
+            var kind = new[] { QuestKind.Slay, QuestKind.Clear, QuestKind.Gather }[random.NextWeighted(weights)];
+            Ask(ref random, offer, kind, region, tier, folk, fightable, trades, tuning);
+            Reward(ref random, offer, tier, tuning);
+            return offer;
+        }
+
+        /// <summary>
+        /// A wandering giver's offer: its calling first (hunter 30, pilgrim 25, pedlar 25, scout 20, less what the
+        /// region cannot offer), and the calling decides the ask.
+        /// </summary>
+        private static QuestOffer NpcOffer(ref DeterministicRandom random, string id, WorldRegionData region,
+            RegionLayout layout, string giverId, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples, RunTuning tuning)
+        {
+            int level = AutoFightRules.MobLevel(layout.Sites);
+            int tier = Math.Max(1, region.Tier);
+            var fightable = layout.Sites.Where(s => s.IsFightable).ToList();
+            var folk = PeoplesOf(region.Biome, peoples);
+            var trades = layout.Sites.Where(s => s.Type == LocationType.ResourceNode)
+                .Select(s => ResourceNodeRules.GoodOf(ResourceNodeRules.TradeOf(s.SiteId, region.Biome)))
+                .Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
+
+            int[] weights =
             {
-                case 0:
+                folk.Count > 0 && fightable.Count > 0 ? 30 : 0,
+                fightable.Count > 0 ? 25 : 0,
+                25,
+                20
+            };
+            int calling = random.NextWeighted(weights);
+            var offer = new QuestOffer { Id = id, GiverId = giverId, RegionId = region.RegionId, Level = level, Calling = Callings[calling] };
+            var kind = new[] { QuestKind.Slay, QuestKind.Clear, QuestKind.Gather, QuestKind.Ambush }[calling];
+            Ask(ref random, offer, kind, region, tier, folk, fightable, trades, tuning);
+            Reward(ref random, offer, tier, tuning);
+            return offer;
+        }
+
+        /// <summary>What a regional giver asks, by kind: sized to the region.</summary>
+        private static void Ask(ref DeterministicRandom random, QuestOffer offer, QuestKind kind, WorldRegionData region, int tier,
+            IReadOnlyList<string> folk, List<SiteSpec> fightable, List<string> trades, RunTuning tuning)
+        {
+            switch (kind)
+            {
+                case QuestKind.Slay:
                     offer.Kind = QuestKind.Slay;
                     offer.Target = folk[random.Next(folk.Count)];
                     // About one and a half runs' worth of that people, shared among the region's peoples.
                     int planned = RunRewardCalculator.PlannedEnemies(tier, tuning, LocationType.Dungeon);
                     offer.Count = Math.Max(5, RoundTo5(planned * 1.5 / folk.Count));
                     break;
-                case 1:
+                case QuestKind.Clear:
                     offer.Kind = QuestKind.Clear;
                     if (fightable.Count == 1 || random.Next(2) == 0)
                     {
@@ -233,14 +324,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
                         offer.Count = 2;
                     }
                     break;
+                case QuestKind.Ambush:
+                    // A scout's: the roads through this region.
+                    offer.Kind = QuestKind.Ambush;
+                    offer.Count = 1;
+                    break;
                 default:
                     offer.Kind = QuestKind.Gather;
                     GatherTarget(ref random, offer, region.Biome, tier, trades);
                     break;
             }
-
-            Reward(ref random, offer, tier, tuning);
-            return offer;
         }
 
         private static QuestOffer HallOffer(ref DeterministicRandom random, string id, QuestKind kind, int level, RunTuning tuning)
