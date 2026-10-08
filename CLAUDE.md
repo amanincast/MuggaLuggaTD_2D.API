@@ -143,6 +143,27 @@ faction per realm, and `FactionRaid` rows for what they do.
   "Siege", "Expand" or "Fortify"; a raid otherwise), `CloseMuster`, and
   `SimulateHours`, which replays the factions' turns through those hours. It returns 404 unless the API
   runs in **Development**.
+- **They race the players on the scoreboard** (season end, shared 1.47.0): see the next section.
+
+## The season's end (`docs/design/season-end.md`, Unity repo)
+
+- **Factions score their land** at the players' rates (`SeasonEndRules.RateForFaction`), nothing for deeds. One
+  `FactionSeasonScore` row per faction per season, settled in `SeasonScoreService.SettleAllAsync` beside the
+  players. They appear in the standings and the final table as `faction:Grimjaw` with the faction's name.
+- **A faction moving land settles the board then and there:** `FactionService.ActAsync` and
+  `SettleDueSiegesAsync` call `SettleAllAsync` after a world change. Before this, a player away from the game
+  kept earning points and gold for a region a faction had taken until they next opened the world.
+- **The close ranks players and factions in one table.** A faction first means nobody is crowned. Each
+  player's `SeasonResult` gets `ChestRarity` from the season's average points an hour
+  (`SeasonEndRules.ChestFor`, bands calibrated by `FactionBalanceSimulation`); none for a player who scored nothing.
+- **Crowns are derived**, never stored: a player's rank-1 results in tables where somebody else was ranked too.
+  `Crowns` rides on standings and result entries.
+- **Endpoints** (`SeasonController`): `GET season/ended` (the latest unseen closed season, 204 if none; it
+  also closes an expired season), `GET season/ended/{n}`, `POST season/results/{n}/seen`,
+  `POST season/results/{n}/chest` (rolls with `FirstStepsRules.RollPiece` and grants through the item ledger,
+  marked opened first), and `POST season/debug/bell` (Development only: the season is made to have run its
+  length, then closed as a real bell closes it).
+- The `SeasonEnd` migration marks every earlier result as seen, so old seasons do not pop up as pages.
 
 ## Companies (phase 1 of `docs/design/parties-and-travel.md`, Unity repo)
 

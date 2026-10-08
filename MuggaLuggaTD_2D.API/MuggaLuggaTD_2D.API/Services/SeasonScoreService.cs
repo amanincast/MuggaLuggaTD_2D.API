@@ -51,6 +51,14 @@ public class SeasonScoreService
     /// <summary>Output from workers settles with gold; optional so tests can build this without it.</summary>
     private readonly HiringService? _hiring;
 
+    /// <summary>Faction names and the chest's item pool; optional so tests can build this without it.</summary>
+    private readonly IGameContentProvider? _content;
+
+    /// <summary>Grants the season chest's piece; optional so tests can build this without it.</summary>
+    private readonly ItemLedgerService? _items;
+
+    private static readonly Random Dice = new();
+
     public SeasonScoreService(
         ApplicationDbContext context,
         GoldService gold,
@@ -58,9 +66,13 @@ public class SeasonScoreService
         IHubContext<GameHub> hubContext,
         ISessionLog sessionLog,
         ILogger<SeasonScoreService> logger,
-        HiringService? hiring = null)
+        HiringService? hiring = null,
+        IGameContentProvider? content = null,
+        ItemLedgerService? items = null)
     {
         _hiring = hiring;
+        _content = content;
+        _items = items;
         _context = context;
         _gold = gold;
         _worlds = worlds;
@@ -99,6 +111,14 @@ public class SeasonScoreService
         {
             Settle(score, until);
             score.PointsPerHour = SeasonScoreRules.RateForHoldings(score.UserId, regions);
+        }
+
+        // The factions score their land beside the players, settled to the same instant, so a region
+        // changing hands between them moves both scores at once (season-end.md §2).
+        foreach (var faction in await FactionScoresForAsync(instance, regions, until))
+        {
+            SettleFaction(faction, until);
+            faction.PointsPerHour = SeasonEndRules.RateForFaction(faction.Faction, regions);
         }
 
         await _context.SaveChangesAsync();
@@ -174,6 +194,7 @@ public class SeasonScoreService
 
         var members = MembersOf(instance, regions);
         var names = await DisplayNamesAsync(members);
+        var crowns = await CrownsAsync(members);
 
         var rows = new List<StandingRow>();
 
@@ -193,6 +214,22 @@ public class SeasonScoreService
                 score.RaidingPoints,
                 SeasonScoreRules.RateForHoldings(userId, regions),
                 regions.Count(r => r.IsOwnedByPlayer(userId))));
+        }
+
+        // The factions race too, on their land alone.
+        var factionScores = await _context.FactionSeasonScores.AsNoTracking()
+            .Where(f => f.GameInstanceId == gameInstanceId && f.SeasonNumber == instance.SeasonNumber)
+            .ToListAsync();
+        foreach (var faction in FactionStrengthRules.All)
+        {
+            var score = factionScores.FirstOrDefault(f => f.Faction == faction);
+            double total = score == null
+                ? 0
+                : score.SettledPoints + SeasonScoreRules.Accrued(score.PointsPerHour, score.LastSettledAt, until);
+            string id = SeasonEndRules.FactionScoreId(faction);
+            names[id] = FactionName(faction);
+            rows.Add(new StandingRow(id, total, total, 0, 0,
+                SeasonEndRules.RateForFaction(faction, regions), FactionStrengthRules.RegionsHeld(faction, regions)));
         }
 
         var ordered = rows.OrderByDescending(r => r.Total).ToList();
@@ -216,7 +253,8 @@ public class SeasonScoreService
                 Math.Round(row.Clearing, 1),
                 Math.Round(row.Raiding, 1),
                 Math.Round(row.Rate, 1),
-                row.RegionsHeld));
+                row.RegionsHeld,
+                crowns.TryGetValue(row.UserId, out var won) ? won : 0));
         }
 
         return new SeasonStandingsResponse(
@@ -254,7 +292,24 @@ public class SeasonScoreService
             .OrderBy(r => r.Rank)
             .ToListAsync();
 
-        return results.Select(ToEntry).ToList();
+        var crowns = await CrownsAsync(results.Select(r => r.UserId).ToList());
+        var table = results.Select(r => ToEntry(r) with { Crowns = crowns.TryGetValue(r.UserId, out var won) ? won : 0 }).ToList();
+
+        // The factions finished somewhere too. A season closed before they were scored has none.
+        var factions = await _context.FactionSeasonScores.AsNoTracking()
+            .Where(f => f.GameInstanceId == gameInstanceId && f.SeasonNumber == seasonNumber && f.Rank != null)
+            .ToListAsync();
+        var first = results.FirstOrDefault();
+        foreach (var faction in factions)
+        {
+            double points = Math.Round(faction.SettledPoints, 1);
+            table.Add(new SeasonResultEntry(
+                seasonNumber, faction.Rank!.Value, SeasonEndRules.FactionScoreId(faction.Faction), FactionName(faction.Faction),
+                points, points, 0, 0, faction.RegionsHeld,
+                first?.SeasonStartedAt ?? default, first?.SeasonEndedAt ?? default, null));
+        }
+
+        return table.OrderBy(e => e.Rank).ToList();
     }
 
     // -----------------------------------------------------------------
@@ -315,16 +370,38 @@ public class SeasonScoreService
 
         if (!alreadyRecorded)
         {
-            var ordered = scores.OrderByDescending(s => s.SettledPoints).ToList();
+            // Players and factions are ranked in one table (season-end.md §2): a faction that out-held
+            // everyone takes the realm, and nobody is crowned that season.
+            var factions = await _context.FactionSeasonScores
+                .Where(f => f.GameInstanceId == instance.Id && f.SeasonNumber == closing)
+                .ToListAsync();
+            var table = scores.Select(s => (Points: s.SettledPoints, Player: s, Faction: (FactionSeasonScore?)null))
+                .Concat(factions.Select(f => (Points: f.SettledPoints, Player: (SeasonScore?)null, Faction: (FactionSeasonScore?)f)))
+                .OrderByDescending(e => e.Points)
+                .ToList();
+            var ranks = new int[table.Count];
+            for (int i = 0; i < table.Count; i++)
+            {
+                ranks[i] = i > 0 && Math.Abs(table[i - 1].Points - table[i].Points) < 0.0001 ? ranks[i - 1] : i + 1;
+            }
+
             var written = new List<SeasonResult>();
 
-            for (int i = 0; i < ordered.Count; i++)
+            for (int i = 0; i < table.Count; i++)
             {
-                var score = ordered[i];
-                int rank = i > 0 && Math.Abs(ordered[i - 1].SettledPoints - score.SettledPoints) < 0.0001
-                    ? written[i - 1].Rank
-                    : i + 1;
+                int rank = ranks[i];
 
+                if (table[i].Faction is { } faction)
+                {
+                    faction.Rank = rank;
+                    faction.RegionsHeld = FactionStrengthRules.RegionsHeld(faction.Faction, regions);
+                    _sessionLog.Log("SEASON-END",
+                        $"instance={instance.Id} season={closing} rank={rank} faction={faction.Faction} " +
+                        $"points={faction.SettledPoints:F0} regions={faction.RegionsHeld}");
+                    continue;
+                }
+
+                var score = table[i].Player!;
                 var result = new SeasonResult
                 {
                     GameInstanceId = instance.Id,
@@ -337,7 +414,8 @@ public class SeasonScoreService
                     RaidingPoints = Math.Round(score.RaidingPoints, 1),
                     RegionsHeld = regions.Count(r => r.IsOwnedByPlayer(score.UserId)),
                     SeasonStartedAt = startedAt,
-                    SeasonEndedAt = endedAt
+                    SeasonEndedAt = endedAt,
+                    ChestRarity = SeasonEndRules.ChestFor(score.SettledPoints, startedAt, endedAt)
                 };
 
                 written.Add(result);
@@ -347,7 +425,7 @@ public class SeasonScoreService
                     $"instance={instance.Id} season={closing} rank={rank} user={score.UserId} " +
                     $"points={result.TotalPoints:F0} (hold={result.HoldingPoints:F0} " +
                     $"clear={result.ClearingPoints:F0} raid={result.RaidingPoints:F0}) " +
-                    $"regions={result.RegionsHeld}");
+                    $"regions={result.RegionsHeld} chest={result.ChestRarity?.ToString() ?? "none"}");
             }
 
             _logger.LogInformation("Season {Season} of instance {Instance} closed with {Count} standing(s).",
@@ -405,8 +483,178 @@ public class SeasonScoreService
     }
 
     // -----------------------------------------------------------------
+    // The season's end page (season-end.md §5)
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// A closed season as its end page shows it, for <paramref name="userId"/>. With
+    /// <paramref name="unseenOnly"/>, only the latest one they have not seen yet (the page shown on their
+    /// return); otherwise the one numbered <paramref name="seasonNumber"/>, or their latest. Null: nothing
+    /// to show.
+    /// </summary>
+    public async Task<SeasonEndedResponse?> EndedForAsync(Guid gameInstanceId, string userId, bool unseenOnly, int? seasonNumber = null)
+    {
+        var query = _context.SeasonResults.AsNoTracking()
+            .Where(r => r.GameInstanceId == gameInstanceId && r.UserId == userId);
+        if (unseenOnly) query = query.Where(r => r.SeenAt == null);
+        if (seasonNumber != null) query = query.Where(r => r.SeasonNumber == seasonNumber);
+
+        var mine = await query.OrderByDescending(r => r.SeasonNumber).FirstOrDefaultAsync();
+        if (mine == null) return null;
+
+        var table = await ResultsAsync(gameInstanceId, mine.SeasonNumber);
+        return new SeasonEndedResponse(
+            gameInstanceId,
+            mine.SeasonNumber,
+            mine.SeasonStartedAt,
+            mine.SeasonEndedAt,
+            table,
+            table.FirstOrDefault(e => e.UserId == userId),
+            mine.ChestRarity?.ToString(),
+            mine.ChestOpenedAt != null,
+            mine.ChestItemName,
+            mine.SeenAt != null);
+    }
+
+    /// <summary>Records that the player has seen a season's end page, so it is not shown on return again.</summary>
+    public async Task<bool> MarkSeenAsync(Guid gameInstanceId, string userId, int seasonNumber)
+    {
+        var mine = await _context.SeasonResults.FirstOrDefaultAsync(r =>
+            r.GameInstanceId == gameInstanceId && r.UserId == userId && r.SeasonNumber == seasonNumber);
+        if (mine == null) return false;
+
+        if (mine.SeenAt == null)
+        {
+            mine.SeenAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
+        return true;
+    }
+
+    public enum ChestError { None, NoSuchSeason, NoChest, AlreadyOpened, NothingToRoll }
+
+    /// <summary>
+    /// Opens a season's chest: one piece of its rarity, rolled and granted through the item ledger. Marked
+    /// opened before the grant, so a second request cannot open it again meanwhile.
+    /// </summary>
+    public async Task<(ChestError Error, SeasonChestResponse? Chest)> OpenChestAsync(Guid gameInstanceId, string userId, int seasonNumber)
+    {
+        var mine = await _context.SeasonResults.FirstOrDefaultAsync(r =>
+            r.GameInstanceId == gameInstanceId && r.UserId == userId && r.SeasonNumber == seasonNumber);
+        if (mine == null) return (ChestError.NoSuchSeason, null);
+        if (mine.ChestRarity == null) return (ChestError.NoChest, null);
+        if (mine.ChestOpenedAt != null) return (ChestError.AlreadyOpened, null);
+        if (_content == null || _items == null) return (ChestError.NothingToRoll, null);
+
+        var rarity = mine.ChestRarity.Value;
+        var item = FirstStepsRules.RollPiece(_content.DroppableItems.ToList(), Dice, SeasonEndRules.ChestLevel, rarity);
+        if (item == null) return (ChestError.NothingToRoll, null);
+
+        mine.ChestOpenedAt = DateTime.UtcNow;
+        mine.ChestItemName = item.ItemName;
+        mine.SeenAt ??= mine.ChestOpenedAt;
+        await _context.SaveChangesAsync();
+
+        await _items.GrantAsync(gameInstanceId, userId, new[] { item }, $"season {seasonNumber} chest");
+        _sessionLog.Log("SEASON-CHEST",
+            $"instance={gameInstanceId} season={seasonNumber} user={userId} rarity={rarity} item={item.ItemName}");
+
+        return (ChestError.None, new SeasonChestResponse(seasonNumber, rarity.ToString(), item));
+    }
+
+    /// <summary>
+    /// Debug (Development only): rings the bell now. The season is made to have started its full length
+    /// ago, and then closed exactly as the first request after a real bell closes it.
+    /// </summary>
+    public async Task<bool> DebugRingBellAsync(Guid gameInstanceId)
+    {
+        var instance = await _context.GameInstances.FirstOrDefaultAsync(g => g.Id == gameInstanceId);
+        if (instance == null) return false;
+
+        // Everyone is settled to now first, so the points earned so far are kept rather than clipped by
+        // the earlier bell.
+        await SettleAllAsync(gameInstanceId);
+
+        instance.SeasonStartedAt = DateTime.UtcNow.AddDays(-instance.SeasonLengthDays).AddSeconds(-1);
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("SEASON-DEBUG-BELL", $"instance={gameInstanceId} season={instance.SeasonNumber}");
+        return await EnsureSeasonCurrentAsync(gameInstanceId);
+    }
+
+    // -----------------------------------------------------------------
     // Plumbing
     // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Each faction's running score this season, made if missing. A new row starts earning from now: its
+    /// land was not being counted before.
+    /// </summary>
+    private async Task<List<FactionSeasonScore>> FactionScoresForAsync(
+        GameInstance instance, IReadOnlyCollection<WorldRegionData> regions, DateTime until)
+    {
+        var rows = await _context.FactionSeasonScores
+            .Where(f => f.GameInstanceId == instance.Id && f.SeasonNumber == instance.SeasonNumber)
+            .ToListAsync();
+
+        foreach (var faction in FactionStrengthRules.All)
+        {
+            if (rows.Any(r => r.Faction == faction)) continue;
+
+            var row = new FactionSeasonScore
+            {
+                GameInstanceId = instance.Id,
+                SeasonNumber = instance.SeasonNumber,
+                Faction = faction,
+                LastSettledAt = until
+            };
+            _context.FactionSeasonScores.Add(row);
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static void SettleFaction(FactionSeasonScore score, DateTime until)
+    {
+        if (until <= score.LastSettledAt) return;
+        score.SettledPoints += SeasonScoreRules.Accrued(score.PointsPerHour, score.LastSettledAt, until);
+        score.LastSettledAt = until;
+    }
+
+    /// <summary>A faction's name as the war log gives it: "The Grimjaw".</summary>
+    private string FactionName(FactionId faction) =>
+        _content?.Factions?.FirstOrDefault(f => f.Id == faction)?.Name ?? faction.ToString();
+
+    /// <summary>
+    /// Seasons each player has won, anywhere: the crown beside their name (season-end.md §4). Derived from
+    /// the results, never stored. A first place counts only when someone else was in the table: a lone
+    /// player in a realm scored before the factions were is not a victor.
+    /// </summary>
+    private async Task<Dictionary<string, int>> CrownsAsync(IReadOnlyList<string> userIds)
+    {
+        var crowns = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (userIds.Count == 0) return crowns;
+
+        var firsts = await _context.SeasonResults.AsNoTracking()
+            .Where(r => userIds.Contains(r.UserId) && r.Rank == 1)
+            .Select(r => new { r.UserId, r.GameInstanceId, r.SeasonNumber })
+            .ToListAsync();
+
+        foreach (var first in firsts)
+        {
+            bool contested =
+                await _context.SeasonResults.AnyAsync(r =>
+                    r.GameInstanceId == first.GameInstanceId && r.SeasonNumber == first.SeasonNumber && r.UserId != first.UserId)
+                || await _context.FactionSeasonScores.AnyAsync(f =>
+                    f.GameInstanceId == first.GameInstanceId && f.SeasonNumber == first.SeasonNumber && f.Rank != null);
+            if (!contested) continue;
+
+            crowns[first.UserId] = crowns.TryGetValue(first.UserId, out var n) ? n + 1 : 1;
+        }
+
+        return crowns;
+    }
 
     private static void Settle(SeasonScore score, DateTime until)
     {
