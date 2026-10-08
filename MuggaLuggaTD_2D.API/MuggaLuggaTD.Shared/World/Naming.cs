@@ -409,10 +409,16 @@ namespace MuggaLuggaTD.Shared.World
         /// What to call a character: the name it was given, else one rolled from its id - so the
         /// starting roster, which nobody named, reads as people rather than as "Orc Warrior", and
         /// the same character is called the same thing on every screen and by the server.
+        ///
+        /// <para>A "given" name that is only its type (<paramref name="typeName"/>, "Archer") counts as
+        /// none: the starting roster used to be stamped with it, so every save made before then holds
+        /// heroes called by their class.</para>
         /// </summary>
-        public static string ForCharacter(string givenName, string linkName, string characterId)
+        public static string ForCharacter(string givenName, string linkName, string characterId, string typeName = null)
         {
-            if (!string.IsNullOrWhiteSpace(givenName)) return givenName;
+            bool isOnlyItsType = !string.IsNullOrWhiteSpace(typeName)
+                && string.Equals(givenName?.Trim(), typeName.Trim(), StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(givenName) && !isOnlyItsType) return givenName;
             if (string.IsNullOrEmpty(characterId)) return null;
             return ForHero(linkName, Hash(characterId));
         }

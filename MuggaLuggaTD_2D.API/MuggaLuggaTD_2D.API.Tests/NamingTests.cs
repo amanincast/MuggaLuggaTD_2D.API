@@ -73,6 +73,10 @@ public class NamingTests
         Assert.Equal(Naming.ForCharacter(null, "Ally_Human_Warrior_1", "c1"), Naming.ForCharacter("", "Ally_Human_Warrior_1", "c1"));
         Assert.Contains(' ', Naming.ForCharacter(null, "Ally_Human_Warrior_1", "c1"));
 
+        // A starter stamped with its type ("Archer") was never named: it gets the rolled name.
+        Assert.Equal(Naming.ForCharacter(null, "Ally_Archer", "c2"), Naming.ForCharacter("Archer", "Ally_Archer", "c2", "Archer"));
+        Assert.Equal("Sir Aldric", Naming.ForCharacter("Sir Aldric", "Ally_Archer", "c2", "Archer"));
+
         // Different seeds should mostly give different people.
         var heroes = Enumerable.Range(0, 200).Select(i => Naming.ForHero("Ally_Human_Warrior_1", (ulong)i)).ToList();
         Assert.True(heroes.Distinct().Count() > 150, $"only {heroes.Distinct().Count()} distinct of 200");
