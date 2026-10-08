@@ -222,6 +222,9 @@ namespace MuggaLuggaTD.Shared
         //   (RunRewardCalculator.PlannedEnemies); a finished quest pays a chest of a weighted tier.
         // 1.49.0 - Quest-givers in the regions (quests.md §13). QuestRules: up to 3 wandering givers (a hunter, pilgrim,
         //   pedlar or scout, "r12:npc1") offer beside the villages; the calling shapes the ask. The board changes.
-        public const string Version = "1.49.0";
+        // 1.50.0 - Worker veterancy (Workers spec). WorkerLevelRules: workers gain levels from hours at work (+4% each),
+        //   roll a perk at 3, 6 and 9 weighted by tier, may be promoted a tier at 5 and 10; up to two veterans carry
+        //   into the next season at half their level. The rates and goods gathered change.
+        public const string Version = "1.50.0";
     }
 }

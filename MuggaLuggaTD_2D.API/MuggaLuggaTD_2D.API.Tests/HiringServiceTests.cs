@@ -401,7 +401,7 @@ public class HiringServiceTests : IDisposable
     // -----------------------------------------------------------------
 
     [Fact]
-    public async Task AResetTakesTheWorkersTheBoardAndTheGoods()
+    public async Task AResetTakesTheBoardAndTheGoods_AndKeepsTheVeteransAtTheHall()
     {
         var (_, site, trade) = await WorldAsync();
         await Hiring.ReadBoardAsync(_realm, Player);
@@ -415,7 +415,9 @@ public class HiringServiceTests : IDisposable
         await HiringService.ResetRealmAsync(_db, _realm);
         await _db.SaveChangesAsync();
 
-        Assert.Empty(await _db.HiredWorkers.Where(w => w.GameInstanceId == _realm).ToListAsync());
+        // One worker: a veteran (the Workers spec keeps two), at the Hall on the new map.
+        var kept = Assert.Single(await _db.HiredWorkers.Where(w => w.GameInstanceId == _realm).ToListAsync());
+        Assert.Null(kept.SiteId);
         Assert.Empty(await _db.HiringCandidates.Where(c => c.GameInstanceId == _realm).ToListAsync());
         Assert.Equal(0, await GoodsAsync(trade));
         Assert.Contains(await Wallet.ReadAsync(_realm, Player), m => m.MaterialName == "Minor Fire Essence");

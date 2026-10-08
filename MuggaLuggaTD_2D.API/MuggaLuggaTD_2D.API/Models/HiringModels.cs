@@ -95,8 +95,85 @@ public class HiredWorker
     /// <summary>The fraction of a unit gathered and not yet paid.</summary>
     public double Carry { get; set; }
 
+    // --- Veterancy (Workers spec) ---------------------------------------
+
+    /// <summary>Hours of experience: time assigned to a site, faster with Quick Study or a Mentor beside them.</summary>
+    public double HoursWorked { get; set; }
+
+    /// <summary>Every roll made this season, in order (<see cref="WorkerRollLog"/>). Perks are read from it.</summary>
+    [MaxLength(512)]
+    public string Rolls { get; set; } = string.Empty;
+
+    /// <summary>How many of <see cref="Rolls"/> the player has seen revealed.</summary>
+    public int RollsSeen { get; set; }
+
+    /// <summary>The highest level whose roll has been made, so a level never rolls twice.</summary>
+    public int LevelRolledTo { get; set; } = 1;
+
+    /// <summary>★ KEEP: one of the (at most two) workers who go with the player into the next season.</summary>
+    public bool Keep { get; set; }
+
+    /// <summary>Whole goods this worker has gathered, ever.</summary>
+    public int LifetimeOutput { get; set; }
+
+    /// <summary>Season ends this worker has come through as a veteran.</summary>
+    public int SeasonsServed { get; set; }
+
     [NotMapped]
     public List<WorkerTrait> TraitList => HiringTraits.Parse(Traits);
+
+    [NotMapped]
+    public int Level => WorkerLevelRules.LevelFor(HoursWorked);
+
+    [NotMapped]
+    public List<WorkerRollResult> RollList => WorkerRollLog.Parse(Rolls);
+
+    [NotMapped]
+    public List<WorkerPerk> PerkList => RollList.Where(r => r.Perk.HasValue).Select(r => r.Perk!.Value).Distinct().ToList();
+
+    /// <summary>What their output depends on, at their current level.</summary>
+    public WorkerSheet Sheet() => new()
+    {
+        Tier = Tier,
+        Trade = Trade,
+        SecondTrade = SecondTrade,
+        Traits = TraitList,
+        Perks = PerkList,
+        HomeBiome = HomeBiome,
+        Level = Level
+    };
+}
+
+/// <summary>
+/// A worker's rolls, stored as <c>level:kind:perk:tier:trait:second</c> entries joined by ';' (an
+/// empty field is "none"). Twelve perks and five roll levels keep it far under its 512 characters.
+/// </summary>
+public static class WorkerRollLog
+{
+    public static List<WorkerRollResult> Parse(string? text)
+    {
+        var rolls = new List<WorkerRollResult>();
+        foreach (var entry in (text ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = entry.Split(':');
+            if (f.Length < 6 || !int.TryParse(f[0], out int level) || !short.TryParse(f[1], out short kind)) continue;
+            rolls.Add(new WorkerRollResult
+            {
+                Level = level,
+                Kind = (WorkerRollKind)kind,
+                Perk = short.TryParse(f[2], out var p) ? (WorkerPerk)p : null,
+                NewTier = short.TryParse(f[3], out var t) ? (WorkerTier)t : null,
+                NewTrait = short.TryParse(f[4], out var tr) ? (WorkerTrait)tr : null,
+                NewSecondTrade = short.TryParse(f[5], out var s) ? (ResourceTrade)s : null
+            });
+        }
+        return rolls;
+    }
+
+    public static string Write(IEnumerable<WorkerRollResult> rolls) => string.Join(';', rolls.Select(r => string.Join(':',
+        r.Level, (short)r.Kind, N(r.Perk), N(r.NewTier), N(r.NewTrait), N(r.NewSecondTrade))));
+
+    private static string N<T>(T? value) where T : struct, Enum => value.HasValue ? Convert.ToInt16(value.Value).ToString() : "";
 }
 
 /// <summary>One player's Hiring Hall in one realm, beyond the board: the refresh price and the clock.</summary>
