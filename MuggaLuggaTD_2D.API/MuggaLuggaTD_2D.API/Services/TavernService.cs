@@ -667,6 +667,10 @@ public class TavernService
             var gear = _items == null ? null
                 : FirstStepsRules.RollPiece(_content.DroppableItems.ToList(), Random.Shared, StarterGearLevel, ItemRarityTypes.Common);
             if (gear != null) await _items!.GrantAsync(gameInstanceId, userId, new[] { gear }, StarterGearSource);
+
+            // And the price of one Common recruit, so First Steps' third step (hire) can be done
+            // before the fifth (a clear) brings the first materials (Mike, playtest 2026-10-08).
+            await _wallet.GrantAsync(gameInstanceId, userId, StarterPurse, "starter purse");
             _sessionLog.Log("TAVERN-STARTERS", $"user={userId} instance={gameInstanceId} " +
                 string.Join(" ", starters.Select(s => $"{s.CharacterClass}/{s.SignatureId}/{s.Affinity}/{s.Sheet}")) +
                 $" gear={gear?.ItemName ?? "none"}");
@@ -705,6 +709,9 @@ public class TavernService
         }
         return rolls;
     }
+
+    /// <summary>What a new player's purse holds: one Common recruit's price.</summary>
+    public static IReadOnlyList<MaterialGrant> StarterPurse => TavernRules.HireCost(CharacterRarity.Common);
 
     /// <summary>The starter piece's level: a world's first drop.</summary>
     public const int StarterGearLevel = 1;

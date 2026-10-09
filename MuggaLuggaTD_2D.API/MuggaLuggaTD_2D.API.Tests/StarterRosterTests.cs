@@ -92,6 +92,19 @@ public class StarterRosterTests : IDisposable
     }
 
     [Fact]
+    public async Task ANewPlayer_CanAffordOneCommonHire_Once()
+    {
+        // First Steps asks for a hire third; without this the first materials came only with the fifth step.
+        await Service.ClaimStartersAsync(_realm, Player);
+        await Service.ClaimStartersAsync(_realm, Player);   // asked again before the save: no second purse
+
+        var wallet = new MaterialWalletService(_db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
+        var held = await wallet.ReadAsync(_realm, Player);
+        foreach (var price in TavernRules.HireCost(CharacterRarity.Common))
+            Assert.Equal(price.Quantity, held.Single(m => m.MaterialName == price.MaterialName).Quantity);
+    }
+
+    [Fact]
     public async Task APlayerWithARoster_GetsNoStarters()
     {
         await _db.AddPlayerSaveAsync(_realm, Player, TestSave.ToJson(TestSave.Roster(TestSave.Character("hero-1"))));
