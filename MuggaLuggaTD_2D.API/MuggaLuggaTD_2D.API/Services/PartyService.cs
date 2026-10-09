@@ -57,6 +57,14 @@ public record PartyOutcome(PartyError Error, string? Message = null)
 /// </summary>
 public class PartyService
 {
+    /// <summary>
+    /// One first company per player per realm. Forming it is lazy (the first read of anyone's companies), and
+    /// the Hall opens with several such reads at once (the companies, the letters' catch-up): two arriving
+    /// together each saw none and each formed a Vanguard, the same four in both (playtest 2026-10-08).
+    /// Per-process, like the season's close; a second API instance would need a database-level claim.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> FirstCompanyLocks = new();
+
     private readonly ApplicationDbContext _context;
     private readonly TavernService _tavern;
     private readonly IGameContentProvider _content;
@@ -857,22 +865,45 @@ public class PartyService
     /// </summary>
     private async Task<List<PlayerParty>> EnsureFirstAsync(Guid gameInstanceId, string userId, JsonNode world)
     {
-        var parties = await _context.PlayerParties
+        var parties = await ReadPartiesAsync(gameInstanceId, userId);
+        if (parties.Count > 0) return await SettledAsync(gameInstanceId, parties);
+
+        var gate = FirstCompanyLocks.GetOrAdd($"{gameInstanceId}:{userId}", _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            // Re-read inside the gate: a request that got here first may have formed it while we waited.
+            parties = await ReadPartiesAsync(gameInstanceId, userId);
+            if (parties.Count > 0) return await SettledAsync(gameInstanceId, parties);
+            return new List<PlayerParty> { await FormFirstAsync(gameInstanceId, userId, world) };
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private Task<List<PlayerParty>> ReadPartiesAsync(Guid gameInstanceId, string userId) =>
+        _context.PlayerParties
             .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId)
             .OrderBy(p => p.SortOrder).ThenBy(p => p.CreatedAt)
             .ToListAsync();
-        if (parties.Count > 0)
-        {
-            // Arrival is noticed by the first read after it, like a season's end.
-            var now = DateTime.UtcNow;
-            bool landed = false;
-            var events = new List<RoadEvent>();
-            foreach (var p in parties) landed |= SettleArrival(p, now, events);
-            if (landed) await _context.SaveChangesAsync();
-            await SendLettersAsync(gameInstanceId, events);
-            return parties;
-        }
 
+    private async Task<List<PlayerParty>> SettledAsync(Guid gameInstanceId, List<PlayerParty> parties)
+    {
+        // Arrival is noticed by the first read after it, like a season's end.
+        var now = DateTime.UtcNow;
+        bool landed = false;
+        var events = new List<RoadEvent>();
+        foreach (var p in parties) landed |= SettleArrival(p, now, events);
+        if (landed) await _context.SaveChangesAsync();
+        await SendLettersAsync(gameInstanceId, events);
+        return parties;
+    }
+
+    /// <summary>The first company: the save's active party, less anyone committed elsewhere, at the capital's keep.</summary>
+    private async Task<PlayerParty> FormFirstAsync(Guid gameInstanceId, string userId, JsonNode world)
+    {
         var save = await MarchingArmy.LoadPlayerSaveAsync(_context, _logger, gameInstanceId, userId);
         var owned = save?.Characters?.Where(c => c?.Id != null).Select(c => c.Id).ToHashSet(StringComparer.Ordinal)
                     ?? new HashSet<string>(StringComparer.Ordinal);
@@ -897,7 +928,7 @@ public class PartyService
         _context.PlayerParties.Add(first);
         await _context.SaveChangesAsync();
         _sessionLog.Log("PARTY-FORM", $"user={userId} party={first.Id} first-company members={first.CharacterIdsJson}");
-        return new List<PlayerParty> { first };
+        return first;
     }
 
     /// <summary>Stands a company at the keep of its player's capital, if they have one.</summary>
