@@ -108,6 +108,11 @@ public record HiredCharacterDto(
     CharacterRarity Rarity,
     DateTime HiredAt);
 
+/// <summary>A new player's start: four heroes, one of each class, and one piece of gear to put on.</summary>
+public record TavernStartersResponse(
+    List<HiredCharacterDto> Heroes,
+    StateManagement.Models.ItemSaveData? Gear);
+
 /// <summary>A completed hire: the new character, the board it came from, and what is left in the wallet.</summary>
 public record TavernHireResponse(
     HiredCharacterDto Character,

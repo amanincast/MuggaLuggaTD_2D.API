@@ -484,7 +484,7 @@ public class TavernServiceTests : IDisposable
         // The number the Guild Hall shows and the number that refuses a hire have to be one number.
         // They were two: the gate counted hire records while the room displayed every character.
         var before = await Service.RosterStandingAsync(Realm, Player);
-        Assert.Equal(1, before.Used);
+        Assert.Equal(0, before.Used);   // no save and no starters claimed yet
 
         await FillWalletAsync();
         var board = await Service.ReadBoardAsync(Realm, Player);
@@ -494,15 +494,13 @@ public class TavernServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task AFaceForTheTavernIsNotPartOfTheStartingRoster()
+    public async Task NoTemplateIsPartOfTheStartingRoster()
     {
-        // Most templates are generated faces with no roll of their own. A new player is given only
-        // the ones that ship with a roll, so counting every template would fill the roster with
-        // characters nobody has - forty-odd of them, with the first batch of generated sheets.
+        // Starters are rolled hires now (ClaimStartersAsync). Counting templates would fill the roster
+        // with characters nobody has - forty-odd of them, with the generated sheets.
         var standing = await Service.RosterStandingAsync(Realm, Player);
 
-        Assert.Equal(_content.RecruitSheets.Count(s => s.IsStarter()), standing.Used);
-        Assert.True(standing.Used < _content.RecruitSheets.Count);
+        Assert.Equal(0, standing.Used);
     }
 
     // -----------------------------------------------------------------
