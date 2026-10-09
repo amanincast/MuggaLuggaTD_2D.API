@@ -20,15 +20,32 @@ public class LettersController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly LetterService _letters;
     private readonly WorldSiegeService _sieges;
+    private readonly PartyService _parties;
+    private readonly SeasonScoreService _seasons;
 
-    public LettersController(ApplicationDbContext context, LetterService letters, WorldSiegeService sieges)
+    public LettersController(ApplicationDbContext context, LetterService letters, WorldSiegeService sieges,
+        PartyService parties, SeasonScoreService seasons)
     {
         _context = context;
         _letters = letters;
         _sieges = sieges;
+        _parties = parties;
+        _seasons = seasons;
     }
 
-    /// <summary>A page of letters, newest first. Anything due is settled first, so a player catching up sees it.</summary>
+    /// <summary>
+    /// Lazy events become facts only when something reads them, so a player who was away is caught up
+    /// first: the season, due sieges, their companies (arrivals, ambushes, auto mode), heroes walking home.
+    /// </summary>
+    private async Task CatchUpAsync(Guid gameInstanceId, string userId)
+    {
+        await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
+        await _sieges.AdvanceAsync(gameInstanceId);
+        await _parties.ListAsync(gameInstanceId, userId);
+        await _letters.CatchUpAsync(gameInstanceId, userId);
+    }
+
+    /// <summary>A page of letters, newest first, after the catch-up.</summary>
     [HttpGet]
     public async Task<ActionResult<LettersResponse>> Page(Guid gameInstanceId, [FromQuery] DateTime? before = null, [FromQuery] int take = 50)
     {
@@ -36,7 +53,7 @@ public class LettersController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await IsMemberAsync(gameInstanceId, userId)) return Forbid();
 
-        await _sieges.AdvanceAsync(gameInstanceId);
+        await CatchUpAsync(gameInstanceId, userId);
         return Ok(await _letters.PageAsync(gameInstanceId, userId, before, take));
     }
 
@@ -48,7 +65,7 @@ public class LettersController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await IsMemberAsync(gameInstanceId, userId)) return Forbid();
 
-        await _sieges.AdvanceAsync(gameInstanceId);
+        await CatchUpAsync(gameInstanceId, userId);
         return Ok(await _letters.SummaryAsync(gameInstanceId, userId));
     }
 

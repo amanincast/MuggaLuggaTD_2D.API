@@ -180,9 +180,54 @@ public class LetterTests : IDisposable
         Assert.Equal(new[] { nameof(LetterKind.YourSiegeResult), nameof(LetterKind.PrisonersRansomed) }, player.Select(l => l.Kind));
         Assert.Equal("won|2 champions taken prisoner", player[0].Detail);
         Assert.Equal("Brakka", player[0].ActorName);
-        var rival = Assert.Single(await MineAsync(TestIds.Rival));
-        Assert.Equal(nameof(LetterKind.SiegeResultOnYou), rival.Kind);
-        Assert.StartsWith("lost", rival.Detail);
+        var rival = await MineAsync(TestIds.Rival);
+        Assert.Equal(new[] { nameof(LetterKind.SiegeResultOnYou), nameof(LetterKind.HeroesCaptured) }, rival.Select(l => l.Kind));
+        Assert.StartsWith("lost", rival[0].Detail);
+        Assert.Equal("2", rival[1].Detail);
+    }
+
+    [Theory]
+    [InlineData("2 champions taken prisoner", 2)]
+    [InlineData("1 champion taken prisoner", 1)]
+    [InlineData(null, null)]
+    [InlineData("resolve 40 → 10", null)]
+    public void TheCaptiveCount_IsReadFromTheSiegeLine(string? detail, int? taken) =>
+        Assert.Equal(taken, LetterService.CapturedIn(detail));
+
+    [Fact]
+    public async Task HeroesTakenInASiege_WalkHomeInALetterDatedWhenTheyArrived()
+    {
+        await RealmAsync();
+        var taken = _clock.UtcNow;
+        await WarLog.RecordAsync(_realm, WarLogKind.SiegeWon, "faction:Ashkin", TestIds.Player, "r1", "2 champions taken prisoner",
+            actorName: "The Ashkin");
+        var captured = Assert.Single(await MineAsync(), l => l.Kind == nameof(LetterKind.HeroesCaptured));
+        Assert.Equal("2", captured.Detail);
+
+        await Letters.CatchUpAsync(_realm, TestIds.Player);
+        Assert.DoesNotContain(await MineAsync(), l => l.Kind == nameof(LetterKind.HeroesReturned));
+
+        _clock.Advance(TimeSpan.FromHours(CaptivityRules.PrisonerReturnHours + 3));
+        await Letters.CatchUpAsync(_realm, TestIds.Player);
+        await Letters.CatchUpAsync(_realm, TestIds.Player);
+
+        var home = Assert.Single(await MineAsync(), l => l.Kind == nameof(LetterKind.HeroesReturned));
+        Assert.Equal(taken.AddHours(CaptivityRules.PrisonerReturnHours), home.OccurredAt);
+    }
+
+    [Fact]
+    public async Task HeroesBoughtBack_NeedNoLetterSayingTheyCameHome()
+    {
+        await RealmAsync();
+        await WarLog.RecordAsync(_realm, WarLogKind.SiegeWon, TestIds.Rival, TestIds.Player, "r1", "1 champion taken prisoner");
+        _clock.Advance(TimeSpan.FromHours(1));
+        await WarLog.RecordAsync(_realm, WarLogKind.RansomPaid, TestIds.Player, TestIds.Rival, "r1", "1:500");
+
+        _clock.Advance(TimeSpan.FromHours(CaptivityRules.PrisonerReturnHours));
+        await Letters.CatchUpAsync(_realm, TestIds.Player);
+
+        Assert.DoesNotContain(await MineAsync(), l => l.Kind == nameof(LetterKind.HeroesReturned));
+        Assert.Single(await MineAsync(TestIds.Rival), l => l.Kind == nameof(LetterKind.PrisonersRansomed));
     }
 
     [Fact]

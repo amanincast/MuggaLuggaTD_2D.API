@@ -45,13 +45,16 @@ public class QuestService
     private readonly MaterialWalletService _wallet;
     private readonly ISessionLog _sessionLog;
     private readonly HiringService? _hiring;
+    private readonly LetterService? _letters;
 
     /// <summary>The clock, for tests.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
     public QuestService(ApplicationDbContext context, IGameContentProvider content, ItemLedgerService items,
-        GoldService gold, MaterialWalletService wallet, ISessionLog sessionLog, HiringService? hiring = null)
+        GoldService gold, MaterialWalletService wallet, ISessionLog sessionLog, HiringService? hiring = null,
+        LetterService? letters = null)
     {
+        _letters = letters;
         _context = context;
         _content = content;
         _items = items;
@@ -191,17 +194,33 @@ public class QuestService
 
             var now = Clock();
             bool changed = false;
+            var ready = new List<PlayerQuest>();
             foreach (var quest in quests)
             {
                 var offer = quest.Offer;
                 int after = QuestRules.Advance(offer, quest.Progress, deed);
                 if (after == quest.Progress) continue;
                 quest.Progress = after;
-                if (QuestRules.IsDone(offer, after)) quest.DoneAt = now;
+                if (QuestRules.IsDone(offer, after))
+                {
+                    quest.DoneAt = now;
+                    ready.Add(quest);
+                }
                 changed = true;
                 _sessionLog.Log("QUEST-PROGRESS", $"user={userId} realm={gameInstanceId} offer={offer.Id} {after}/{offer.Count}");
             }
             if (changed) await _context.SaveChangesAsync();
+
+            // Ready to hand in (the inbox). A Gather quest is done only at the hand-in, so it never gets here.
+            if (_letters != null)
+            {
+                foreach (var quest in ready)
+                {
+                    var offer = quest.Offer;
+                    await _letters.SendAsync(gameInstanceId, userId, LetterKind.QuestReady, now, $"quest:{quest.Id}:ready",
+                        offer.RegionId, quest.Id.ToString(), detail: $"{offer.Kind}|{offer.Target}|{offer.Count}");
+                }
+            }
         }
         catch (Exception ex)
         {

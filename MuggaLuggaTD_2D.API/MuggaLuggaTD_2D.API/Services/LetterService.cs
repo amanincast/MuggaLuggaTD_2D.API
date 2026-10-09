@@ -1,6 +1,9 @@
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD.Shared.World;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Hubs;
@@ -132,6 +135,9 @@ public class LetterService
             case WarLogKind.SiegeWon:
                 if (subject != null) await Send(subject, LetterKind.SiegeResultOnYou, Result("lost", entry.Detail), "subject");
                 if (actor != null) await Send(actor, LetterKind.YourSiegeResult, Result("won", entry.Detail), "actor");
+                // The fallen region's garrison is taken with it, by a player or a faction alike.
+                if (subject != null && CapturedIn(entry.Detail) is int taken and > 0)
+                    await Send(subject, LetterKind.HeroesCaptured, taken.ToString(), "captured");
                 break;
             case WarLogKind.SiegeRepelled:
                 if (subject != null) await Send(subject, LetterKind.SiegeResultOnYou, Result("held", entry.Detail), "subject");
@@ -145,6 +151,40 @@ public class LetterService
                 // The captor is the subject; the payer bought their own heroes back and needs no letter.
                 if (subject != null) await Send(subject, LetterKind.PrisonersRansomed, entry.Detail, "subject");
                 break;
+        }
+    }
+
+    /// <summary>
+    /// How many champions a won siege took, from its war log detail ("2 champions taken prisoner", worded the
+    /// same by the player and the faction siege). Null when it took none.
+    /// </summary>
+    public static int? CapturedIn(string? detail)
+    {
+        var match = detail == null ? null : Regex.Match(detail, @"^(\d+) champions? taken prisoner");
+        return match is { Success: true } ? int.Parse(match.Groups[1].Value) : null;
+    }
+
+    /// <summary>
+    /// Catches up what only the clock decides, before a read: heroes taken in a siege walk home after
+    /// <see cref="CaptivityRules.PrisonerReturnHours"/> unless bought back first, and that return is a
+    /// letter dated when it happened. Bought-back heroes need none: the player did it themselves.
+    /// </summary>
+    public async Task CatchUpAsync(Guid gameInstanceId, string userId)
+    {
+        var now = Now;
+        var returnAfter = TimeSpan.FromHours(CaptivityRules.PrisonerReturnHours);
+        var taken = await _context.Letters.AsNoTracking()
+            .Where(l => l.UserId == userId && l.GameInstanceId == gameInstanceId && l.Kind == nameof(LetterKind.HeroesCaptured))
+            .ToListAsync();
+        foreach (var letter in taken.Where(l => l.OccurredAt + returnAfter <= now))
+        {
+            var home = letter.OccurredAt + returnAfter;
+            bool ransomed = await _context.WarLog.AsNoTracking().AnyAsync(e =>
+                e.GameInstanceId == gameInstanceId && e.Kind == nameof(WarLogKind.RansomPaid) && e.ActorUserId == userId &&
+                e.RegionId == letter.RegionId && e.OccurredAt >= letter.OccurredAt && e.OccurredAt <= home);
+            if (ransomed) continue;
+            await SendAsync(gameInstanceId, userId, LetterKind.HeroesReturned, home, $"returned:{letter.Id}", letter.RegionId,
+                detail: letter.Detail);
         }
     }
 
@@ -227,8 +267,8 @@ public class LetterService
 
     /// <summary>
     /// Which of <paramref name="letters"/> still need the player (⚑). Worked out from state already stored,
-    /// never kept on the letter: a siege letter is flagged while a siege on that region against this player
-    /// is live.
+    /// never kept on the letter: a siege on them while it is live, heroes while they are held, an ambush
+    /// while the company stands halted, a quest until it is handed in, a season until its chest is opened.
     /// </summary>
     public async Task<HashSet<Guid>> FlagsAsync(Guid gameInstanceId, string userId, IEnumerable<Letter> letters)
     {
@@ -243,7 +283,57 @@ public class LetterService
             foreach (var letter in sieged)
                 if (letter.RegionId != null && regions.Contains(letter.RegionId)) flagged.Add(letter.Id);
         }
+        var held = candidates.Where(l => l.Kind == nameof(LetterKind.HeroesCaptured)).ToList();
+        if (held.Count > 0)
+        {
+            var regions = await HoldingRegionsAsync(gameInstanceId);
+            foreach (var letter in held)
+                if (letter.RegionId != null && regions.Contains(letter.RegionId)) flagged.Add(letter.Id);
+        }
+
+        var ambushed = candidates.Where(l => l.Kind == nameof(LetterKind.CompanyAmbushed)).ToList();
+        if (ambushed.Count > 0)
+        {
+            var halted = (await _context.PlayerParties.AsNoTracking()
+                .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.State == CompanyState.Ambushed)
+                .Select(p => p.Id).ToListAsync()).Select(id => id.ToString()).ToHashSet();
+            foreach (var letter in ambushed)
+                if (letter.SubjectId != null && halted.Contains(letter.SubjectId)) flagged.Add(letter.Id);
+        }
+
+        var quests = candidates.Where(l => l.Kind == nameof(LetterKind.QuestReady)).ToList();
+        if (quests.Count > 0)
+        {
+            var waiting = (await _context.PlayerQuests.AsNoTracking()
+                .Where(q => q.GameInstanceId == gameInstanceId && q.UserId == userId && q.DoneAt != null && q.HandedInAt == null)
+                .Select(q => q.Id).ToListAsync()).Select(id => id.ToString()).ToHashSet();
+            foreach (var letter in quests)
+                if (letter.SubjectId != null && waiting.Contains(letter.SubjectId)) flagged.Add(letter.Id);
+        }
+
+        var seasons = candidates.Where(l => l.Kind == nameof(LetterKind.SeasonEnded)).ToList();
+        if (seasons.Count > 0)
+        {
+            var unopened = (await _context.SeasonResults.AsNoTracking()
+                .Where(r => r.GameInstanceId == gameInstanceId && r.UserId == userId && r.ChestRarity != null && r.ChestOpenedAt == null)
+                .Select(r => r.SeasonNumber).ToListAsync()).Select(n => n.ToString()).ToHashSet();
+            foreach (var letter in seasons)
+                if (letter.SubjectId != null && unopened.Contains(letter.SubjectId)) flagged.Add(letter.Id);
+        }
         return flagged;
+    }
+
+    /// <summary>The regions where somebody is still held prisoner (a fallen garrison stays where it was taken).</summary>
+    private async Task<HashSet<string>> HoldingRegionsAsync(Guid gameInstanceId)
+    {
+        var row = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        var regions = new HashSet<string>();
+        if (row == null) return regions;
+        var now = Now;
+        foreach (var region in WorldRegionBlob.ReadAllRegions(JsonNode.Parse(row.GameData)))
+            if (region.SiteOverrides.Values.Any(o => o != null && CaptivityRules.IsHolding(o, now)))
+                regions.Add(region.RegionId);
+        return regions;
     }
 
     private async Task<HashSet<string>> LiveSiegeRegionsAsync(Guid gameInstanceId, string userId)
