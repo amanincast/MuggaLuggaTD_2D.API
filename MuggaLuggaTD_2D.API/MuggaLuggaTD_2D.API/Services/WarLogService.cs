@@ -22,10 +22,13 @@ public class WarLogService
     private readonly IHubContext<GameHub> _hubContext;
     private readonly ILogger<WarLogService> _logger;
     private readonly TimeProvider _clock;
+    private readonly LetterService? _letters;
 
     public WarLogService(
-        ApplicationDbContext context, IHubContext<GameHub> hubContext, ILogger<WarLogService> logger, TimeProvider clock)
+        ApplicationDbContext context, IHubContext<GameHub> hubContext, ILogger<WarLogService> logger, TimeProvider clock,
+        LetterService? letters = null)
     {
+        _letters = letters;
         _context = context;
         _hubContext = hubContext;
         _logger = logger;
@@ -79,7 +82,11 @@ public class WarLogService
             // Do not leave a failed line tracked, or the next unrelated save would retry - and fail - it.
             if (entry != null) _context.Entry(entry).State = EntityState.Detached;
             _logger.LogWarning(ex, "Could not record war log {Kind} in instance {Instance}.", kind, gameInstanceId);
+            return;
         }
+
+        // A line with a player on either side is that player's letter (the inbox). It never fails here.
+        if (_letters != null && entry != null) await _letters.FromWarLogAsync(entry);
     }
 
     /// <summary>The current season's log, newest first.</summary>

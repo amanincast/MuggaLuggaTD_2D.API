@@ -166,6 +166,28 @@ faction per realm, and `FactionRaid` rows for what they do.
   handed in before the grant.
 - **Debug (Development only):** `POST quests/debug/fresh` and `quests/debug/finish`.
 
+## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
+
+Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log
+stays the realm's news. Mike 2026-10-08: the Hall only, no auto-open, no cross-realm view.
+
+- **One letter per event per player:** `DedupKey` is unique per (user, realm), so a settle that runs
+  twice writes nothing twice. `OccurredAt` is the event's time, not the settle's.
+- **Raids and sieges come from the war log.** `WarLogService.RecordAsync` hands each line to
+  `FromWarLogAsync`: the defender gets RaidOnYou / RaidRepelled / SiegeDeclaredOnYou / SiegeResultOnYou,
+  the besieger YourSiegeResult, a captor PrisonersRansomed. A new path that logs gets letters for free;
+  a faction (`faction:` ids) never gets one. Siege results carry `"won|detail"` for the client to word.
+- **Raids on one region fold within the hour** (`LetterRules.GroupWindow`): `Count` rises and the letter
+  is unread again.
+- **Kept 30 days, at most 200** per player per realm (`LetterRules.ToDrop`, on write). Not wiped by a
+  season reset.
+- **The ⚑ is worked out on read**, never stored (`FlagsAsync`): a siege letter is flagged while a live
+  siege (player or faction) on that region has this player as defender.
+- **Pushed to the player** with `Clients.User(userId)` ("LetterAdded"), which the default user id
+  provider maps from the NameIdentifier claim.
+- Routes: `GET letters?before=&take=`, `GET letters/summary`, `POST letters/read {ids | all}`. Reads
+  advance due sieges first.
+
 ## The season's end (`docs/design/season-end.md`, Unity repo)
 
 - **Factions score their land** at the players' rates (`SeasonEndRules.RateForFaction`), nothing for deeds. One

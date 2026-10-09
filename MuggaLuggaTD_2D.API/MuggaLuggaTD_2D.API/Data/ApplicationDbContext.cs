@@ -25,6 +25,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
+    public DbSet<Letter> Letters => Set<Letter>();
     public DbSet<PlayerMaterial> PlayerMaterials => Set<PlayerMaterial>();
     public DbSet<ItemGrant> ItemGrants => Set<ItemGrant>();
     public DbSet<ItemLedgerState> ItemLedgerStates => Set<ItemLedgerState>();
@@ -356,6 +357,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<HiredCharacter>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.CharacterId }).IsUnique();
+        });
+
+        // Configure Letter (a player's inbox in one realm: read newest first, unread counted, one per event)
+        builder.Entity<Letter>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.GameInstanceId, e.ReadAt, e.OccurredAt });
+            entity.HasIndex(e => new { e.UserId, e.GameInstanceId, e.DedupKey }).IsUnique();
         });
 
         // Configure WarLogEntry entity (a realm's war log, read newest first per season)

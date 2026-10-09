@@ -46,7 +46,8 @@ public class WorldSiegeServiceTests : IDisposable
     /// <summary>Enough of every siege supply for any siege these tests lay.</summary>
     private const int Stockpile = 100_000;
 
-    private WarLogService WarLog => new(_db, _hub, NullLogger<WarLogService>.Instance, _clock);
+    private WarLogService WarLog => new(_db, _hub, NullLogger<WarLogService>.Instance, _clock,
+        new LetterService(_db, _hub, NullLogger<LetterService>.Instance, _clock));
 
     private WorldRaidService Raids => new(_db, _content, NullLogger<WorldRaidService>.Instance);
 
@@ -735,6 +736,39 @@ public class WorldSiegeServiceTests : IDisposable
         Assert.Equal(Target, won.RegionId);
         Assert.Contains("1 champion taken prisoner", won.Detail);
         Assert.Contains("WarLogEntryAdded", _hub.MethodsSentTo(instanceId));
+    }
+
+    // -----------------------------------------------------------------
+    // Letters (the inbox)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ADefenderGetsOneFlaggedLetter_WhichStopsNeedingThemOnceTheSiegeEnds()
+    {
+        var instanceId = await SeedAsync();
+        await DeclareAsync(instanceId);
+
+        var letters = new LetterService(_db, _hub, NullLogger<LetterService>.Instance, _clock);
+        var page = await letters.PageAsync(instanceId, TestIds.Rival);
+        var letter = Assert.Single(page.Letters);
+        Assert.Equal(nameof(LetterKind.SiegeDeclaredOnYou), letter.Kind);
+        Assert.Equal(Target, letter.RegionId);
+        Assert.True(letter.Flagged);
+        Assert.True(page.Flagged);
+        Assert.Contains(_hub.Sent, s => s.Group == TestIds.Rival && s.Method == "LetterAdded");
+        // The besieger wrote the line, but it is not news to them.
+        Assert.Empty((await letters.PageAsync(instanceId, TestIds.Player)).Letters);
+
+        _clock.Advance(SiegeRules.Muster + SiegeRules.AssaultWindow);
+        await Service.AdvanceAsync(instanceId);
+        await Service.AdvanceAsync(instanceId);   // a second settle writes nothing twice
+
+        var defender = (await letters.PageAsync(instanceId, TestIds.Rival)).Letters;
+        Assert.Equal(new[] { nameof(LetterKind.SiegeResultOnYou), nameof(LetterKind.SiegeDeclaredOnYou) }, defender.Select(l => l.Kind));
+        Assert.Equal("lapsed", defender[0].Detail);
+        Assert.All(defender, l => Assert.False(l.Flagged));
+        var attacker = Assert.Single((await letters.PageAsync(instanceId, TestIds.Player)).Letters);
+        Assert.Equal(nameof(LetterKind.YourSiegeResult), attacker.Kind);
     }
 
     [Fact]
