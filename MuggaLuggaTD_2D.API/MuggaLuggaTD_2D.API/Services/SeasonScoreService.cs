@@ -44,6 +44,7 @@ public class SeasonScoreService
     private readonly ApplicationDbContext _context;
     private readonly GoldService _gold;
     private readonly WorldProvisioningService _worlds;
+    private readonly LetterService? _letters;
     private readonly IHubContext<GameHub> _hubContext;
     private readonly ISessionLog _sessionLog;
     private readonly ILogger<SeasonScoreService> _logger;
@@ -68,8 +69,10 @@ public class SeasonScoreService
         ILogger<SeasonScoreService> logger,
         HiringService? hiring = null,
         IGameContentProvider? content = null,
-        ItemLedgerService? items = null)
+        ItemLedgerService? items = null,
+        LetterService? letters = null)
     {
+        _letters = letters;
         _hiring = hiring;
         _content = content;
         _items = items;
@@ -365,6 +368,7 @@ public class SeasonScoreService
             .Where(s => s.GameInstanceId == instance.Id && s.SeasonNumber == closing)
             .ToListAsync();
 
+        var written = new List<SeasonResult>();
         bool alreadyRecorded = await _context.SeasonResults
             .AnyAsync(r => r.GameInstanceId == instance.Id && r.SeasonNumber == closing);
 
@@ -384,8 +388,6 @@ public class SeasonScoreService
             {
                 ranks[i] = i > 0 && Math.Abs(table[i - 1].Points - table[i].Points) < 0.0001 ? ranks[i - 1] : i + 1;
             }
-
-            var written = new List<SeasonResult>();
 
             for (int i = 0; i < table.Count; i++)
             {
@@ -469,6 +471,14 @@ public class SeasonScoreService
         await SettleAllAsync(instance.Id, JsonNode.Parse(fresh.GameData), DateTime.UtcNow);
 
         await BroadcastSeasonEndedAsync(instance, closing, fresh);
+
+        // Every ranked player's letter (the inbox), kept through the reset: letters age out instead.
+        if (_letters != null)
+        {
+            foreach (var result in written)
+                await _letters.SendAsync(instance.Id, result.UserId, LetterKind.SeasonEnded, endedAt, $"season:{closing}:ended",
+                    subjectId: closing.ToString(), detail: $"{closing}|{result.Rank}|{result.ChestRarity?.ToString() ?? ""}");
+        }
     }
 
     private async Task BroadcastSeasonEndedAsync(GameInstance instance, int closedSeason, WorldViewGameData world)

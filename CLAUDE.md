@@ -177,12 +177,23 @@ stays the realm's news. Mike 2026-10-08: the Hall only, no auto-open, no cross-r
   `FromWarLogAsync`: the defender gets RaidOnYou / RaidRepelled / SiegeDeclaredOnYou / SiegeResultOnYou,
   the besieger YourSiegeResult, a captor PrisonersRansomed. A new path that logs gets letters for free;
   a faction (`faction:` ids) never gets one. Siege results carry `"won|detail"` for the client to word.
+- **The other hooks**, each beside the code that makes the fact:
+  - `PartyService.SettleArrival` notes arrivals and ambushes (dated at `ArrivesAt` / the strike), sent to the
+    company's owner by whichever read settled it. The static `CompanyAtAsync` settle sends none.
+  - `AutoFightService.SettleAsync`: one AutoReport per company per settle, `"name|fights|won|gold|items"`.
+  - `QuestService.RecordAsync`: QuestReady when a deed finishes a quest, `"Kind|Target|Count"`.
+  - `SeasonScoreService.CloseSeasonAsync`: SeasonEnded to every ranked player, `"season|rank|chest"`.
+  - A won siege's `"N champions taken prisoner"` line also writes HeroesCaptured (`CapturedIn`).
+- **The catch-up** (`LettersController`, before every read): the season, due sieges, the player's companies
+  (`PartyService.ListAsync`, which settles auto mode too), then `LetterService.CatchUpAsync`, which writes
+  HeroesReturned at capture + 8h unless the player ransomed them first.
 - **Raids on one region fold within the hour** (`LetterRules.GroupWindow`): `Count` rises and the letter
   is unread again.
 - **Kept 30 days, at most 200** per player per realm (`LetterRules.ToDrop`, on write). Not wiped by a
   season reset.
 - **The ⚑ is worked out on read**, never stored (`FlagsAsync`): a siege letter is flagged while a live
-  siege (player or faction) on that region has this player as defender.
+  siege (player or faction) on that region has this player as defender; heroes while someone is held in that
+  region; an ambush while the company stands halted; a quest until handed in; a season until its chest is opened.
 - **Pushed to the player** with `Clients.User(userId)` ("LetterAdded"), which the default user id
   provider maps from the NameIdentifier claim.
 - Routes: `GET letters?before=&take=`, `GET letters/summary`, `POST letters/read {ids | all}`. Reads

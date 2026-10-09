@@ -129,6 +129,30 @@ public class AutoFightServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ASettleWithFights_IsOneLetterPerCompany_SummingWhatItWon()
+    {
+        var (instance, company, home, _) = await SeedAsync();
+        await SendAsync(instance, company, AutoOrder.Roam, home.RegionId);
+        _now += TimeSpan.FromHours(1);
+        var letters = new LetterService(_db, new FakeHubContext(), NullLogger<LetterService>.Instance, new FakeClock(_now));
+        var auto = new AutoFightService(_db, _content, Wallet, Gold, Items, new FakeSessionLog(),
+            NullLogger<AutoFightService>.Instance, letters: letters) { Clock = () => _now, Roll = _roll, RollRoad = _road, Dice = new Random(3) };
+
+        await auto.SettleAsync(instance, TestIds.Player);
+        await auto.SettleAsync(instance, TestIds.Player);
+
+        var reports = await ReportsAsync(instance);
+        Assert.NotEmpty(reports);
+        var letter = Assert.Single(await _db.Letters.ToListAsync());
+        Assert.Equal(nameof(LetterKind.AutoReport), letter.Kind);
+        Assert.Equal(reports.Max(r => r.At), letter.OccurredAt);
+        var parts = letter.Detail!.Split('|');
+        Assert.Equal(company.Name, parts[0]);
+        Assert.Equal(reports.Count.ToString(), parts[1]);
+        Assert.Equal(reports.Sum(r => r.Gold).ToString(), parts[3]);
+    }
+
+    [Fact]
     public async Task ACompanyInAutoModeWaitsForAnOrder()
     {
         var (instance, company, _, _) = await SeedAsync();

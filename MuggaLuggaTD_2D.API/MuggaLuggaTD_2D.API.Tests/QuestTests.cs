@@ -270,6 +270,33 @@ public class QuestTests : IDisposable
     }
 
     [Fact]
+    public async Task AQuestMadeReady_IsOneFlaggedLetter_UntilItIsHandedIn()
+    {
+        var realm = await SeedAsync();
+        var quest = await TakeAsync(realm, new QuestOffer
+        {
+            Id = "x.0.r0:1", GiverId = "r0:1", RegionId = "r0", Kind = QuestKind.Slay, Target = "Goblin", Count = 10,
+            Level = 6, ChestTier = ItemRarityTypes.Rare, Gold = 120
+        });
+        var letters = new LetterService(_db, new FakeHubContext(), NullLogger<LetterService>.Instance, new FakeClock(Now));
+        QuestService Lettered() => new(_db, _content, Items, Gold, Wallet, _log, letters: letters) { Clock = () => Now };
+
+        await Lettered().RecordAsync(realm, TestIds.Player, new QuestDeed { RegionId = "r0", Kills = new() { ["Goblin"] = 6 } });
+        Assert.Empty(await _db.Letters.ToListAsync());
+        await Lettered().RecordAsync(realm, TestIds.Player, new QuestDeed { RegionId = "r0", Kills = new() { ["Goblin"] = 6 } });
+
+        var ready = Assert.Single((await letters.PageAsync(realm, TestIds.Player)).Letters);
+        Assert.Equal(nameof(LetterKind.QuestReady), ready.Kind);
+        Assert.Equal("Slay|Goblin|10", ready.Detail);
+        Assert.Equal(quest.Id.ToString(), ready.SubjectId);
+        Assert.True(ready.Flagged);
+
+        var (paid, _) = await Lettered().HandInAsync(realm, TestIds.Player, quest.Id);
+        Assert.True(paid.Succeeded, paid.Message);
+        Assert.False(Assert.Single((await letters.PageAsync(realm, TestIds.Player)).Letters).Flagged);
+    }
+
+    [Fact]
     public async Task AFinishedQuestPaysItsChestGoldAndMaterials_Once()
     {
         var realm = await SeedAsync();

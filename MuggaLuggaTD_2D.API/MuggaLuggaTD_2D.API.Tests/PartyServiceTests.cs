@@ -370,6 +370,56 @@ public class PartyServiceTests : IDisposable
         Assert.Null(dto.Journey);
     }
 
+    private readonly FakeHubContext _letterHub = new();
+
+    private PartyService Lettered =>
+        new(_db, Tavern, _content, Wallet, Gold, new FakeSessionLog(), NullLogger<PartyService>.Instance, Items,
+            letters: new LetterService(_db, _letterHub, NullLogger<LetterService>.Instance, new FakeClock())) { Dice = _dice };
+
+    [Fact]
+    public async Task AnArrival_IsOneLetter_DatedWhenItArrived_NotWhenItWasNoticed()
+    {
+        var (instance, _) = await SeedWithDungeonAsync();
+        var first = await FirstAsync(instance);
+        await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(DungeonId));
+        await BackdateJourneyAsync(first.Id);
+        var arrived = (await _db.PlayerParties.AsNoTracking().SingleAsync(p => p.Id == first.Id)).ArrivesAt!.Value;
+
+        await Lettered.ListAsync(instance, TestIds.Player);
+        await Lettered.ListAsync(instance, TestIds.Player);
+
+        var letter = Assert.Single(await _db.Letters.ToListAsync());
+        Assert.Equal(nameof(LetterKind.CompanyArrived), letter.Kind);
+        Assert.Equal(arrived, letter.OccurredAt);
+        Assert.Equal(first.Id.ToString(), letter.SubjectId);
+        Assert.Equal(first.Name, letter.Detail);
+    }
+
+    [Fact]
+    public async Task AnAmbush_IsAFlaggedLetter_UntilTheCompanyMovesOn()
+    {
+        var (instance, regions) = await SeedRowAsync(0, 1, 2);
+        var first = await FirstAsync(instance);
+        _dice = new FixedDice(0.0);
+        var (_, sent) = await Service.TravelAsync(instance, TestIds.Player, first.Id, Travel(TestWorld.DungeonIn(regions[2])));
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == first.Id);
+        var total = party.ArrivesAt!.Value - party.DepartedAt!.Value;
+        party.AmbushAt = 0.5;
+        party.DepartedAt = DateTime.UtcNow - total * 0.6;
+        party.ArrivesAt = party.DepartedAt + total;
+        await _db.SaveChangesAsync();
+
+        await Lettered.ListAsync(instance, TestIds.Player);
+        var letters = new LetterService(_db, _letterHub, NullLogger<LetterService>.Instance, new FakeClock());
+        var halted = Assert.Single((await letters.PageAsync(instance, TestIds.Player)).Letters);
+        Assert.Equal(nameof(LetterKind.CompanyAmbushed), halted.Kind);
+        Assert.True(halted.Flagged);
+
+        var (fled, _) = await Lettered.FleeAmbushAsync(instance, TestIds.Player, first.Id, Order);
+        Assert.True(fled.Succeeded, fled.Message);
+        Assert.False((await letters.PageAsync(instance, TestIds.Player)).Letters.Single(l => l.Kind == nameof(LetterKind.CompanyAmbushed)).Flagged);
+    }
+
     [Fact]
     public async Task ACompanyOnTheRoadCannotBeSentAgainOrRemanned()
     {

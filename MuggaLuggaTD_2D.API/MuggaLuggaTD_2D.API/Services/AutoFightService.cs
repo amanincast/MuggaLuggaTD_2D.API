@@ -63,6 +63,7 @@ public class AutoFightService
 
     /// <summary>Counts auto mode's wins toward the player's quests, at its share (quests.md §4).</summary>
     private readonly QuestService? _quests;
+    private readonly LetterService? _letters;
 
     /// <summary>Where spoils are rolled from. Tests fix it.</summary>
     public Random Dice { get; set; } = Random.Shared;
@@ -81,8 +82,9 @@ public class AutoFightService
 
     public AutoFightService(ApplicationDbContext context, IGameContentProvider content, MaterialWalletService wallet,
         GoldService gold, ItemLedgerService items, ISessionLog sessionLog, ILogger<AutoFightService> logger,
-        HiringService? hiring = null, QuestService? quests = null)
+        HiringService? hiring = null, QuestService? quests = null, LetterService? letters = null)
     {
+        _letters = letters;
         _quests = quests;
         _context = context;
         _content = content;
@@ -439,6 +441,21 @@ public class AutoFightService
         if (transaction != null) await transaction.CommitAsync();
 
         if (_quests != null) await RecordQuestDeedsAsync(day);
+
+        // One letter per company per settle (the inbox): "fought 4 times: 312 g, 2 gear", dated at its last fight.
+        if (_letters != null)
+        {
+            foreach (var company in day.Reports.GroupBy(r => r.PartyId))
+            {
+                var last = company.Max(r => r.At);
+                var lastSite = company.OrderBy(r => r.At).Last().SiteId;
+                int items = company.Sum(r => (JsonNode.Parse(r.ItemsJson) as JsonArray)?.Count ?? 0);
+                await _letters.SendAsync(gameInstanceId, userId, LetterKind.AutoReport, last,
+                    $"auto:{company.Key}:{last.Ticks}", string.IsNullOrEmpty(lastSite) ? null : SiteSpec.RegionIdOf(lastSite),
+                    company.Key.ToString(),
+                    detail: $"{company.First().PartyName}|{company.Count()}|{company.Count(r => r.Won)}|{company.Sum(r => r.Gold)}|{items}");
+            }
+        }
 
         if (day.Fights > 0 || day.Eaten.Count > 0)
             _sessionLog.Log("AUTO-SETTLE",

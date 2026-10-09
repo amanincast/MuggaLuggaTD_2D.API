@@ -39,7 +39,10 @@ public class SeasonEndTests : IDisposable
         _log,
         NullLogger<SeasonScoreService>.Instance,
         content: _content,
-        items: new ItemLedgerService(_db, _log, NullLogger<ItemLedgerService>.Instance));
+        items: new ItemLedgerService(_db, _log, NullLogger<ItemLedgerService>.Instance),
+        letters: Letters);
+
+    private LetterService Letters => new(_db, _hub, NullLogger<LetterService>.Instance, new FakeClock());
 
     private static WorldRegionData Held(FactionId faction, string id, int tier = 4)
     {
@@ -163,6 +166,26 @@ public class SeasonEndTests : IDisposable
         var standings = await Seasons.StandingsAsync(realm);
 
         Assert.Equal(0, standings.Standings.Single(s => s.UserId == TestIds.Player).Crowns);
+    }
+
+    [Fact]
+    public async Task EveryRankedPlayerGetsTheSeasonsLetter_WhichOutlivesTheReset_AndNeedsThemUntilTheChestIsOpened()
+    {
+        var realm = await SeedAsync(
+            TestWorld.OwnedBy(TestIds.Player, "p1", tier: 4), TestWorld.OwnedBy(TestIds.Player, "p2", tier: 4),
+            Held(FactionId.Grimjaw, "g", tier: 3));
+        await Seasons.SettleAllAsync(realm, at: SeasonStart);
+
+        await CloseAsync(realm);
+
+        var letter = Assert.Single((await Letters.PageAsync(realm, TestIds.Player)).Letters);
+        Assert.Equal(nameof(LetterKind.SeasonEnded), letter.Kind);
+        Assert.Equal("1", letter.SubjectId);
+        Assert.StartsWith("1|1|", letter.Detail);
+        Assert.True(letter.Flagged);
+        // One per ranked player; a faction is ranked but writes no letter.
+        Assert.Equal(await _db.SeasonResults.CountAsync(), await _db.Letters.CountAsync());
+        Assert.DoesNotContain(await _db.Letters.ToListAsync(), l => l.UserId.StartsWith("faction"));
     }
 
     // -----------------------------------------------------------------

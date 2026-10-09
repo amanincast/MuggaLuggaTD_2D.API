@@ -75,6 +75,7 @@ public class PartyService
 
     /// <summary>Counts an ambush fought off toward the player's quests. Optional so tests can leave it out.</summary>
     private readonly QuestService? _quests;
+    private readonly LetterService? _letters;
 
     /// <summary>Catches companies in auto mode up before they are read; optional so tests can build this without it.</summary>
     private readonly AutoFightService? _auto;
@@ -82,8 +83,9 @@ public class PartyService
     public PartyService(ApplicationDbContext context, TavernService tavern, IGameContentProvider content,
         MaterialWalletService wallet, GoldService gold, ISessionLog sessionLog, ILogger<PartyService> logger,
         ItemLedgerService items, FirstStepsService? firstSteps = null, AutoFightService? auto = null,
-        QuestService? quests = null)
+        QuestService? quests = null, LetterService? letters = null)
     {
+        _letters = letters;
         _quests = quests;
         _firstSteps = firstSteps;
         _auto = auto;
@@ -124,8 +126,10 @@ public class PartyService
         var now = DateTime.UtcNow;
         var all = await _context.PlayerParties.Where(p => p.GameInstanceId == gameInstanceId).ToListAsync();
         bool settled = false;
-        foreach (var p in all) settled |= SettleArrival(p, now);
+        var landed = new List<RoadEvent>();
+        foreach (var p in all) settled |= SettleArrival(p, now, landed);
         if (settled) await _context.SaveChangesAsync();
+        await SendLettersAsync(gameInstanceId, landed);
 
         var sight = RegionSight.Lit(WorldRegionBlob.ReadAllRegions(world), userId);
         foreach (var mine in all.Where(p => p.UserId == userId && p.RegionId != null)) sight.Add(mine.RegionId!);
@@ -375,11 +379,30 @@ public class PartyService
             : null;
     }
 
+    /// <summary>A company halted by an ambush or landed, noticed by a settle: its owner's letter.</summary>
+    private readonly record struct RoadEvent(PlayerParty Party, LetterKind Kind, DateTime At, string? RegionId);
+
+    /// <summary>
+    /// The letters for what a settle noticed (the inbox), dated when it happened, not when it was noticed.
+    /// Whoever's read noticed it, the letter goes to the company's owner.
+    /// </summary>
+    private async Task SendLettersAsync(Guid gameInstanceId, List<RoadEvent> events)
+    {
+        if (_letters == null) return;
+        foreach (var e in events)
+        {
+            string what = e.Kind == LetterKind.CompanyAmbushed ? "ambushed" : "arrived";
+            await _letters.SendAsync(gameInstanceId, e.Party.UserId, e.Kind, e.At, $"party:{e.Party.Id}:{what}:{e.At.Ticks}",
+                e.RegionId, e.Party.Id.ToString(), detail: e.Party.Name);
+        }
+    }
+
     /// <summary>
     /// Settles a company on the road by the clock: halts it where its ambush strikes, or lands it where
     /// it was going (or back where it set out, if it turned round). Returns whether anything changed.
+    /// What it noticed is added to <paramref name="events"/>, for the owner's letters.
     /// </summary>
-    private static bool SettleArrival(PlayerParty party, DateTime now)
+    private static bool SettleArrival(PlayerParty party, DateTime now, List<RoadEvent>? events = null)
     {
         // A company in auto mode walks by its own replay (AutoFightService), which lands it itself.
         if (party.AutoMode) return false;
@@ -396,6 +419,7 @@ public class PartyService
                 party.HaltedAt = strikes;
                 party.RegionId = RegionAlong(party, strikes) ?? party.RegionId;
                 party.UpdatedAt = now;
+                events?.Add(new RoadEvent(party, LetterKind.CompanyAmbushed, strikes, party.RegionId));
                 return true;
             }
         }
@@ -410,9 +434,11 @@ public class PartyService
             return true;
         }
 
+        var arrivedAt = party.ArrivesAt.Value;
         party.State = CompanyState.Idle;
         party.SiteId = party.ToSiteId;
         if (!string.IsNullOrEmpty(party.ToSiteId)) party.RegionId = SiteSpec.RegionIdOf(party.ToSiteId);
+        events?.Add(new RoadEvent(party, LetterKind.CompanyArrived, arrivedAt, party.RegionId));
         party.AmbushAt = null;
         party.HaltedAt = null;
         party.AmbushRunId = null;
@@ -840,8 +866,10 @@ public class PartyService
             // Arrival is noticed by the first read after it, like a season's end.
             var now = DateTime.UtcNow;
             bool landed = false;
-            foreach (var p in parties) landed |= SettleArrival(p, now);
+            var events = new List<RoadEvent>();
+            foreach (var p in parties) landed |= SettleArrival(p, now, events);
             if (landed) await _context.SaveChangesAsync();
+            await SendLettersAsync(gameInstanceId, events);
             return parties;
         }
 
