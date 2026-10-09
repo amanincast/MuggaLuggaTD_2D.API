@@ -74,6 +74,45 @@ public class PartyServiceTests : IDisposable
         return (instance.Id, TestWorld.KeepIn(region));
     }
 
+    [Fact]
+    public async Task TwoFirstReadsAtOnce_FormOneCompany()
+    {
+        // The Hall's opening reads (companies, the letters' catch-up) once each formed a Vanguard.
+        string store = $"race-{Guid.NewGuid()}";
+        Guid instance;
+        await using (var seed = TestDb.Create(store))
+        {
+            instance = (await seed.AddInstanceAsync()).Id;
+            var region = TestWorld.OwnedBy(TestIds.Player, "r1");
+            region.IsCapital = true;
+            await seed.AddWorldAsync(instance, TestWorld.Blob(region));
+            var save = TestSave.Roster(TestSave.Character("hero-1"), TestSave.Character("hero-2"));
+            save.ActiveCharacterIds = new List<string> { "hero-1", "hero-2" };
+            await seed.AddPlayerSaveAsync(instance, TestIds.Player, TestSave.ToJson(save));
+        }
+
+        var contexts = Enumerable.Range(0, 4).Select(_ => TestDb.Create(store)).ToList();
+        try
+        {
+            await Task.WhenAll(contexts.Select(db => Task.Run(() =>
+            {
+                var gold = new GoldService(db, new FakeSessionLog(), NullLogger<GoldService>.Instance);
+                var wallet = new MaterialWalletService(db, new FakeSessionLog(), NullLogger<MaterialWalletService>.Instance);
+                var tavern = new TavernService(db, _content, wallet, gold, new FakeSessionLog(), NullLogger<TavernService>.Instance);
+                var items = new ItemLedgerService(db, new FakeSessionLog(), NullLogger<ItemLedgerService>.Instance);
+                return new PartyService(db, tavern, _content, wallet, gold, new FakeSessionLog(), NullLogger<PartyService>.Instance, items)
+                    .ListAsync(instance, TestIds.Player);
+            })));
+
+            await using var check = TestDb.Create(store);
+            Assert.Single(await check.PlayerParties.ToListAsync());
+        }
+        finally
+        {
+            foreach (var db in contexts) await db.DisposeAsync();
+        }
+    }
+
     private static PartyCreateRequest Form(params string[] ids) => new(null, null, ids.ToList(), Contract);
 
     private static PartyUpdateRequest Man(params string[] ids) => new(null, null, ids.ToList(), Contract);
