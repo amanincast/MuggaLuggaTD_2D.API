@@ -89,6 +89,27 @@ public class TavernController : ControllerBase
     }
 
     /// <summary>
+    /// A new player's starting heroes, rolled here (one Common of each class), and one Common piece of gear. The client builds its first
+    /// roster from these and saves it; asked again before that save, the same heroes come back.
+    /// </summary>
+    [HttpPost("starters")]
+    public async Task<ActionResult<TavernStartersResponse>> Starters(Guid gameInstanceId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        // A newcomer has no save yet, so membership cannot be asked; the realm existing is what a first save needs too.
+        if (!await _context.GameInstances.AnyAsync(g => g.Id == gameInstanceId)) return NotFound();
+
+        var (outcome, starters, gear) = await _tavern.ClaimStartersAsync(gameInstanceId, userId);
+        return outcome.Error switch
+        {
+            TavernError.None => Ok(new TavernStartersResponse(starters.Select(ToDto).ToList(), gear)),
+            TavernError.AlreadyStarted => Conflict(new { error = outcome.Message }),
+            _ => BadRequest(new { error = outcome.Message }),
+        };
+    }
+
+    /// <summary>
     /// Offers a crystal against the next restock. The crystal is spent now; the board it buys arrives
     /// with the next dungeon cleared, because a dungeon is still the only refresh.
     /// </summary>

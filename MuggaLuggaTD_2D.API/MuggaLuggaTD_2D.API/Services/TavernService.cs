@@ -5,6 +5,7 @@ using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD.Shared.World;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.Models;
+using StateManagement.Models;
 
 namespace MuggaLuggaTD_2D.API.Services;
 
@@ -21,6 +22,7 @@ public enum TavernError
     NoSuchCrystal,
     BoardIsFull,
     NoContent,
+    AlreadyStarted,
     NoSlotsLeft
 }
 
@@ -46,6 +48,15 @@ public record TavernOutcome(TavernError Error, string? Message = null)
 /// </summary>
 public class TavernService
 {
+    /// <summary>How many heroes a new player starts with: one company, one of each class (Mike, 2026-10-08).</summary>
+    public const int StarterCount = 4;
+
+    /// <summary>The ledger source of a new player's one piece of gear, which is also how a repeat claim finds it.</summary>
+    public const string StarterGearSource = "starter gear";
+
+    /// <summary>One starting roster per player per realm, however many first loads arrive at once.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> StarterLocks = new();
+
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
     private readonly MaterialWalletService _wallet;
@@ -56,6 +67,9 @@ public class TavernService
     /// <summary>Ticks First Steps where they happen; optional so tests can build this without it.</summary>
     private readonly FirstStepsService? _firstSteps;
 
+    /// <summary>Records the starter piece; optional so tests can build this without it.</summary>
+    private readonly ItemLedgerService? _items;
+
     public TavernService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -63,9 +77,11 @@ public class TavernService
         GoldService gold,
         ISessionLog sessionLog,
         ILogger<TavernService> logger,
-        FirstStepsService? firstSteps = null)
+        FirstStepsService? firstSteps = null,
+        ItemLedgerService? items = null)
     {
         _firstSteps = firstSteps;
+        _items = items;
         _context = context;
         _content = content;
         _wallet = wallet;
@@ -309,7 +325,7 @@ public class TavernService
     /// <summary>
     /// Every character in this player's save, which is what the cap counts.
     ///
-    /// <para>Falls back to the hire records plus the starting ally templates when there is no save yet
+    /// <para>Falls back to the hire records (the starters among them) when there is no save yet
     /// - a player who has just joined a realm has a roster the client is about to write rather than one
     /// already on disk, and refusing their first hire would be wrong.</para>
     /// </summary>
@@ -339,8 +355,8 @@ public class TavernService
         int hires = await _context.HiredCharacters
             .CountAsync(h => h.GameInstanceId == gameInstanceId && h.UserId == userId);
 
-        // The starting roster, not every template: most templates are only faces for the Tavern.
-        return hires + (_content.RecruitSheets?.Count(s => s.IsStarter()) ?? 0);
+        // A new player's starters are hires now (ClaimStartersAsync), so the records are the whole roster.
+        return hires;
     }
 
     private async Task<JsonNode?> LoadWorldAsync(Guid gameInstanceId)
@@ -604,6 +620,128 @@ public class TavernService
             $"pity={row.MissedRestocks} target={TavernRules.EffectiveLureTarget(strength, row.MissedRestocks):P0}");
 
         return (new TavernOutcome(TavernError.None), row);
+    }
+
+    /// <summary>
+    /// A new player's starting heroes: one Common of each class, each with a rolled signature, affinity,
+    /// face and name, so no two players start alike (Mike, playtest 2026-10-08; every player used to get
+    /// the same seven templates). They are hires like any other, so the save is held to their records.
+    ///
+    /// <para>Only for a player with no roster yet. Asked again before the client has saved them, it hands
+    /// back the same heroes rather than rolling more. A player who already has characters gets none.</para>
+    /// </summary>
+    public async Task<(TavernOutcome Outcome, List<HiredCharacter> Starters, ItemSaveData? Gear)> ClaimStartersAsync(Guid gameInstanceId, string userId)
+    {
+        var gate = StarterLocks.GetOrAdd($"{gameInstanceId}:{userId}", _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            if (await SavedRosterCountAsync(gameInstanceId, userId) > 0)
+                return (new TavernOutcome(TavernError.AlreadyStarted, "You already have a roster in this realm."), new List<HiredCharacter>(), null);
+
+            var hired = await ReadHiredAsync(gameInstanceId, userId);
+            if (hired.Count > 0) return (new TavernOutcome(TavernError.None), hired, await StarterGearAsync(gameInstanceId, userId));
+
+            var starters = RollStarters(_content.RecruitSheets, _content.Signatures, Random.Shared)
+                .Select(roll => new HiredCharacter
+                {
+                    GameInstanceId = gameInstanceId,
+                    UserId = userId,
+                    CharacterId = Guid.NewGuid().ToString(),
+                    Name = roll.Name,
+                    Sheet = roll.Sheet,
+                    CharacterClass = roll.Class,
+                    SignatureId = roll.SignatureId,
+                    Affinity = roll.Affinity,
+                    Rarity = roll.Rarity,
+                })
+                .ToList();
+            if (starters.Count == 0)
+                return (new TavernOutcome(TavernError.NoContent, "No recruit can be rolled from this content."), starters, null);
+
+            _context.HiredCharacters.AddRange(starters);
+            await _context.SaveChangesAsync();
+
+            // One piece of gear to put on, so First Steps' second step (equip) can be done at once
+            // rather than after the fifth (a clear) brings the first drop (Mike, playtest 2026-10-08).
+            var gear = _items == null ? null
+                : FirstStepsRules.RollPiece(_content.DroppableItems.ToList(), Random.Shared, StarterGearLevel, ItemRarityTypes.Common);
+            if (gear != null) await _items!.GrantAsync(gameInstanceId, userId, new[] { gear }, StarterGearSource);
+            _sessionLog.Log("TAVERN-STARTERS", $"user={userId} instance={gameInstanceId} " +
+                string.Join(" ", starters.Select(s => $"{s.CharacterClass}/{s.SignatureId}/{s.Affinity}/{s.Sheet}")) +
+                $" gear={gear?.ItemName ?? "none"}");
+            return (new TavernOutcome(TavernError.None), starters, gear);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// One Common of every class that has a face and a signature, in a shuffled order (the first leads the
+    /// company). Each is the Tavern's own roll with the class fixed.
+    /// </summary>
+    public static List<RecruitRoll> RollStarters(IReadOnlyList<RecruitSheet>? sheets, IReadOnlyList<SignatureDefinition>? signatures, Random random)
+    {
+        var rolls = new List<RecruitRoll>();
+        if (sheets == null || signatures == null) return rolls;
+
+        var classes = sheets
+            .Where(s => s != null && !string.IsNullOrEmpty(s.Class) && !string.IsNullOrEmpty(s.Sheet))
+            .Select(s => s.Class)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(c => SignatureRules.ForClass(signatures, c).Count > 0)
+            .OrderBy(c => c, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var className in classes.OrderBy(_ => random.Next()).Take(StarterCount))
+        {
+            var ofClass = sheets.Where(s => s != null && string.Equals(s.Class, className, StringComparison.OrdinalIgnoreCase)).ToList();
+            var roll = RecruitRoller.Roll(ofClass, signatures, 1, null, random);
+            if (roll == null) continue;
+            roll.Rarity = CharacterRarity.Common;
+            rolls.Add(roll);
+        }
+        return rolls;
+    }
+
+    /// <summary>The starter piece's level: a world's first drop.</summary>
+    public const int StarterGearLevel = 1;
+
+    /// <summary>The starter piece already granted, for a claim repeated before the first save.</summary>
+    private async Task<ItemSaveData?> StarterGearAsync(Guid gameInstanceId, string userId)
+    {
+        var json = await _context.ItemGrants
+            .Where(g => g.GameInstanceId == gameInstanceId && g.UserId == userId && g.Source == StarterGearSource)
+            .Select(g => g.ItemJson)
+            .FirstOrDefaultAsync();
+        if (json == null) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<ItemSaveData>(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Characters in this player's save, or 0 with no save (or one that cannot be read).</summary>
+    private async Task<int> SavedRosterCountAsync(Guid gameInstanceId, string userId)
+    {
+        var save = await _context.PlayerGameData
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+        if (save == null) return 0;
+        try
+        {
+            return JsonNode.Parse(save.GameData) is JsonObject root && root["Characters"] is JsonArray characters ? characters.Count : 0;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return 0;
+        }
     }
 
     public async Task<List<HiredCharacter>> ReadHiredAsync(Guid gameInstanceId, string userId)
