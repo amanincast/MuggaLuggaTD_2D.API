@@ -21,6 +21,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
         QuestReady,
         SeasonEnded,
         RealmGoalReached,
+
+        /// <summary>A Lesser Rift is about to open in your region (Invasions R4). Subject: the rift.</summary>
+        RiftOmen,
+
+        /// <summary>A Great Rift is about to open next to your land. Subject: the rift.</summary>
+        RiftNear,
+
+        /// <summary>A rift you fought was sealed; your chest waits. Detail: "{kind}:{rarity}:{share%}".</summary>
+        RiftSealed,
+
+        /// <summary>Your Lesser Rift was not sealed in time: your region is invaded until it is. Subject: the rift.</summary>
+        RegionInvaded,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -51,7 +63,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public static bool CanFlag(LetterKind kind) =>
             kind == LetterKind.SiegeDeclaredOnYou || kind == LetterKind.HeroesCaptured ||
-            kind == LetterKind.CompanyAmbushed || kind == LetterKind.QuestReady || kind == LetterKind.SeasonEnded;
+            kind == LetterKind.CompanyAmbushed || kind == LetterKind.QuestReady || kind == LetterKind.SeasonEnded ||
+            kind == LetterKind.RiftOmen || kind == LetterKind.RegionInvaded || kind == LetterKind.RiftSealed;
 
         public static LetterCategory CategoryOf(LetterKind kind)
         {
@@ -65,6 +78,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     return LetterCategory.Quests;
                 case LetterKind.SeasonEnded:
                 case LetterKind.RealmGoalReached:
+                case LetterKind.RiftNear:
+                case LetterKind.RiftSealed:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

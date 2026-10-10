@@ -161,7 +161,7 @@ public class RealmGoalService
             var chest = RealmGoalRules.ChestFor(share.Count, goal.Target);
             if (chest == null) continue;
 
-            int level = await RosterLevelAsync(gameInstanceId, share.UserId);
+            int level = await RosterLevelAsync(_context, _logger, gameInstanceId, share.UserId);
             var pieces = QuestRules.RollChest(_content.DroppableItems.ToList(), Dice, level, chest.Value);
             await _items.GrantAsync(gameInstanceId, share.UserId, pieces, $"realm-goal {goal.Day}");
             share.ChestRarity = chest;
@@ -244,9 +244,9 @@ public class RealmGoalService
     }
 
     /// <summary>The player's average hero level, the level their chest is rolled at (as the Hall board's).</summary>
-    private async Task<int> RosterLevelAsync(Guid gameInstanceId, string userId)
+    internal static async Task<int> RosterLevelAsync(ApplicationDbContext context, ILogger logger, Guid gameInstanceId, string userId)
     {
-        var save = await MarchingArmy.LoadPlayerSaveAsync(_context, _logger, gameInstanceId, userId);
+        var save = await MarchingArmy.LoadPlayerSaveAsync(context, logger, gameInstanceId, userId);
         var levels = save?.Characters?.Where(c => c != null).Select(c => (double)Math.Max(1, c.Level)).ToList();
         return levels == null || levels.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(levels.Average()));
     }

@@ -141,9 +141,12 @@ public class SeasonScoreService
     /// Pays a player for something they did, having first brought the whole realm up to date so the
     /// lump lands on top of a settled score rather than being swept up by the next settle.
     /// </summary>
-    public async Task AwardAsync(Guid gameInstanceId, string userId, SeasonDeed deed, JsonNode? world = null)
+    public Task AwardAsync(Guid gameInstanceId, string userId, SeasonDeed deed, JsonNode? world = null) =>
+        AwardAsync(gameInstanceId, userId, deed, SeasonScoreRules.PointsFor(deed), world);
+
+    /// <summary>As above, for a deed whose points depend on how it was done (a share of a rift).</summary>
+    public async Task AwardAsync(Guid gameInstanceId, string userId, SeasonDeed deed, double points, JsonNode? world = null)
     {
-        double points = SeasonScoreRules.PointsFor(deed);
         if (points <= 0 || string.IsNullOrEmpty(userId)) return;
 
         await SettleAllAsync(gameInstanceId, world);
@@ -158,7 +161,7 @@ public class SeasonScoreService
         var score = await FindOrCreateAsync(instance, userId, DateTime.UtcNow);
 
         score.SettledPoints += points;
-        if (deed == SeasonDeed.SiteCleared) score.ClearingPoints += points;
+        if (deed == SeasonDeed.SiteCleared || deed == SeasonDeed.RiftSealed) score.ClearingPoints += points;
         else score.RaidingPoints += points;
 
         await _context.SaveChangesAsync();
@@ -459,6 +462,8 @@ public class SeasonScoreService
         await FortifyService.ResetRealmAsync(_context, instance.Id);
         // The new map seats its factions anew, at full strength.
         await FactionService.ResetRealmAsync(_context, instance.Id);
+        // Rifts open in the old map's regions; an invasion lasts until the season ends (Invasions Q6).
+        await RiftService.ResetRealmAsync(_context, instance.Id);
 
         await _context.SaveChangesAsync();
 

@@ -52,6 +52,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<FactionSeasonScore> FactionSeasonScores => Set<FactionSeasonScore>();
     public DbSet<RealmGoal> RealmGoals => Set<RealmGoal>();
     public DbSet<RealmGoalShare> RealmGoalShares => Set<RealmGoalShare>();
+    public DbSet<Rift> Rifts => Set<Rift>();
+    public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
 
     // Hardening 4: every update to a revisioned row raises its revision, which is the row's
     // concurrency token, so the second of two racing writes is refused instead of overwriting.
@@ -316,6 +318,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(e => new { e.GoalId, e.UserId }).IsUnique();
             entity.HasOne<RealmGoal>().WithMany().HasForeignKey(e => e.GoalId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A rift's number is the subject of its rolls: the scheduler and a read racing to announce the same one
+        // collide here, and the loser reads the winner's.
+        builder.Entity<Rift>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Kind, e.EventNumber }).IsUnique();
+            entity.HasIndex(e => new { e.GameInstanceId, e.Stage });
+            entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<RiftContribution>(entity =>
+        {
+            entity.HasIndex(e => new { e.RiftId, e.UserId }).IsUnique();
+            entity.HasOne<Rift>().WithMany().HasForeignKey(e => e.RiftId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PlayerGold>(entity =>

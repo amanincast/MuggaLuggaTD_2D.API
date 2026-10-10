@@ -109,6 +109,8 @@ builder.Services.AddScoped<PlaytestSeeder>();
 builder.Services.AddScoped<InviteCodeService>();
 builder.Services.AddScoped<RealmMembershipService>();
 builder.Services.AddScoped<RealmGoalService>();
+builder.Services.AddScoped<RiftService>();
+builder.Services.AddSingleton<RealmPresence>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support

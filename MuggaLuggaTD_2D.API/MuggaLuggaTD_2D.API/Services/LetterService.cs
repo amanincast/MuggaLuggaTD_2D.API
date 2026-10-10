@@ -311,6 +311,23 @@ public class LetterService
                 if (letter.SubjectId != null && waiting.Contains(letter.SubjectId)) flagged.Add(letter.Id);
         }
 
+        // A rift letter needs the player while its rift can still be sealed, or its chest is unopened.
+        var rifts = candidates.Where(l => l.SubjectId != null &&
+            (l.Kind == nameof(LetterKind.RiftOmen) || l.Kind == nameof(LetterKind.RegionInvaded) || l.Kind == nameof(LetterKind.RiftSealed))).ToList();
+        if (rifts.Count > 0)
+        {
+            var ids = rifts.Select(l => Guid.TryParse(l.SubjectId, out var id) ? id : Guid.Empty).Distinct().ToList();
+            var live = (await _context.Rifts.AsNoTracking()
+                .Where(r => ids.Contains(r.Id) && (r.Stage == RiftStage.Omen || r.Stage == RiftStage.Open || r.Stage == RiftStage.Invaded))
+                .Select(r => r.Id).ToListAsync()).Select(id => id.ToString()).ToHashSet();
+            var chests = (await _context.RiftContributions.AsNoTracking()
+                .Where(c => ids.Contains(c.RiftId) && c.UserId == userId && c.ChestRarity != null && c.ChestOpenedAt == null)
+                .Select(c => c.RiftId).ToListAsync()).Select(id => id.ToString()).ToHashSet();
+            foreach (var letter in rifts)
+                if (letter.Kind == nameof(LetterKind.RiftSealed) ? chests.Contains(letter.SubjectId!) : live.Contains(letter.SubjectId!))
+                    flagged.Add(letter.Id);
+        }
+
         var seasons = candidates.Where(l => l.Kind == nameof(LetterKind.SeasonEnded)).ToList();
         if (seasons.Count > 0)
         {
