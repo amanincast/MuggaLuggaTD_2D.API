@@ -212,8 +212,55 @@ public class ItemLedgerService
         if (grant == null) return null;
 
         grant.ListingId = listingId;
+        // Hardening 7: it leaves the seller's stored save now, not at their next save, so server-side
+        // power (garrisons, raids, sieges) stops counting it the moment it is on the Bazaar.
+        await RemoveFromStoredSaveAsync(gameInstanceId, sellerId, itemId);
         await _context.SaveChangesAsync();
         return grant.ItemJson;
+    }
+
+    /// <summary>
+    /// Whether the player's stored save has this item on a character (Hardening 5). Only the client
+    /// refused to list a worn piece, so a hand-made request could sell gear off a hero's back.
+    /// </summary>
+    public async Task<bool> IsEquippedAsync(Guid gameInstanceId, string userId, string? itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return false;
+        var stored = await _context.PlayerGameData
+            .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId)
+            .Select(p => p.GameData)
+            .FirstOrDefaultAsync();
+
+        foreach (var item in EquipmentIn(ParseOrNull(stored)))
+            if (ReadString(item["Id"]) == itemId && !string.IsNullOrEmpty(ReadString(item[EquippedField])))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Takes an item out of the player's stored save, as a targeted edit of that one array (the rest
+    /// of the save is written back as it was read). Leaves the save for the caller to commit.
+    /// </summary>
+    private async Task RemoveFromStoredSaveAsync(Guid gameInstanceId, string userId, string itemId)
+    {
+        var row = await _context.PlayerGameData
+            .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+        var save = ParseOrNull(row?.GameData);
+        if (row == null || SaveItems(save) is not JsonArray items) return;
+
+        bool removed = false;
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            if (items[i] is JsonObject item && !IsMaterial(item) && ReadString(item["Id"]) == itemId)
+            {
+                items.RemoveAt(i);
+                removed = true;
+            }
+        }
+        if (!removed) return;
+
+        row.GameData = save!.ToJsonString();
+        _sessionLog.Log("ITEM-UNSAVED", $"user={userId} item={itemId} realm={gameInstanceId}");
     }
 
     /// <summary>A cancelled listing gives the item back to its seller.</summary>

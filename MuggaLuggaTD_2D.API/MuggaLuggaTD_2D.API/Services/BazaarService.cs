@@ -19,7 +19,10 @@ public enum BazaarError
     CannotAfford,
     NotYours,
     NotActive,
-    OwnListing
+    OwnListing,
+
+    /// <summary>The piece is on a character; take it off before selling it.</summary>
+    Equipped
 }
 
 public record BazaarOutcome(BazaarError Error, string? Message = null)
@@ -183,6 +186,10 @@ public class BazaarService
     {
         if (string.IsNullOrWhiteSpace(itemId))
             return (new BazaarOutcome(BazaarError.NothingNamed, "No item was named."), null);
+
+        // The server's own check (Hardening 5): only the client used to refuse a worn piece.
+        if (await _items.IsEquippedAsync(realmId, sellerId, itemId))
+            return (new BazaarOutcome(BazaarError.Equipped, "Take that off first: a hero is wearing it."), null);
 
         await TradeLock.WaitAsync();
         try
