@@ -80,7 +80,8 @@ public class PlayerGameDataController : ControllerBase
         var playerData = await _context.PlayerGameData
             .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
 
-        if (playerData == null)
+        // A member who has joined but not yet saved has no save: answering 404 is what starts them.
+        if (playerData == null || playerData.GameData == RealmMembershipService.NoSaveYet)
         {
             return NotFound(new { message = "Player data not found" });
         }
@@ -113,6 +114,14 @@ public class PlayerGameDataController : ControllerBase
 
         var existingData = await _context.PlayerGameData
             .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+
+        // A save no longer makes a member (Hardening 2): POST gameinstance/{id}/join does, after
+        // checking the realm's access type and capacity. Only the owner may save without having joined.
+        if (existingData == null && gameInstance.OwnerId != userId)
+        {
+            _sessionLog.Log("SAVE-DENY", $"user={userId} instance={gameInstanceId} not a member");
+            return Forbid();
+        }
 
         // Merge rather than replace: the roster save and fog discovery each send only their own
         // fields, and replacing the blob let either one erase the other (see PlayerDataMerger).
