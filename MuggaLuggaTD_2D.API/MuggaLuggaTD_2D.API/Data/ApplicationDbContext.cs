@@ -50,6 +50,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<FactionRaid> FactionRaids => Set<FactionRaid>();
     public DbSet<FactionSiege> FactionSieges => Set<FactionSiege>();
     public DbSet<FactionSeasonScore> FactionSeasonScores => Set<FactionSeasonScore>();
+    public DbSet<RealmGoal> RealmGoals => Set<RealmGoal>();
+    public DbSet<RealmGoalShare> RealmGoalShares => Set<RealmGoalShare>();
 
     // Hardening 4: every update to a revisioned row raises its revision, which is the row's
     // concurrency token, so the second of two racing writes is refused instead of overwriting.
@@ -304,6 +306,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         // Configure PlayerGold (one purse per player per realm; every read and write is by that
         // key, and a second row would be a second balance quietly accruing alongside the first)
+        // A realm has one goal a day; two requests racing to make it collide here and read the winner's.
+        builder.Entity<RealmGoal>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.Day }).IsUnique();
+            entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<RealmGoalShare>(entity =>
+        {
+            entity.HasIndex(e => new { e.GoalId, e.UserId }).IsUnique();
+            entity.HasOne<RealmGoal>().WithMany().HasForeignKey(e => e.GoalId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<PlayerGold>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId }).IsUnique();

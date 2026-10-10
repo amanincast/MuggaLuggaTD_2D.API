@@ -41,7 +41,13 @@ public enum WarLogKind
     /// A defender's sortie broke a faction's siege (npc-factions.md phase 3). The actor is the defender,
     /// the subject the faction.
     /// </summary>
-    SiegeBroken
+    SiegeBroken,
+
+    /// <summary>The realm's goal of the day passed a quarter. Detail: "25:Slay 900 Goblins".</summary>
+    RealmGoalProgress,
+
+    /// <summary>The realm reached its goal of the day; the actor struck the last blow. Detail as above.</summary>
+    RealmGoalReached
 }
 
 /// <summary>

@@ -166,6 +166,22 @@ faction per realm, and `FactionRaid` rows for what they do.
   handed in before the grant.
 - **Debug (Development only):** `POST quests/debug/fresh` and `quests/debug/finish`.
 
+## Realm goal of the day (`RealmGoalService`, `RealmGoalController`; Unity `docs/systems/quests.md`)
+
+- **One goal per realm per UTC day**: a `RealmGoal` row (unique realm+day), made lazily by `TodayAsync`
+  from `RealmGoalRules.For` (shared; seeded by realm and day; Slay a people of the realm's biomes, Clear
+  sites or win Ambushes; target scales with players who saved in the last 7 days, at least 2).
+- **Fed by `QuestService.RecordAsync`**, which calls `RealmGoalService.RecordAsync` first, so every deed source
+  counts (PvE claim, ambush claim, auto mode). Never throws. Each player's count is a `RealmGoalShare`.
+- **Paid once, by the write that reaches it.** Goal and shares are `IRevisioned` and updated under
+  `Concurrency.RetryAsync`/`RefreshAsync`. Each share of at least 2% gets a Magic chest, or Rare at 10%,
+  rolled at the roster's average level and granted through the ledger. It also gets a `RealmGoalReached`
+  letter (dedup `goal:{day}`). The war log notes each quarter and the end. Session log: `REALM-GOAL`.
+- **Details carry parts, the client writes the words** (plurals): war log `"{pct}:{kind}:{subject}:{target}"`,
+  letter `"{chest}:{mine}:{kind}:{subject}:{target}"`.
+- `GET gameinstance/{id}/realm-goal` (the strip: count, ends at, my share and chest, top 5).
+  Debug (Development only): `POST realm-goal/debug/fill?fraction=`.
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log

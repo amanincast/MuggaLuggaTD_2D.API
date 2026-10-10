@@ -20,6 +20,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         AutoReport,
         QuestReady,
         SeasonEnded,
+        RealmGoalReached,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -63,6 +64,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.QuestReady:
                     return LetterCategory.Quests;
                 case LetterKind.SeasonEnded:
+                case LetterKind.RealmGoalReached:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

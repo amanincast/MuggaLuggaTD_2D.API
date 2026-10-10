@@ -50,10 +50,13 @@ public class QuestService
     /// <summary>The clock, for tests.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
+    private readonly RealmGoalService? _goals;
+
     public QuestService(ApplicationDbContext context, IGameContentProvider content, ItemLedgerService items,
         GoldService gold, MaterialWalletService wallet, ISessionLog sessionLog, HiringService? hiring = null,
-        LetterService? letters = null)
+        LetterService? letters = null, RealmGoalService? goals = null)
     {
+        _goals = goals;
         _letters = letters;
         _context = context;
         _content = content;
@@ -188,6 +191,9 @@ public class QuestService
     public async Task RecordAsync(Guid gameInstanceId, string userId, QuestDeed deed)
     {
         if (string.IsNullOrEmpty(userId) || deed == null) return;
+
+        // The realm's goal of the day counts the same deeds (Active Content B). It never throws.
+        if (_goals != null) await _goals.RecordAsync(gameInstanceId, userId, deed);
         try
         {
             var quests = await _context.PlayerQuests
