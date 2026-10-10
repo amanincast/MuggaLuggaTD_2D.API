@@ -147,9 +147,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return levels.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(levels.Average()));
         }
 
-        /// <summary>Whether auto mode may fight this kind of site at all: portals and dungeons (caves are dungeons).</summary>
-        public static bool IsFightable(LocationType type) =>
-            type == LocationType.Portal || type == LocationType.Dungeon;
+        /// <summary>Whether auto mode may fight this kind of site at all: any site a hand fight can (caves, portals, ruins, camps).</summary>
+        public static bool IsFightable(LocationType type) => SiteSpec.IsFightableType(type);
 
         /// <summary>Whether a company of this level may auto-fight a site of that one: only below it.</summary>
         public static bool CanFight(int companyLevel, int siteLevel) => siteLevel < companyLevel;

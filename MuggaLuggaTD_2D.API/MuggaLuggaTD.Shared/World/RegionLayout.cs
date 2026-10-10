@@ -48,7 +48,11 @@ namespace MuggaLuggaTD.Shared.World
         public int Level = 1;
 
         /// <summary>True for the site types a player can enter and fight in.</summary>
-        public bool IsFightable => Type == LocationType.Dungeon || Type == LocationType.Portal;
+        public bool IsFightable => IsFightableType(Type);
+
+        /// <summary>The kinds of site a company fights at: caves, portals, ruins and camps (ruins and camps since 1.51.0).</summary>
+        public static bool IsFightableType(LocationType type) =>
+            type == LocationType.Dungeon || type == LocationType.Portal || type == LocationType.Ruin || type == LocationType.Camp;
 
         /// <summary>The region id embedded in a site id, or null when it is not a site id.</summary>
         public static string RegionIdOf(string siteId)

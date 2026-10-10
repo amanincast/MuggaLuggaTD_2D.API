@@ -217,7 +217,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// the restock is paid for with a dungeon, so taking a keep must not also buy a board.
         /// </summary>
         public static bool BringsARecruit(LocationType siteType)
-            => siteType == LocationType.Dungeon || siteType == LocationType.Portal;
+            => siteType == LocationType.Dungeon || siteType == LocationType.Portal || siteType == LocationType.Ruin;
+        // Not a camp: camps are the quick, plentiful fights, and a recruit for each would flood the board.
 
         /// <summary>
         /// What a paid refresh costs, in gold.

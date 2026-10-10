@@ -43,6 +43,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
                 case LocationType.Portal:
                 case LocationType.Dungeon:
+                case LocationType.Ruin:
+                case LocationType.Camp:
                     return ConquestOutcome.RemoveLocation;
 
                 default:

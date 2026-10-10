@@ -20,7 +20,11 @@ namespace MuggaLuggaTD.Shared.World
         // places to fight: a node produces resources over time, a ruin can be repaired to raise the
         // region's entrenchment. Appended deliberately — these integers are persisted.
         ResourceNode = 5,
-        Ruin = 6
+        Ruin = 6,
+
+        // A bandit or monster camp: a short open-field fight, two in every region, so a region opens with
+        // more to do than its caves (Mike, playtest 2026-10-09). Appended, like the rest.
+        Camp = 7
     }
 
     /// <summary>

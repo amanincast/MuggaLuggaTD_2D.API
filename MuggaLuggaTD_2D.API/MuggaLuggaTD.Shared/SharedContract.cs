@@ -225,6 +225,9 @@ namespace MuggaLuggaTD.Shared
         // 1.50.0 - Worker veterancy (Workers spec). WorkerLevelRules: workers gain levels from hours at work (+4% each),
         //   roll a perk at 3, 6 and 9 weighted by tier, may be promoted a tier at 5 and 10; up to two veterans carry
         //   into the next season at half their level. The rates and goods gathered change.
-        public const string Version = "1.50.0";
+        // 1.51.0 - Camps and ruins (playtest 2026-10-09). LocationType.Camp: two per region, placed after every other
+        //   site (so no existing site moves), a tier-1 open-field fight at the region's level. Ruins and camps are
+        //   fightable (RegionLayout.IsFightableType); a ruin brings a recruit, a camp does not. The site list changes.
+        public const string Version = "1.51.0";
     }
 }
