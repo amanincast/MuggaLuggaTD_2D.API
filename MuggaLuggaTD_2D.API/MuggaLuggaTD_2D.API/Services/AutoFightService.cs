@@ -343,8 +343,10 @@ public class AutoFightService
         // One settle at a time per player. The Hall reads the companies and the reports together, and
         // two replays of the same stretch would pay it twice: on Postgres the second waits here for the
         // first to commit, then finds nothing left to do.
-        await using var transaction = _context.Database.IsRelational() ? await _context.Database.BeginTransactionAsync() : null;
-        if (transaction != null)
+        // Inside a caller's transaction (a trade, Hardening 3) it joins that one; the row lock still holds.
+        await using var transaction = _context.Database.IsRelational() && _context.Database.CurrentTransaction == null
+            ? await _context.Database.BeginTransactionAsync() : null;
+        if (_context.Database.IsRelational())
             await _context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT 1 FROM \"PlayerParties\" WHERE \"GameInstanceId\" = {gameInstanceId} AND \"UserId\" = {userId} AND \"AutoMode\" FOR UPDATE");
 
@@ -416,19 +418,9 @@ public class AutoFightService
                 row.RecoversAt = day.Bloodied[id];
             }
         }
-        if (day.Eaten.Count > 0)
-        {
-            var names = day.Eaten.Keys.ToList();
-            var goods = await _context.PlayerMaterials
-                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId && names.Contains(m.MaterialName))
-                .ToListAsync();
-            foreach (var row in goods)
-            {
-                row.Quantity = Math.Max(0, row.Quantity - day.Eaten[row.MaterialName]);
-                row.UpdatedAt = day.Now;
-            }
-        }
         await _context.SaveChangesAsync();
+        // Through the wallet, so a provision eaten while the player spends the same goods cannot lose either write.
+        await _wallet.ConsumeAsync(gameInstanceId, userId, day.Eaten, day.Now);
 
         // Paid as one sum each, after the replay: the purse settles its land income up to now first.
         string source = $"auto user={userId} fights={day.Fights}";

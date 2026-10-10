@@ -51,6 +51,27 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<FactionSiege> FactionSieges => Set<FactionSiege>();
     public DbSet<FactionSeasonScore> FactionSeasonScores => Set<FactionSeasonScore>();
 
+    // Hardening 4: every update to a revisioned row raises its revision, which is the row's
+    // concurrency token, so the second of two racing writes is refused instead of overwriting.
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        RaiseRevisions();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        RaiseRevisions();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void RaiseRevisions()
+    {
+        foreach (var entry in ChangeTracker.Entries<IRevisioned>())
+            if (entry.State == EntityState.Modified)
+                entry.Entity.Revision++;
+    }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

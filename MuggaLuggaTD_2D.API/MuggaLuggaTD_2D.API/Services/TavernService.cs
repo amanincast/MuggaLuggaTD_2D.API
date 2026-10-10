@@ -472,7 +472,11 @@ public class TavernService
     /// cannot be paid for leaves nothing behind; and the slot is marked hired in the same save as
     /// the record, so two requests for one slot cannot both succeed.</para>
     /// </summary>
-    public async Task<(TavernOutcome Outcome, HiredCharacter? Hired)> HireAsync(
+    public Task<(TavernOutcome Outcome, HiredCharacter? Hired)> HireAsync(
+        Guid gameInstanceId, string userId, int slot)
+        => Concurrency.TransactionAsync(_context, () => HireCoreAsync(gameInstanceId, userId, slot));
+
+    private async Task<(TavernOutcome Outcome, HiredCharacter? Hired)> HireCoreAsync(
         Guid gameInstanceId, string userId, int slot)
     {
         var recruit = await _context.TavernRecruits

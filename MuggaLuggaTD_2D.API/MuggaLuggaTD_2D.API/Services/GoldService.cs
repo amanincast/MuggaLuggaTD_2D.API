@@ -77,31 +77,34 @@ public class GoldService
         var members = userIds?.Where(u => !string.IsNullOrEmpty(u)).Distinct().ToList();
         if (members == null || members.Count == 0) return;
 
-        var rows = await _context.PlayerGold
-            .Where(g => g.GameInstanceId == gameInstanceId && members.Contains(g.UserId))
-            .ToListAsync();
-
-        foreach (var userId in members)
+        await Concurrency.RetryAsync(_context, async () =>
         {
-            var row = rows.FirstOrDefault(g => g.UserId == userId);
-            if (row == null)
+            var rows = await _context.PlayerGold
+                .Where(g => g.GameInstanceId == gameInstanceId && members.Contains(g.UserId))
+                .ToListAsync();
+
+            foreach (var userId in members)
             {
-                row = new PlayerGold
+                var row = rows.FirstOrDefault(g => g.UserId == userId);
+                if (row == null)
                 {
-                    GameInstanceId = gameInstanceId,
-                    UserId = userId,
-                    LastSettledAt = until
-                };
-                _context.PlayerGold.Add(row);
-                rows.Add(row);
+                    row = new PlayerGold
+                    {
+                        GameInstanceId = gameInstanceId,
+                        UserId = userId,
+                        LastSettledAt = until
+                    };
+                    _context.PlayerGold.Add(row);
+                    rows.Add(row);
+                }
+
+                Settle(row, until);
+                row.GoldPerHour = GoldRules.RateForHoldings(userId, regions);
+                row.UpdatedAt = DateTime.UtcNow;
             }
 
-            Settle(row, until);
-            row.GoldPerHour = GoldRules.RateForHoldings(userId, regions);
-            row.UpdatedAt = DateTime.UtcNow;
-        }
-
-        await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
+        });
     }
 
     /// <summary>
@@ -112,16 +115,19 @@ public class GoldService
     {
         if (gold <= 0 || string.IsNullOrEmpty(userId)) return 0;
 
-        var row = await FindOrCreateAsync(gameInstanceId, userId);
-        Settle(row, DateTime.UtcNow);
+        long balance = await Concurrency.RetryAsync(_context, async () =>
+        {
+            await Concurrency.RefreshAsync<PlayerGold>(_context, g => g.GameInstanceId == gameInstanceId && g.UserId == userId);
+            var row = await FindOrCreateAsync(gameInstanceId, userId);
+            Settle(row, DateTime.UtcNow);
 
-        row.SettledGold += gold;
-        row.LifetimeFromClears += gold;
-        row.UpdatedAt = DateTime.UtcNow;
+            row.SettledGold += gold;
+            row.LifetimeFromClears += gold;
+            row.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
-
-        long balance = (long)Math.Floor(row.SettledGold);
+            await _context.SaveChangesAsync();
+            return (long)Math.Floor(row.SettledGold);
+        });
 
         _sessionLog.Log("GOLD-GRANT",
             $"user={userId} instance={gameInstanceId} reason={reason} gold={gold} balance={balance}");
@@ -137,15 +143,18 @@ public class GoldService
     {
         if (gold <= 0 || string.IsNullOrEmpty(userId)) return 0;
 
-        var row = await FindOrCreateAsync(gameInstanceId, userId);
-        Settle(row, DateTime.UtcNow);
+        long balance = await Concurrency.RetryAsync(_context, async () =>
+        {
+            await Concurrency.RefreshAsync<PlayerGold>(_context, g => g.GameInstanceId == gameInstanceId && g.UserId == userId);
+            var row = await FindOrCreateAsync(gameInstanceId, userId);
+            Settle(row, DateTime.UtcNow);
 
-        row.SettledGold += gold;
-        row.UpdatedAt = DateTime.UtcNow;
+            row.SettledGold += gold;
+            row.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
-
-        long balance = (long)Math.Floor(row.SettledGold);
+            await _context.SaveChangesAsync();
+            return (long)Math.Floor(row.SettledGold);
+        });
 
         _sessionLog.Log("GOLD-CREDIT",
             $"user={userId} instance={gameInstanceId} reason={reason} gold={gold} balance={balance}");
@@ -162,30 +171,36 @@ public class GoldService
         if (cost <= 0)
             return new GoldOutcome(GoldError.NothingToSpend, "No gold was named.");
 
-        var row = await FindOrCreateAsync(gameInstanceId, userId);
-        Settle(row, DateTime.UtcNow);
-
-        long balance = (long)Math.Floor(row.SettledGold);
-        if (balance < cost)
+        // Retried as a whole if another write lands first, so the check is made against the purse
+        // as it really is, and two spends can never both pass against one balance (Hardening 4).
+        return await Concurrency.RetryAsync(_context, async () =>
         {
-            _sessionLog.Log("GOLD-REFUSE",
-                $"user={userId} instance={gameInstanceId} reason={reason} wanted={cost} held={balance}");
+            await Concurrency.RefreshAsync<PlayerGold>(_context, g => g.GameInstanceId == gameInstanceId && g.UserId == userId);
+            var row = await FindOrCreateAsync(gameInstanceId, userId);
+            Settle(row, DateTime.UtcNow);
 
-            return new GoldOutcome(GoldError.InsufficientGold,
-                $"Not enough gold: {cost} needed, {balance} held.", balance);
-        }
+            long balance = (long)Math.Floor(row.SettledGold);
+            if (balance < cost)
+            {
+                _sessionLog.Log("GOLD-REFUSE",
+                    $"user={userId} instance={gameInstanceId} reason={reason} wanted={cost} held={balance}");
 
-        row.SettledGold -= cost;
-        row.UpdatedAt = DateTime.UtcNow;
+                return new GoldOutcome(GoldError.InsufficientGold,
+                    $"Not enough gold: {cost} needed, {balance} held.", balance);
+            }
 
-        await _context.SaveChangesAsync();
+            row.SettledGold -= cost;
+            row.UpdatedAt = DateTime.UtcNow;
 
-        long remaining = (long)Math.Floor(row.SettledGold);
+            await _context.SaveChangesAsync();
 
-        _sessionLog.Log("GOLD-SPEND",
-            $"user={userId} instance={gameInstanceId} reason={reason} gold={cost} balance={remaining}");
+            long remaining = (long)Math.Floor(row.SettledGold);
 
-        return new GoldOutcome(GoldError.None, null, remaining);
+            _sessionLog.Log("GOLD-SPEND",
+                $"user={userId} instance={gameInstanceId} reason={reason} gold={cost} balance={remaining}");
+
+            return new GoldOutcome(GoldError.None, null, remaining);
+        });
     }
 
     // -----------------------------------------------------------------
@@ -214,8 +229,10 @@ public class GoldService
 
     private async Task<PlayerGold> FindOrCreateAsync(Guid gameInstanceId, string userId)
     {
-        var row = await _context.PlayerGold
-            .FirstOrDefaultAsync(g => g.GameInstanceId == gameInstanceId && g.UserId == userId);
+        // A purse added by a try that lost its race is still pending: it is this purse.
+        var row = _context.PlayerGold.Local.FirstOrDefault(g => g.GameInstanceId == gameInstanceId && g.UserId == userId)
+            ?? await _context.PlayerGold
+                .FirstOrDefaultAsync(g => g.GameInstanceId == gameInstanceId && g.UserId == userId);
 
         if (row != null) return row;
 

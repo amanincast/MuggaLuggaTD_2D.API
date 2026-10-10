@@ -77,6 +77,13 @@ public class GarrisonController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
+        // The gold, the release and the world write are one transaction (Hardening 3): a world that
+        // fails to save cannot leave the payer charged for prisoners still held.
+        return await Concurrency.TransactionAsync(_context, () => RansomCoreAsync(gameInstanceId, userId, request));
+    }
+
+    private async Task<ActionResult<RansomResponse>> RansomCoreAsync(Guid gameInstanceId, string userId, RansomRequest request)
+    {
         var (outcome, response, world) = await _garrisons.RansomAsync(gameInstanceId, userId, request);
 
         if (!outcome.Succeeded)

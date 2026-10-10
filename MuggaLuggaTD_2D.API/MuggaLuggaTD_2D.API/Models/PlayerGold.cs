@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MuggaLuggaTD_2D.API.Data;
 
 namespace MuggaLuggaTD_2D.API.Models;
 
@@ -20,7 +21,7 @@ namespace MuggaLuggaTD_2D.API.Models;
 /// contested is scoped to. Unlike a season score it <b>survives a season reset</b>: the scoreboard
 /// belongs to the season, but the purse belongs to the player.</para>
 /// </summary>
-public class PlayerGold
+public class PlayerGold : IRevisioned
 {
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -54,4 +55,8 @@ public class PlayerGold
     public double LifetimeFromClears { get; set; }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Raised on every update; two racing writes cannot both land (Hardening 4).</summary>
+    [ConcurrencyCheck]
+    public long Revision { get; set; }
 }
