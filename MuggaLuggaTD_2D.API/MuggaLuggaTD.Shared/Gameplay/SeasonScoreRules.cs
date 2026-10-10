@@ -20,7 +20,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         SiegeWon = 3,
 
         /// <summary>Held a region against a siege.</summary>
-        SiegeRepelled = 4
+        SiegeRepelled = 4,
+
+        /// <summary>
+        /// Helped seal a rift (Invasions row 6). Its points depend on the share, so they come from
+        /// <see cref="RiftRules"/> rather than <see cref="SeasonScoreRules.PointsFor"/>; they count as clearing.
+        /// </summary>
+        RiftSealed = 5
     }
 
     /// <summary>

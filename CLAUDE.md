@@ -190,6 +190,27 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Hunting Season:** a per-leg factor in `AmbushRules.ChanceForRoute` at departure (`PartyService.TravelAsync`,
   `AutoFightService.StartWalk`), ×1.5. The pay is ×1.5 by the hour struck (`ClaimAmbushAsync`, auto `Ambushed`).
 
+## Rifts (`RiftRules`, `RiftService`, shared 1.53.0; spec: Invasions R1–R7)
+
+- **Two kinds.** A **Great Rift** is the realm's event: about 4 a day, 1 h omen, 4 h open, one live at a time, a
+  shared Breach (`BreachMax` = 600 × players active in the last day, at least 1,200). Unsealed, it **erupts**.
+  A **Lesser Rift** opens in one online player's region (seen in the last 30 min, `RealmPresence`), never a
+  capital, one per player: about 6–8 a day per realm, 20 min omen, 90 min open, one win seals it. Unsealed,
+  the region is **invaded until it is sealed or the season ends** (stage `Invaded`, still sealable).
+- **Timing is random but fixed:** `RiftRules.DueToOpen` rolls each gap from the realm and the rift's number. An
+  overdue rift still gets its whole omen (`OpensAt`). No rifts in a season's first 2 h or last 6 h, nor in a realm
+  nobody has played for a day.
+- **Advanced** every minute by `SiegeScheduler` (`RiftService.AdvanceAllAsync`) and by every `GET rifts` first.
+  A unique (realm, season, kind, number) index stops two announcers making the same rift twice.
+- **Sealing:** `RecordWinAsync(rift, user, breach)` is the one way Breach comes off (revisioned, so two wins at once
+  both count and only one seals). The seal sets each share's chest (`GreatChestFor` by share and rank; a Lesser Rift
+  pays its sealer a Magic chest), awards `SeasonDeed.RiftSealed` (counts as clearing), and sends `RiftSealed`
+  letters. Chests are rolled when opened (`POST rifts/{id}/chest`).
+- **Presence** (`RealmPresence`, singleton, in memory): `GameHub.JoinGameInstance` marks a player in; leaving or
+  disconnecting stamps when they were last seen. A restart forgets it, and clients rejoin at once.
+- **Phase 1 only marks** an erupted or invaded region: no Riftborn faction, no invasion ambushes, no rift fights
+  yet (phases 3–5). Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log

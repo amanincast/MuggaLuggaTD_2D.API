@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Hubs;
 
@@ -11,10 +12,12 @@ namespace MuggaLuggaTD_2D.API.Hubs;
 public class GameHub : Hub
 {
     private readonly ApplicationDbContext _context;
+    private readonly RealmPresence? _presence;
 
-    public GameHub(ApplicationDbContext context)
+    public GameHub(ApplicationDbContext context, RealmPresence? presence = null)
     {
         _context = context;
+        _presence = presence;
     }
 
     public async Task JoinGameInstance(Guid gameInstanceId)
@@ -32,11 +35,19 @@ public class GameHub : Hub
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, gameInstanceId.ToString());
+        _presence?.Joined(Context.ConnectionId, gameInstanceId, userId);
     }
 
     public async Task LeaveGameInstance(Guid gameInstanceId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, gameInstanceId.ToString());
+        _presence?.Left(Context.ConnectionId);
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        _presence?.Left(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
     }
 
     private async Task<bool> HasAccessToGameInstance(GameInstance gameInstance, string userId)

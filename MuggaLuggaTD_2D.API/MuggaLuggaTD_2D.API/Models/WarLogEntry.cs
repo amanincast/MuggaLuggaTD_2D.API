@@ -47,7 +47,22 @@ public enum WarLogKind
     RealmGoalProgress,
 
     /// <summary>The realm reached its goal of the day; the actor struck the last blow. Detail as above.</summary>
-    RealmGoalReached
+    RealmGoalReached,
+
+    /// <summary>A Great Rift is announced in the region (Invasions). Detail: the rift's kind.</summary>
+    RiftOmen,
+
+    /// <summary>A Great Rift has opened. Detail: the rift's kind.</summary>
+    RiftOpened,
+
+    /// <summary>A rift was sealed; the actor struck the last blow, the subject held a Lesser Rift's region. Detail: the kind.</summary>
+    RiftSealed,
+
+    /// <summary>A Great Rift was not sealed in time. Detail: the kind.</summary>
+    RiftErupted,
+
+    /// <summary>A Lesser Rift was not sealed in time: the subject's region is invaded. Detail: the kind.</summary>
+    RegionInvaded
 }
 
 /// <summary>

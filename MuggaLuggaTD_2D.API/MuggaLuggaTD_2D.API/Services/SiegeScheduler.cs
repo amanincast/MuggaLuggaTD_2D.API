@@ -64,6 +64,12 @@ public class SiegeScheduler : BackgroundService
                 if (settled > 0)
                     _logger.LogInformation("Faction sieges settled: {Count}.", settled);
 
+                // Rifts are announced, opened and run out on the same sweep (Invasions spec §5.2).
+                var rifts = scope.ServiceProvider.GetRequiredService<RiftService>();
+                int moved = await rifts.AdvanceAllAsync();
+                if (moved > 0)
+                    _logger.LogInformation("Rift sweep: {Count} rift(s) announced or moved on.", moved);
+
                 // The NPC factions take their turn every quarter hour, not every minute
                 // (docs/design/npc-factions.md §4).
                 var now = DateTime.UtcNow;

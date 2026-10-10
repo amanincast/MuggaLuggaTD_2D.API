@@ -231,6 +231,9 @@ namespace MuggaLuggaTD.Shared
         // 1.52.0 - Fairs and storms (Active Content C, hourly). RegionConditionRules: each hour a held region may
         //   carry a Harvest Fair (its workers bring in +50% goods) or Hunting Season (ambushes 1.5x as likely there,
         //   and pay 1.5x). The goods gathered, the ambush chance a route shows, and what an ambush pays change.
-        public const string Version = "1.52.0";
+        // 1.53.0 - Rifts, phase 1 (Invasions spec R1–R7). RiftRules: Great Rifts (4 a day, a realm's shared Breach,
+        //   erupt if unsealed) and Lesser Rifts (6–8 a day in an online player's region, invade it if unsealed); their
+        //   timing, placement, Breach and pay. New letter kinds, SeasonDeed.RiftSealed.
+        public const string Version = "1.53.0";
     }
 }
