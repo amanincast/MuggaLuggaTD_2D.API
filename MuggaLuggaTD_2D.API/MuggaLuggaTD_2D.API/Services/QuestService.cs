@@ -123,7 +123,10 @@ public class QuestService
     /// Pays the chest, the gold and the materials. Once every offer on the board has been handed in, a fresh
     /// set is rolled at once.
     /// </summary>
-    public async Task<(QuestOutcome Outcome, QuestHandInResponse? Response)> HandInAsync(Guid gameInstanceId, string userId, Guid questId)
+    public Task<(QuestOutcome Outcome, QuestHandInResponse? Response)> HandInAsync(Guid gameInstanceId, string userId, Guid questId)
+        => Concurrency.TransactionAsync(_context, () => HandInCoreAsync(gameInstanceId, userId, questId));
+
+    private async Task<(QuestOutcome Outcome, QuestHandInResponse? Response)> HandInCoreAsync(Guid gameInstanceId, string userId, Guid questId)
     {
         var quest = await _context.PlayerQuests.FirstOrDefaultAsync(q =>
             q.Id == questId && q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null);

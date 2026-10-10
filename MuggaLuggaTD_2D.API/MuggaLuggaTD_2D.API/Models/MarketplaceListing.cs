@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MuggaLuggaTD_2D.API.Data;
 
 namespace MuggaLuggaTD_2D.API.Models;
 
@@ -36,7 +37,7 @@ public enum ListingKind
 /// from the oldest listings first, across every seller and world. Equipment is unique, so each
 /// listing is its own row and is bought whole.</para>
 /// </summary>
-public class MarketplaceListing
+public class MarketplaceListing : IRevisioned
 {
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -101,4 +102,8 @@ public class MarketplaceListing
 
     [NotMapped]
     public long GoldOwed => Math.Max(0, EarnedGold - CollectedGold);
+
+    /// <summary>Raised on every update; two racing writes cannot both land (Hardening 4).</summary>
+    [ConcurrencyCheck]
+    public long Revision { get; set; }
 }

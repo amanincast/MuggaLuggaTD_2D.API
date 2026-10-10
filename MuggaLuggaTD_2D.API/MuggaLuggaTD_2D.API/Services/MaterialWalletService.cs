@@ -59,38 +59,71 @@ public class MaterialWalletService
         if (grants == null || grants.Count == 0)
             return;
 
-        var existing = await _context.PlayerMaterials
-            .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
-            .ToListAsync();
-
-        foreach (var grant in grants)
+        await Concurrency.RetryAsync(_context, async () =>
         {
-            if (string.IsNullOrWhiteSpace(grant?.MaterialName) || grant.Quantity <= 0)
-                continue;
+            await Concurrency.RefreshAsync<PlayerMaterial>(_context, m => m.GameInstanceId == gameInstanceId && m.UserId == userId);
+            var existing = await _context.PlayerMaterials
+                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
+                .ToListAsync();
 
-            var row = existing.FirstOrDefault(m => m.MaterialName == grant.MaterialName);
-            if (row == null)
+            // A row added by a try that lost its race is still pending; it is the same stack.
+            existing.AddRange(_context.PlayerMaterials.Local
+                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId && !existing.Contains(m)));
+
+            foreach (var grant in grants)
             {
-                row = new PlayerMaterial
+                if (string.IsNullOrWhiteSpace(grant?.MaterialName) || grant.Quantity <= 0)
+                    continue;
+
+                var row = existing.FirstOrDefault(m => m.MaterialName == grant.MaterialName);
+                if (row == null)
                 {
-                    GameInstanceId = gameInstanceId,
-                    UserId = userId,
-                    MaterialName = grant.MaterialName,
-                    Quantity = 0
-                };
-                _context.PlayerMaterials.Add(row);
-                existing.Add(row);
+                    row = new PlayerMaterial
+                    {
+                        GameInstanceId = gameInstanceId,
+                        UserId = userId,
+                        MaterialName = grant.MaterialName,
+                        Quantity = 0
+                    };
+                    _context.PlayerMaterials.Add(row);
+                    existing.Add(row);
+                }
+
+                row.Quantity += grant.Quantity;
+                row.UpdatedAt = DateTime.UtcNow;
             }
 
-            row.Quantity += grant.Quantity;
-            row.UpdatedAt = DateTime.UtcNow;
-        }
-
-        await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
+        });
 
         _sessionLog.Log("WALLET-GRANT",
             $"user={userId} instance={gameInstanceId} reason={reason} " +
             $"materials={string.Join(",", grants.Select(g => $"{g.MaterialName}x{g.Quantity}"))}");
+    }
+
+    /// <summary>
+    /// Takes up to what is named, never below nothing: provisions an auto-fight day ate. Unlike
+    /// <see cref="SpendAsync"/> it is not refused for want of stock - the meals were already eaten.
+    /// </summary>
+    public async Task ConsumeAsync(
+        Guid gameInstanceId, string userId, IReadOnlyDictionary<string, int> eaten, DateTime at)
+    {
+        if (eaten == null || eaten.Count == 0) return;
+        var names = eaten.Keys.ToList();
+
+        await Concurrency.RetryAsync(_context, async () =>
+        {
+            await Concurrency.RefreshAsync<PlayerMaterial>(_context, m => m.GameInstanceId == gameInstanceId && m.UserId == userId);
+            var goods = await _context.PlayerMaterials
+                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId && names.Contains(m.MaterialName))
+                .ToListAsync();
+            foreach (var row in goods)
+            {
+                row.Quantity = Math.Max(0, row.Quantity - eaten[row.MaterialName]);
+                row.UpdatedAt = at;
+            }
+            await _context.SaveChangesAsync();
+        });
     }
 
     /// <summary>
@@ -112,32 +145,40 @@ public class MaterialWalletService
         if (required.Count == 0)
             return new WalletOutcome(WalletError.NothingToSpend, "No materials were named.");
 
-        var rows = await _context.PlayerMaterials
-            .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
-            .ToListAsync();
-
-        foreach (var (name, quantity) in required)
+        // Retried as a whole if another write lands first (Hardening 4): the check is always made
+        // against the stacks as they really are, so two spends cannot both pass against one stack.
+        var refused = await Concurrency.RetryAsync(_context, async () =>
         {
-            var row = rows.FirstOrDefault(m => m.MaterialName == name);
-            if (row == null || row.Quantity < quantity)
+            await Concurrency.RefreshAsync<PlayerMaterial>(_context, m => m.GameInstanceId == gameInstanceId && m.UserId == userId);
+            var rows = await _context.PlayerMaterials
+                .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
+                .ToListAsync();
+
+            foreach (var (name, quantity) in required)
             {
-                _sessionLog.Log("WALLET-REFUSE",
-                    $"user={userId} instance={gameInstanceId} reason={reason} " +
-                    $"material={name} wanted={quantity} held={row?.Quantity ?? 0}");
+                var row = rows.FirstOrDefault(m => m.MaterialName == name);
+                if (row == null || row.Quantity < quantity)
+                {
+                    _sessionLog.Log("WALLET-REFUSE",
+                        $"user={userId} instance={gameInstanceId} reason={reason} " +
+                        $"material={name} wanted={quantity} held={row?.Quantity ?? 0}");
 
-                return new WalletOutcome(WalletError.InsufficientMaterials,
-                    $"Not enough {name}: {quantity} needed, {row?.Quantity ?? 0} held.");
+                    return new WalletOutcome(WalletError.InsufficientMaterials,
+                        $"Not enough {name}: {quantity} needed, {row?.Quantity ?? 0} held.");
+                }
             }
-        }
 
-        foreach (var (name, quantity) in required)
-        {
-            var row = rows.First(m => m.MaterialName == name);
-            row.Quantity -= quantity;
-            row.UpdatedAt = DateTime.UtcNow;
-        }
+            foreach (var (name, quantity) in required)
+            {
+                var row = rows.First(m => m.MaterialName == name);
+                row.Quantity -= quantity;
+                row.UpdatedAt = DateTime.UtcNow;
+            }
 
-        await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
+            return (WalletOutcome?)null;
+        });
+        if (refused != null) return refused;
 
         _sessionLog.Log("WALLET-SPEND",
             $"user={userId} instance={gameInstanceId} reason={reason} " +

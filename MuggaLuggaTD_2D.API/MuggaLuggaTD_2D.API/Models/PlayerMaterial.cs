@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MuggaLuggaTD_2D.API.Data;
 
 namespace MuggaLuggaTD_2D.API.Models;
 
@@ -15,7 +16,7 @@ namespace MuggaLuggaTD_2D.API.Models;
 /// <para>Per realm rather than per account, because a season resets the world and its economy with
 /// it — and because a realm is the unit everything else contested is scoped to.</para>
 /// </summary>
-public class PlayerMaterial
+public class PlayerMaterial : IRevisioned
 {
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -43,4 +44,8 @@ public class PlayerMaterial
     public int Quantity { get; set; }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Raised on every update; two racing writes cannot both land (Hardening 4).</summary>
+    [ConcurrencyCheck]
+    public long Revision { get; set; }
 }

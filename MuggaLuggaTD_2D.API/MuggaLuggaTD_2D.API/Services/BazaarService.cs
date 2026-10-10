@@ -174,7 +174,11 @@ public class BazaarService
     // -----------------------------------------------------------------
 
     /// <summary>Lists one piece of equipment the seller holds. It leaves their inventory.</summary>
-    public async Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListEquipmentAsync(
+    public Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListEquipmentAsync(
+        Guid realmId, string sellerId, string? itemId)
+        => Concurrency.TransactionAsync(_context, () => ListEquipmentCoreAsync(realmId, sellerId, itemId));
+
+    private async Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListEquipmentCoreAsync(
         Guid realmId, string sellerId, string? itemId)
     {
         if (string.IsNullOrWhiteSpace(itemId))
@@ -210,7 +214,11 @@ public class BazaarService
     }
 
     /// <summary>Lists a quantity of a material. It leaves the seller's wallet.</summary>
-    public async Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListMaterialAsync(
+    public Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListMaterialAsync(
+        Guid realmId, string sellerId, string? materialName, int quantity)
+        => Concurrency.TransactionAsync(_context, () => ListMaterialCoreAsync(realmId, sellerId, materialName, quantity));
+
+    private async Task<(BazaarOutcome Outcome, MarketplaceListing? Listing)> ListMaterialCoreAsync(
         Guid realmId, string sellerId, string? materialName, int quantity)
     {
         var material = MaterialNamed(materialName);
@@ -249,7 +257,11 @@ public class BazaarService
     /// Takes a listing off the Bazaar: whatever is unsold goes back to the seller, in the realm it
     /// came from. Gold already earned stays to be collected.
     /// </summary>
-    public async Task<(BazaarOutcome Outcome, ItemSaveData? Returned, int MaterialsReturned)> PullBackAsync(
+    public Task<(BazaarOutcome Outcome, ItemSaveData? Returned, int MaterialsReturned)> PullBackAsync(
+        Guid realmId, string sellerId, Guid listingId)
+        => Concurrency.TransactionAsync(_context, () => PullBackCoreAsync(realmId, sellerId, listingId));
+
+    private async Task<(BazaarOutcome Outcome, ItemSaveData? Returned, int MaterialsReturned)> PullBackCoreAsync(
         Guid realmId, string sellerId, Guid listingId)
     {
         await TradeLock.WaitAsync();
@@ -285,7 +297,10 @@ public class BazaarService
     }
 
     /// <summary>Banks every coin this seller's listings from this realm have earned.</summary>
-    public async Task<(long Collected, long Balance)> CollectAsync(Guid realmId, string sellerId)
+    public Task<(long Collected, long Balance)> CollectAsync(Guid realmId, string sellerId)
+        => Concurrency.TransactionAsync(_context, () => CollectCoreAsync(realmId, sellerId));
+
+    private async Task<(long Collected, long Balance)> CollectCoreAsync(Guid realmId, string sellerId)
     {
         await TradeLock.WaitAsync();
         try
@@ -316,7 +331,10 @@ public class BazaarService
     /// Buys one piece of equipment, paid from the buyer's realm. The item moves into that realm's
     /// ledger under the buyer, so their next save may carry it.
     /// </summary>
-    public async Task<BazaarPurchase> BuyEquipmentAsync(Guid buyerRealm, string buyerId, Guid listingId, long? quotedPrice)
+    public Task<BazaarPurchase> BuyEquipmentAsync(Guid buyerRealm, string buyerId, Guid listingId, long? quotedPrice)
+        => Concurrency.TransactionAsync(_context, () => BuyEquipmentCoreAsync(buyerRealm, buyerId, listingId, quotedPrice));
+
+    private async Task<BazaarPurchase> BuyEquipmentCoreAsync(Guid buyerRealm, string buyerId, Guid listingId, long? quotedPrice)
     {
         await TradeLock.WaitAsync();
         try
@@ -366,7 +384,11 @@ public class BazaarService
     /// realm and delivered to that realm's wallet. All of it or none: a buyer is never charged for a
     /// partial fill they did not ask for.
     /// </summary>
-    public async Task<BazaarPurchase> BuyMaterialAsync(Guid buyerRealm, string buyerId, string? materialName,
+    public Task<BazaarPurchase> BuyMaterialAsync(Guid buyerRealm, string buyerId, string? materialName,
+        int quantity, long? quotedUnitPrice)
+        => Concurrency.TransactionAsync(_context, () => BuyMaterialCoreAsync(buyerRealm, buyerId, materialName, quantity, quotedUnitPrice));
+
+    private async Task<BazaarPurchase> BuyMaterialCoreAsync(Guid buyerRealm, string buyerId, string? materialName,
         int quantity, long? quotedUnitPrice)
     {
         var material = MaterialNamed(materialName);
