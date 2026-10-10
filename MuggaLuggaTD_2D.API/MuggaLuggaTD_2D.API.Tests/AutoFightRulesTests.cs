@@ -53,13 +53,16 @@ public class AutoFightRulesTests
     }
 
     [Fact]
-    public void OnlyPortalsAndDungeonsAreFoughtInAutoMode()
+    public void AutoModeFightsWhatAHandFightCan()
     {
+        // Caves, portals, ruins and camps (ruins and camps since 1.51.0); never a keep or a worked site.
         Assert.True(AutoFightRules.IsFightable(LocationType.Portal));
         Assert.True(AutoFightRules.IsFightable(LocationType.Dungeon));
+        Assert.True(AutoFightRules.IsFightable(LocationType.Ruin));
+        Assert.True(AutoFightRules.IsFightable(LocationType.Camp));
         Assert.False(AutoFightRules.IsFightable(LocationType.ResourceNode));
         Assert.False(AutoFightRules.IsFightable(LocationType.Castle));
-        Assert.False(AutoFightRules.IsFightable(LocationType.Ruin));
+        Assert.False(AutoFightRules.IsFightable(LocationType.NeutralHome));
     }
 
     [Fact]

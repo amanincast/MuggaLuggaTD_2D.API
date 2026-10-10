@@ -170,6 +170,8 @@ namespace MuggaLuggaTD.Shared.World
         private static readonly string[] RiftNouns = { "Rift", "Gate", "Tear", "Breach", "Veil", "Door" };
         private static readonly string[] RiftAdjectives = { "Shimmering", "Hungry", "Broken", "Violet", "Wailing", "Starless", "Unquiet", "Weeping" };
         private static readonly string[] RuinNouns = { "Shrine", "Span", "Chapel", "Watchtower", "Halls", "Cairn", "Circle", "Abbey", "Tower" };
+        private static readonly string[] CampNouns = { "Camp", "Encampment", "Hideout", "Den", "Stockade", "Warren" };
+        private static readonly string[] CampAdjectives = { "Bandit", "Raiders'", "Outlaw", "Smoking", "Muddy", "Thieves'", "Brigand" };
         private static readonly string[] RuinAdjectives = { "Broken", "Hollow", "Fallen", "Roofless", "Sunken", "Burnt", "Forgotten", "Old" };
 
         private static string[] DeepAdjectives(BiomeType biome)
@@ -241,6 +243,13 @@ namespace MuggaLuggaTD.Shared.World
                         case 0: return $"Old {Pick(roots, ref random)} {Pick(RuinNouns, ref random)}";
                         case 1: return $"The {Phrase(RuinAdjectives, RuinNouns, ref random)}";
                         default: return $"{Compound(Pick(roots, ref random), "side") ?? Pick(roots, ref random)} {Pick(RuinNouns, ref random)}";
+                    }
+                case LocationType.Camp:
+                    switch (random.Next(3))
+                    {
+                        case 0: return $"{Pick(roots, ref random)} {Pick(CampNouns, ref random)}";
+                        case 1: return $"The {Phrase(CampAdjectives, CampNouns, ref random)}";
+                        default: return $"{Pick(CampAdjectives, ref random)} {Pick(CampNouns, ref random)}";
                     }
                 case LocationType.ResourceNode:
                     // Named for what is worked there, so a "Quarry" is never a farm.

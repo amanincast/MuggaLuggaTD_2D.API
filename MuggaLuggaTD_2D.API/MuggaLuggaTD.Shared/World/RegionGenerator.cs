@@ -360,7 +360,8 @@ namespace MuggaLuggaTD.Shared.World
                 { LocationType.Dungeon, 1 + t },            // 2..5
                 { LocationType.NeutralHome, 1 + (t / 2) },  // 1..3 settlements
                 { LocationType.ResourceNode, 1 + t },       // 2..5
-                { LocationType.Ruin, t >= 3 ? 1 : 0 }
+                { LocationType.Ruin, t >= 3 ? 1 : 0 },
+                { LocationType.Camp, 2 }                    // the quick fights (Mike, playtest 2026-10-09)
             };
 
             // A portal is the rarer, harder fight, and only worth placing where the land is already
@@ -421,7 +422,10 @@ namespace MuggaLuggaTD.Shared.World
             LocationType.Dungeon,
             LocationType.NeutralHome,
             LocationType.ResourceNode,
-            LocationType.Ruin
+            LocationType.Ruin,
+            // Last, always: a region placed before camps existed keeps every site where it stood and
+            // simply gains its camps on the ground left over.
+            LocationType.Camp
         };
 
         private static List<GridCell> BuildableCells(TerrainClass[] terrain)
@@ -473,6 +477,9 @@ namespace MuggaLuggaTD.Shared.World
 
             if (type == LocationType.Dungeon)
                 return random.Next(1, regionTier + 1); // Somewhere up to the region's own tier.
+
+            if (type == LocationType.Camp)
+                return 1; // The quick fight: a tier-1 run's waves and no boss, at the region's level.
 
             return regionTier;
         }

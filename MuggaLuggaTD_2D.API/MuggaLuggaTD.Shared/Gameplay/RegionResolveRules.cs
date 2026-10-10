@@ -40,6 +40,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             {
                 case LocationType.Dungeon:
                 case LocationType.Portal:
+                case LocationType.Ruin:
+                case LocationType.Camp:
                     return RestoredPerClear;
                 default:
                     return 0;
