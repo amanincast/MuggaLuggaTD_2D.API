@@ -162,7 +162,7 @@ public class BazaarController : ControllerBase
     private ActionResult Refuse(BazaarOutcome outcome) => outcome.Error switch
     {
         BazaarError.NotYours => NotFound(new { error = outcome.Message }),
-        BazaarError.NothingNamed or BazaarError.UnknownGoods => BadRequest(new { error = outcome.Message }),
+        BazaarError.NothingNamed or BazaarError.UnknownGoods or BazaarError.Equipped => BadRequest(new { error = outcome.Message }),
         _ => Conflict(new { error = outcome.Message })
     };
 

@@ -281,6 +281,45 @@ public class BazaarTests : IDisposable
         Assert.Equal(100_000, await Gold.BalanceAsync(Frostmere, Rival));
     }
 
+    // -----------------------------------------------------------------
+    // Hardening 5 and 7: the server's own checks on a listed piece
+    // -----------------------------------------------------------------
+
+    /// <summary>A stored save holding <paramref name="item"/>, worn by <paramref name="wearer"/> if named.</summary>
+    private async Task SaveHoldingAsync(Guid realm, string user, ItemSaveData item, string? wearer)
+    {
+        var node = System.Text.Json.JsonSerializer.SerializeToNode(item)!.AsObject();
+        node["EquippedByCharacterId"] = wearer;
+        var save = new JsonObject { ["Characters"] = new JsonArray(), ["InventoryItems"] = new JsonArray(node) };
+        await _db.AddPlayerSaveAsync(realm, user, save.ToJsonString());
+    }
+
+    [Fact]
+    public async Task AWornPiece_CannotBeListed_WhateverTheRequestSays()
+    {
+        await Ledger.GrantAsync(Emberhold, Seller, new[] { Sword("blade-1") }, "test");
+        await SaveHoldingAsync(Emberhold, Seller, Sword("blade-1"), wearer: "hero-1");
+
+        var (outcome, listing) = await Bazaar.ListEquipmentAsync(Emberhold, Seller, "blade-1");
+
+        Assert.Equal(BazaarError.Equipped, outcome.Error);
+        Assert.Null(listing);
+        Assert.Single(await Ledger.HeldAsync(Emberhold, Seller));
+    }
+
+    [Fact]
+    public async Task AListedPiece_LeavesTheStoredSave_SoServerPowerStopsCountingIt()
+    {
+        await Ledger.GrantAsync(Emberhold, Seller, new[] { Sword("blade-1") }, "test");
+        await SaveHoldingAsync(Emberhold, Seller, Sword("blade-1"), wearer: null);
+
+        Assert.True((await Bazaar.ListEquipmentAsync(Emberhold, Seller, "blade-1")).Outcome.Succeeded);
+
+        var save = await MarchingArmy.LoadPlayerSaveAsync(_db, NullLogger.Instance, Emberhold, Seller);
+        Assert.NotNull(save);
+        Assert.DoesNotContain(save!.InventoryItems ?? new List<ItemSaveData>(), i => i.Id == "blade-1");
+    }
+
     [Fact]
     public async Task PullingBackEquipmentReturnsIt()
     {
