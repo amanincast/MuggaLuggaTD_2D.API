@@ -22,15 +22,21 @@ public class WorldViewGameDataController : ControllerBase
     private readonly WorldProvisioningService _provisioning;
     private readonly SeasonScoreService _seasons;
     private readonly FortifyService? _fortify;
+    private readonly IWebHostEnvironment _environment;
+    private readonly ISessionLog _sessionLog;
 
     public WorldViewGameDataController(
         ApplicationDbContext context,
         IHubContext<GameHub> hubContext,
         WorldProvisioningService provisioning,
         SeasonScoreService seasons,
+        IWebHostEnvironment environment,
+        ISessionLog sessionLog,
         FortifyService? fortify = null)
     {
         _fortify = fortify;
+        _environment = environment;
+        _sessionLog = sessionLog;
         _context = context;
         _hubContext = hubContext;
         _provisioning = provisioning;
@@ -93,6 +99,15 @@ public class WorldViewGameDataController : ControllerBase
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
+
+        // Hardening 1: the server owns the world, and a client world write once made it regenerate
+        // the whole realm. No client calls this any more; outside Development it does not exist, so
+        // a member with a token cannot overwrite everyone's territory from outside the game.
+        if (!_environment.IsDevelopment())
+        {
+            _sessionLog.Log("WORLD-WRITE-DENY", $"user={userId} instance={gameInstanceId}");
+            return NotFound();
+        }
 
         var gameInstance = await _context.GameInstances
             .FirstOrDefaultAsync(g => g.Id == gameInstanceId);

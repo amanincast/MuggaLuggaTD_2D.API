@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.DTOs;
 using MuggaLuggaTD_2D.API.Models;
+using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
@@ -14,10 +15,31 @@ namespace MuggaLuggaTD_2D.API.Controllers;
 public class GameInstanceController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly RealmMembershipService _membership;
 
-    public GameInstanceController(ApplicationDbContext context)
+    public GameInstanceController(ApplicationDbContext context, RealmMembershipService membership)
     {
         _context = context;
+        _membership = membership;
+    }
+
+    /// <summary>
+    /// Joins a realm (Hardening 2): the access type and capacity are checked here, and nowhere else
+    /// makes a member. A member's join changes nothing, so the client calls it on every ENTER.
+    /// </summary>
+    [HttpPost("{id:guid}/join")]
+    public async Task<IActionResult> JoinGameInstance(Guid id)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        return await _membership.JoinAsync(id, userId) switch
+        {
+            JoinOutcome.Joined or JoinOutcome.AlreadyMember => NoContent(),
+            JoinOutcome.Full => Conflict(new { message = "This realm is full." }),
+            // A realm you may not enter is answered as one that does not exist, as GET does.
+            _ => NotFound(new { message = "Game instance not found" }),
+        };
     }
 
     [HttpGet]

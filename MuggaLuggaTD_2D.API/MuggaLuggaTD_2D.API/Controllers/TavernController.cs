@@ -97,8 +97,9 @@ public class TavernController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null) return Unauthorized();
-        // A newcomer has no save yet, so membership cannot be asked; the realm existing is what a first save needs too.
+        // A newcomer has joined (Hardening 2) but not yet saved, so membership can be asked.
         if (!await _context.GameInstances.AnyAsync(g => g.Id == gameInstanceId)) return NotFound();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
 
         var (outcome, starters, gear) = await _tavern.ClaimStartersAsync(gameInstanceId, userId);
         return outcome.Error switch
