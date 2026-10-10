@@ -217,11 +217,19 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public static double Gathered(double ratePerHour, DateTime from, DateTime to, WorkerSheet worker, string workerId,
             Func<long, bool> harried, DateTime? assignedAt)
+            => Gathered(ratePerHour, from, to, worker, workerId, harried, assignedAt, null);
+
+        /// <summary>
+        /// As above, with <paramref name="goodsFactor"/>: what the hour itself does to the region's goods
+        /// (a Harvest Fair's +50%, <see cref="RegionConditionRules.GoodsFactor"/>). Null for ordinary hours.
+        /// </summary>
+        public static double Gathered(double ratePerHour, DateTime from, DateTime to, WorkerSheet worker, string workerId,
+            Func<long, bool> harried, DateTime? assignedAt, Func<long, double> goodsFactor)
         {
             if (ratePerHour <= 0 || to <= from) return 0;
             DateTime? oldHandFrom = worker.Has(WorkerPerk.OldHand) && assignedAt.HasValue ? assignedAt + OldHandAfter : null;
             bool luckable = worker.Has(WorkerTrait.Lucky) || worker.Has(WorkerPerk.Packhorse);
-            if (!luckable && harried == null && oldHandFrom == null) return ratePerHour * (to - from).TotalHours;
+            if (!luckable && harried == null && oldHandFrom == null && goodsFactor == null) return ratePerHour * (to - from).TotalHours;
 
             double luckyFactor = worker.Has(WorkerPerk.Packhorse) ? PackhorseLuckyFactor : 2;
             double harriedFactor = worker.Has(WorkerPerk.Stalwart) ? StalwartHarriedFactor : HarassmentRules.HarriedFactor;
@@ -233,6 +241,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 var end = new DateTime(Math.Min(to.Ticks, (h + 1) * TimeSpan.TicksPerHour), DateTimeKind.Utc);
                 double factor = luckable && IsLuckyHour(worker, workerId, h) ? luckyFactor : 1;
                 if (harried != null && harried(h)) factor *= harriedFactor;
+                if (goodsFactor != null) factor *= goodsFactor(h);
 
                 if (oldHandFrom.HasValue && end > oldHandFrom.Value)
                 {

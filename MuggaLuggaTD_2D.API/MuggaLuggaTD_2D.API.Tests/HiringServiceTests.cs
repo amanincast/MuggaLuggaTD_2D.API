@@ -318,17 +318,57 @@ public class HiringServiceTests : IDisposable
     // Raiders at the diggings (auto-fight.md §7, phase 5)
     // -----------------------------------------------------------------
 
-    /// <summary>Moves the clock to the start of a day that holds at least one harried hour for the region.</summary>
+    /// <summary>
+    /// Moves the clock to the start of a day that holds at least one harried hour for the region, and
+    /// no Harvest Fair there (the region is the only one held), so only the raiders change its goods.
+    /// </summary>
     private int ToATroubledDay(string regionId)
     {
-        for (int day = 0; day < 60; day++)
+        for (int day = 0; day < 200; day++)
         {
             var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(day);
             long first = HarassmentRules.HourOf(start);
             int harried = Enumerable.Range(0, 24).Count(h => HarassmentRules.IsHarried(_realm.ToString(), regionId, first + h));
-            if (harried > 0) { _now = start; return harried; }
+            if (harried > 0 && FairHours(regionId, first) == 0) { _now = start; return harried; }
         }
-        throw new InvalidOperationException("sixty quiet days");
+        throw new InvalidOperationException("two hundred quiet days");
+    }
+
+    /// <summary>How many of the 24 hours from <paramref name="first"/> hold a Harvest Fair in the region (the only one held).</summary>
+    private int FairHours(string regionId, long first) =>
+        Enumerable.Range(0, 24).Count(h =>
+            RegionConditionRules.Of(_realm.ToString(), first + h, regionId, new[] { regionId }) == RegionCondition.HarvestFair);
+
+    [Fact]
+    public async Task AHarvestFairLiftsTheDiggingsForItsHour()
+    {
+        var (region, site, trade) = await WorldAsync();
+        int fairs = 0;
+        for (int day = 0; day < 200 && fairs == 0; day++)
+        {
+            _now = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(day);
+            fairs = FairHours(region.RegionId, HarassmentRules.HourOf(_now));
+        }
+        Assert.True(fairs > 0);
+
+        var worker = await WorkerAsync(trade);
+        worker.LastSettledAt = _now;
+        await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
+        double rate = worker.RatePerHour;
+
+        // A patrol keeps the raiders off, so only the fair changes the day.
+        _db.PlayerParties.Add(new PlayerParty
+        {
+            GameInstanceId = _realm, UserId = Player, Name = "The Watch", CharacterIdsJson = "[\"hero-1\"]",
+            AutoMode = true, AutoOrder = AutoOrder.Patrol, AutoRegionId = region.RegionId, AutoStatus = AutoStatus.Patrolling,
+        });
+        await _db.SaveChangesAsync();
+
+        _now += TimeSpan.FromHours(24);
+        await Hiring.SettlePlayerAsync(_realm, Player);
+
+        double expected = rate * (24 + fairs * (RegionConditionRules.FairGoodsFactor - 1));
+        Assert.Equal((int)Math.Floor(expected), await GoodsAsync(trade));
     }
 
     [Fact]

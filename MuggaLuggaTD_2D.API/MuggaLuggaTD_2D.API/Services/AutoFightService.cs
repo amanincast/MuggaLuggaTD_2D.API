@@ -626,11 +626,13 @@ public class AutoFightService
         party.AutoStatus = AutoStatus.Walking;
         party.AutoStepEndsAt = t + route.Duration;
 
+        var conditions = RegionConditionRules.For(day.Instance.ToString(), HarassmentRules.HourOf(t), day.Regions.Values);
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {
             day.Regions.TryGetValue(leg.RegionId, out var land);
             var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
-            return (land?.Tier ?? 1, land != null && land.IsOwnedByPlayer(day.UserId), walk, day.Patrolled.Contains(leg.RegionId));
+            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId));
+            return (land?.Tier ?? 1, land != null && land.IsOwnedByPlayer(day.UserId), walk, day.Patrolled.Contains(leg.RegionId), hunt);
         }));
         if (RollRoad(chance, party.Id.ToString(), t) is double strikes)
         {
@@ -662,7 +664,8 @@ public class AutoFightService
 
         if (won)
         {
-            PaySkirmish(report, day, mobs);
+            PaySkirmish(report, day, mobs, RegionConditionRules.AmbushRewardFactor(
+                RegionConditionRules.At(day.Instance.ToString(), regionId ?? "", at, day.Regions.Values)));
             party.AutoStatus = AutoStatus.Walking;
             party.AutoStepEndsAt = party.ArrivesAt;
         }
@@ -754,14 +757,14 @@ public class AutoFightService
     }
 
     /// <summary>A skirmish's pay: an ambush's share of a tier-1 clear at the mobs' level, then a third of that.</summary>
-    private void PaySkirmish(AutoFightReport report, Day day, int mobs)
+    private void PaySkirmish(AutoFightReport report, Day day, int mobs, double factor = 1.0)
     {
         double share = AmbushRules.RewardShare * AutoFightRules.RewardShare;
         var full = RunRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.DroppableItems,
             Dice, AutoFightRules.RarityStepsDown);
         var materials = MaterialRewardCalculator.Calculate(mobs, AmbushRules.SkirmishTier, _content.RunTuning, _content.Materials, Dice)
-            .Select(m => (m.MaterialName, (int)AutoFightRules.Share(AmbushRules.Share(m.Quantity, Dice), Dice)));
-        Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * AmbushRules.RewardShare), Dice),
+            .Select(m => (m.MaterialName, (int)Math.Round(AutoFightRules.Share(AmbushRules.Share(m.Quantity, Dice), Dice) * factor)));
+        Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * AmbushRules.RewardShare * factor), Dice),
             full.Items.Where(_ => Dice.NextDouble() < share).ToList(), materials);
     }
 
