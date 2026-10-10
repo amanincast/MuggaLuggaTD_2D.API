@@ -352,11 +352,14 @@ public class PartyService
         var byId = regions.ToDictionary(r => r.RegionId);
         var patrolled = parties.Where(p => p.AutoMode && AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
             .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal);
+        // Hunting Season makes its region's road likelier to be struck (Active Content C).
+        var conditions = RegionConditionRules.For(gameInstanceId.ToString(), HarassmentRules.HourOf(now), regions);
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {
             var land = byId[leg.RegionId];
             var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
-            return (land.Tier, land.IsOwnedByPlayer(userId), walk, patrolled.Contains(leg.RegionId));
+            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId));
+            return (land.Tier, land.IsOwnedByPlayer(userId), walk, patrolled.Contains(leg.RegionId), hunt);
         }));
         party.AmbushAt = AmbushRules.Roll(chance, Dice);
         party.HaltedAt = null;
@@ -608,12 +611,15 @@ public class PartyService
             // skirmish is not a dungeon.
             var full = RunRewardCalculator.Calculate(ambush!.Level, AmbushRules.SkirmishTier,
                 _content.RunTuning, _content.DroppableItems, Dice);
-            experience = (long)Math.Round(full.Experience * AmbushRules.RewardShare);
+            // Struck in Hunting Season: it pays more (Active Content C), by the hour it struck.
+            double hunt = RegionConditionRules.AmbushRewardFactor(RegionConditionRules.At(gameInstanceId.ToString(),
+                AmbushRegionOf(party, world), party.HaltedAt ?? now, WorldRegionBlob.ReadAllRegions(world)));
+            experience = (long)Math.Round(full.Experience * AmbushRules.RewardShare * hunt);
             gold = GoldRules.GoldForClear(experience);
             items = full.Items.Where(_ => Dice.NextDouble() < AmbushRules.RewardShare).ToList();
             materials = MaterialRewardCalculator.Calculate(ambush.Level, AmbushRules.SkirmishTier,
                     _content.RunTuning, _content.Materials, Dice)
-                .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = AmbushRules.Share(m.Quantity, Dice) })
+                .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = (int)Math.Round(AmbushRules.Share(m.Quantity, Dice) * hunt) })
                 .Where(m => m.Quantity > 0)
                 .ToList();
 
@@ -709,6 +715,13 @@ public class PartyService
         var keep = sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? sites[0];
         int level = (int)Math.Round(sites.Average(s => Math.Max(1, s.Level)));
         return new AmbushDto(keep.SiteId, Math.Max(1, level), AmbushRules.SkirmishTier, SkirmishWaves);
+    }
+
+    /// <summary>The region a company was struck in: where it stood when halted, else where it was bound.</summary>
+    private static string? AmbushRegionOf(PlayerParty p, JsonNode world)
+    {
+        var along = p.HaltedAt is DateTime halted ? RegionAlong(p, halted) : null;
+        return along ?? (string.IsNullOrEmpty(p.ToSiteId) ? null : WorldRegionBlob.ResolveSite(world, p.ToSiteId)?.Region.RegionId);
     }
 
     /// <summary>The waves a tier-1 site is fought with (SurvivalData's WavesRequiredTier1).</summary>

@@ -182,6 +182,14 @@ faction per realm, and `FactionRaid` rows for what they do.
 - `GET gameinstance/{id}/realm-goal` (the strip: count, ends at, my share and chest, top 5).
   Debug (Development only): `POST realm-goal/debug/fill?fraction=`.
 
+## Fairs and storms (`RegionConditionRules`, shared 1.52.0; Unity `docs/systems/hiring-hall-and-goods.md`)
+
+- **Pure, hourly, nothing stored:** `RegionConditionRules.For(realm, hour, heldRegionIds)`. Only player-held
+  regions; each rolls its own chance (Fair 833/10,000, Hunting Season 625/10,000). At most 2 fairs and 1 hunt.
+- **Harvest Fair:** `WorkerLevelRules.Gathered(..., goodsFactor)` from `HiringService.SettleAllAsync`, +50%.
+- **Hunting Season:** a per-leg factor in `AmbushRules.ChanceForRoute` at departure (`PartyService.TravelAsync`,
+  `AutoFightService.StartWalk`), ×1.5. The pay is ×1.5 by the hour struck (`ClaimAmbushAsync`, auto `Ambushed`).
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log

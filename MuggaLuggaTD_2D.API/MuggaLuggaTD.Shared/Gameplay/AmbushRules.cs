@@ -68,11 +68,19 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// (<see cref="PatrolFactor"/>; <c>docs/design/auto-fight.md</c> §6). A second patrol adds nothing.
         /// </summary>
         public static double ChanceFor(int regionTier, bool heldByPlayer, TimeSpan duration, bool patrolled)
+            => ChanceFor(regionTier, heldByPlayer, duration, patrolled, 1.0);
+
+        /// <summary>
+        /// As above, times <paramref name="factor"/>: what the hour does to the region's roads (Hunting
+        /// Season, <see cref="RegionConditionRules.AmbushChanceFactor"/>). Still capped.
+        /// </summary>
+        public static double ChanceFor(int regionTier, bool heldByPlayer, TimeSpan duration, bool patrolled, double factor)
         {
             double chance = BaseChance + ChancePerTier * Math.Max(0, regionTier - 1);
             if (!heldByPlayer) chance *= UnheldLandFactor;
             chance += ChancePerMinute * Math.Max(0, duration.TotalMinutes - 1);
             if (patrolled) chance *= PatrolFactor;
+            chance *= factor;
             return Math.Max(0, Math.Min(MaximumChance, chance));
         }
 
@@ -107,10 +115,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>As above, with whether each region walked is patrolled by one of the player's companies.</summary>
         public static double ChanceForRoute(IEnumerable<(int Tier, bool Held, TimeSpan Walk, bool Patrolled)> legs)
+            => ChanceForRoute(legs?.Select(l => (l.Tier, l.Held, l.Walk, l.Patrolled, 1.0)));
+
+        /// <summary>As above, with each region's factor for the hour the road is rolled (Hunting Season).</summary>
+        public static double ChanceForRoute(IEnumerable<(int Tier, bool Held, TimeSpan Walk, bool Patrolled, double Factor)> legs)
         {
             double quiet = 1;
             if (legs != null)
-                foreach (var leg in legs) quiet *= 1 - ChanceFor(leg.Tier, leg.Held, leg.Walk, leg.Patrolled);
+                foreach (var leg in legs) quiet *= 1 - ChanceFor(leg.Tier, leg.Held, leg.Walk, leg.Patrolled, leg.Factor);
             return Math.Min(MaximumChance, 1 - quiet);
         }
 

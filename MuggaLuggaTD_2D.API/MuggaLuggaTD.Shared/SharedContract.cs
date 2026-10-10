@@ -228,6 +228,9 @@ namespace MuggaLuggaTD.Shared
         // 1.51.0 - Camps and ruins (playtest 2026-10-09). LocationType.Camp: two per region, placed after every other
         //   site (so no existing site moves), a tier-1 open-field fight at the region's level. Ruins and camps are
         //   fightable (RegionLayout.IsFightableType); a ruin brings a recruit, a camp does not. The site list changes.
-        public const string Version = "1.51.0";
+        // 1.52.0 - Fairs and storms (Active Content C, hourly). RegionConditionRules: each hour a held region may
+        //   carry a Harvest Fair (its workers bring in +50% goods) or Hunting Season (ambushes 1.5x as likely there,
+        //   and pay 1.5x). The goods gathered, the ambush chance a route shows, and what an ambush pays change.
+        public const string Version = "1.52.0";
     }
 }

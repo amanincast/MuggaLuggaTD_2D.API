@@ -272,6 +272,13 @@ public class HiringService
         string realm = gameInstanceId.ToString();
         int season = await SeasonAsync(gameInstanceId);
 
+        // A Harvest Fair lifts a region's goods for its hour (Active Content C). One factor per region,
+        // shared by its workers, as each works the hours out once.
+        var held = RegionConditionRules.HeldIds(regions);
+        var fairs = new Dictionary<string, Func<long, double>?>(StringComparer.Ordinal);
+        Func<long, double>? FairsIn(string regionId) =>
+            fairs.TryGetValue(regionId, out var f) ? f : fairs[regionId] = RegionConditionRules.GoodsFactor(realm, regionId, held);
+
         // Mentors lift the experience of the others at their site; computed before anyone changes.
         var mentorsAt = workers.Where(w => w.PerkList.Contains(WorkerPerk.Mentor))
             .GroupBy(w => w.SiteId!).ToDictionary(g => g.Key, g => g.Select(w => w.Id).ToHashSet());
@@ -287,7 +294,7 @@ public class HiringService
                 var sheet = worker.Sheet();
                 double gathered = worker.Carry + WorkerLevelRules.Gathered(worker.RatePerHour, worker.LastSettledAt, until,
                     sheet, worker.Id.ToString(),
-                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h), worker.AssignedAt);
+                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h), worker.AssignedAt, FairsIn(regionId));
                 int whole = (int)Math.Floor(gathered);
                 worker.Carry = gathered - whole;
                 worker.LifetimeOutput += whole;
