@@ -485,6 +485,8 @@ public class SeasonScoreService
 
         // Its goods on the Bazaar go with the world (Mike, 2026-10-01); gold already earned is paid.
         await BazaarService.ExpireRealmAsync(_context, _gold, _sessionLog, instance.Id);
+        // So does a Rift contract: the gold the server held for it goes back (Invasions R7).
+        await RiftService.ExpireContractsAsync(_context, _gold, _sessionLog, instance.Id);
 
         var fresh = await _worlds.RegenerateWorldAsync(instance.Id);
 

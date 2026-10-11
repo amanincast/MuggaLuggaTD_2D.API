@@ -249,6 +249,8 @@ namespace MuggaLuggaTD.Shared
         // 1.58.0 - Rifts, phase 4: the Invasion (spec R4). RiftRules.Invasion: an invaded region's roads are twice as
         //   likely to be ambushed (by Riftborn: the rift's donor roster and first mutator), and its workers are harried
         //   every hour, patrol or not, until the rift is sealed. Ambush chances and goods gathered change.
-        public const string Version = "1.58.0";
+        // 1.59.0 - Rifts, phase 5: Rift contracts (spec R7). RiftRules.MayCloseLesser: a contract's holder closes a
+        //   Lesser Rift while the hold stands, its lord otherwise. New letter kinds.
+        public const string Version = "1.59.0";
     }
 }

@@ -64,6 +64,35 @@ namespace MuggaLuggaTD.Shared.Gameplay
     }
 
     /// <summary>
+    /// A Rift contract's two kinds (R7). <b>Sell:</b> the taker pays the lord for the right to close the rift.
+    /// <b>Hire:</b> the lord pays the taker to close it. Either way the closer gets the chest.
+    /// </summary>
+    public enum RiftContractKind
+    {
+        Sell = 0,
+        Hire = 1,
+    }
+
+    /// <summary>Where a Rift contract stands. Only <see cref="Posted"/> and <see cref="Taken"/> are live.</summary>
+    public enum RiftContractStatus
+    {
+        /// <summary>Up for anyone in the realm to take.</summary>
+        Posted = 0,
+
+        /// <summary>Someone has taken it, and holds the right to close the rift until its hold runs out.</summary>
+        Taken = 1,
+
+        /// <summary>The holder closed the rift, and the gold went where the contract said.</summary>
+        Fulfilled = 2,
+
+        /// <summary>The lord took it down before anyone took it.</summary>
+        Withdrawn = 3,
+
+        /// <summary>It ended another way (the lord closed it, the land changed hands, the season ended): gold went back.</summary>
+        Void = 4,
+    }
+
+    /// <summary>
     /// A region's invasion (R4): from when its Lesser Rift ran out to when it was sealed, or still going
     /// (<see cref="Until"/> null). The season's end clears it with the rest of the rifts.
     /// </summary>
@@ -434,6 +463,55 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Warded: an elite's Ward takes this much off each hit, until it has taken this share of its health.</summary>
         public const float WardReduction = 0.6f;
         public const float WardBreaksAfter = 0.25f;
+
+        // -----------------------------------------------------------------
+        // Rift contracts (R7, R6 phase 5)
+        // -----------------------------------------------------------------
+
+        /// <summary>How long a taker holds the right to close the rift (R7: "30 minutes, tune").</summary>
+        public static readonly TimeSpan ContractHold = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// How long past its hold a taker's fight already under way keeps the contract theirs, so a fight begun in the
+        /// hold's last minute can still be won and paid.
+        /// </summary>
+        public static readonly TimeSpan ContractFightGrace = TimeSpan.FromMinutes(20);
+
+        /// <summary>The least and most a contract can name, in gold, and what the book offers first.</summary>
+        public const long ContractMinPrice = 50;
+        public const long ContractMaxPrice = 50000;
+        public const long ContractSuggestedPrice = 500;
+
+        public static bool IsLive(RiftContractStatus status) => status == RiftContractStatus.Posted || status == RiftContractStatus.Taken;
+
+        /// <summary>Whether a contract can be posted on this rift: a Lesser Rift, open or invading.</summary>
+        public static bool CanPostContract(RiftKind kind, RiftStage stage) => kind == RiftKind.Lesser && CanSeal(stage);
+
+        public static bool IsValidPrice(long price) => price >= ContractMinPrice && price <= ContractMaxPrice;
+
+        /// <summary>Whether a taker's hold still stands at <paramref name="now"/>.</summary>
+        public static bool IsHeld(RiftContractStatus status, DateTime? heldUntil, DateTime now) =>
+            status == RiftContractStatus.Taken && heldUntil.HasValue && now < heldUntil.Value;
+
+        /// <summary>
+        /// Who may close a Lesser Rift (R4, R7): whoever holds its contract while the hold stands, and otherwise its
+        /// lord. <paramref name="holderUserId"/> is null when nobody holds it.
+        /// </summary>
+        public static bool MayCloseLesser(string userId, string lordUserId, string holderUserId, DateTime? heldUntil, DateTime now)
+        {
+            if (string.IsNullOrEmpty(userId)) return false;
+            if (!string.IsNullOrEmpty(holderUserId) && heldUntil.HasValue && now < heldUntil.Value)
+                return string.Equals(userId, holderUserId, StringComparison.Ordinal);
+            return string.Equals(userId, lordUserId, StringComparison.Ordinal);
+        }
+
+        /// <summary>Who a contract's held gold goes back to if it is not fulfilled: a Sell's taker, a Hire's lord.</summary>
+        public static string RefundTo(RiftContractKind kind, string ownerUserId, string holderUserId) =>
+            kind == RiftContractKind.Sell ? holderUserId : ownerUserId;
+
+        /// <summary>Who a fulfilled contract pays: a Sell pays the lord, a Hire pays the closer.</summary>
+        public static string PaysTo(RiftContractKind kind, string ownerUserId, string holderUserId) =>
+            kind == RiftContractKind.Sell ? ownerUserId : holderUserId;
 
         // -----------------------------------------------------------------
         // The Invasion (R4, R6 phase 4)

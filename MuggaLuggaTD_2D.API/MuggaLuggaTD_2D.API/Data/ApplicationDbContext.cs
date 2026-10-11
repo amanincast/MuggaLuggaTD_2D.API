@@ -57,6 +57,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Rift> Rifts => Set<Rift>();
     public DbSet<RateLimitRefusal> RateLimitRefusals => Set<RateLimitRefusal>();
     public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
+    public DbSet<RiftContract> RiftContracts => Set<RiftContract>();
 
     // Hardening 4: every update to a revisioned row raises its revision, which is the row's
     // concurrency token, so the second of two racing writes is refused instead of overwriting.
@@ -357,6 +358,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(e => new { e.RiftId, e.UserId }).IsUnique();
             entity.HasOne<Rift>().WithMany().HasForeignKey(e => e.RiftId).OnDelete(DeleteBehavior.Cascade);
+        });
+        // Not tied to its rift: a season's end deletes the rifts first, then hands back the gold its contracts hold.
+        builder.Entity<RiftContract>(entity =>
+        {
+            entity.HasIndex(e => new { e.RiftId, e.Status });
+            entity.HasIndex(e => new { e.GameInstanceId, e.Status });
+            entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<PlayerGold>(entity =>
