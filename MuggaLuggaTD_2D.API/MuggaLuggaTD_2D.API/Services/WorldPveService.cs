@@ -516,13 +516,20 @@ public class WorldPveService
         var region = WorldRegionBlob.ReadRegion(regionNode);
 
         // A Lesser Rift is its land's lord's to close (R4), and goes with the land: whoever holds the region now.
-        // Land no player holds leaves it with its last lord.
+        // Land no player holds leaves it with its last lord. While someone holds its contract, it is theirs (R7).
         if (rift.Kind == RiftKind.Lesser)
         {
             string? lord = region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId)
                 ? region.OwnerUserId : rift.TargetUserId;
-            if (!string.Equals(lord, userId, StringComparison.Ordinal))
-                return (new PveOutcome(PveError.NotPveTarget, "Only the lord of this land can close this rift."), Guid.Empty, null);
+            var contract = await RiftService.LiveContractAsync(_context, rift.Id);
+            string? holder = contract?.Status == RiftContractStatus.Taken ? contract.HolderUserId : null;
+            if (!RiftRules.MayCloseLesser(userId, lord, holder, contract?.HeldUntil, now))
+            {
+                bool heldByOther = holder != null && RiftRules.IsHeld(contract!.Status, contract.HeldUntil, now);
+                return (new PveOutcome(PveError.NotPveTarget, heldByOther
+                    ? "Someone holds this rift's contract: it is theirs to close until their hold runs out."
+                    : "Only the lord of this land, or whoever holds its contract, can close this rift."), Guid.Empty, null);
+            }
         }
 
         if (request.PartyId == null)

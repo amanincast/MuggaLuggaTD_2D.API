@@ -1889,6 +1889,69 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("Rifts");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.RiftContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Escrow")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("GameInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("HeldUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HolderUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTime>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Price")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RegionId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("RiftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("TakenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameInstanceId", "Status");
+
+                    b.HasIndex("RiftId", "Status");
+
+                    b.ToTable("RiftContracts");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.RiftContribution", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2860,6 +2923,15 @@ namespace MuggaLuggaTD_2D.API.Migrations
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Rift", b =>
+                {
+                    b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", null)
+                        .WithMany()
+                        .HasForeignKey("GameInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.RiftContract", b =>
                 {
                     b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", null)
                         .WithMany()

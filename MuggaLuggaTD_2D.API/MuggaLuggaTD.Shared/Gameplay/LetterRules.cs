@@ -33,6 +33,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>Your Lesser Rift was not sealed in time: your region is invaded until it is. Subject: the rift.</summary>
         RegionInvaded,
+
+        /// <summary>To everyone else in the realm: a lord posted a Rift contract. Detail "{kind}:{price}".</summary>
+        RiftContractPosted,
+
+        /// <summary>To the lord: someone took their contract. Detail "{kind}:{price}".</summary>
+        RiftContractTaken,
+
+        /// <summary>To whoever a fulfilled contract paid. Detail "{kind}:{price}".</summary>
+        RiftContractPaid,
+
+        /// <summary>To whoever got held gold back, or lost a hold that ran out. Detail "{kind}:{gold back}:{why}".</summary>
+        RiftContractEnded,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -80,6 +92,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.RealmGoalReached:
                 case LetterKind.RiftNear:
                 case LetterKind.RiftSealed:
+                case LetterKind.RiftContractPosted:
+                case LetterKind.RiftContractTaken:
+                case LetterKind.RiftContractPaid:
+                case LetterKind.RiftContractEnded:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

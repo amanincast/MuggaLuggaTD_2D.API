@@ -49,6 +49,51 @@ public class RiftController : ControllerBase
     }
 
     // -----------------------------------------------------------------
+    // Rift contracts (Invasions R7)
+    // -----------------------------------------------------------------
+
+    /// <summary>The lord posts a contract on their Lesser Rift: Sell (the taker pays) or Hire (the lord pays).</summary>
+    [HttpPost("{riftId:guid}/contract")]
+    public async Task<ActionResult<RiftsResponse>> PostContract(Guid gameInstanceId, Guid riftId, [FromBody] PostRiftContractRequest request)
+    {
+        var userId = await MemberAsync(gameInstanceId);
+        if (userId == null) return Forbid();
+        return await ContractAnswerAsync(gameInstanceId, userId,
+            await _rifts.PostContractAsync(gameInstanceId, userId, riftId, request.Kind, request.Price));
+    }
+
+    /// <summary>The lord withdraws a contract nobody has taken.</summary>
+    [HttpDelete("{riftId:guid}/contract")]
+    public async Task<ActionResult<RiftsResponse>> WithdrawContract(Guid gameInstanceId, Guid riftId)
+    {
+        var userId = await MemberAsync(gameInstanceId);
+        if (userId == null) return Forbid();
+        return await ContractAnswerAsync(gameInstanceId, userId, await _rifts.WithdrawContractAsync(gameInstanceId, userId, riftId));
+    }
+
+    /// <summary>Takes a posted contract: the right to close the rift, for its hold.</summary>
+    [HttpPost("{riftId:guid}/contract/take")]
+    public async Task<ActionResult<RiftsResponse>> TakeContract(Guid gameInstanceId, Guid riftId)
+    {
+        var userId = await MemberAsync(gameInstanceId);
+        if (userId == null) return Forbid();
+        return await ContractAnswerAsync(gameInstanceId, userId, await _rifts.TakeContractAsync(gameInstanceId, userId, riftId));
+    }
+
+    private async Task<ActionResult<RiftsResponse>> ContractAnswerAsync(Guid gameInstanceId, string userId, RiftContractOutcome outcome)
+    {
+        if (outcome.Succeeded) return Ok(await _rifts.ViewAsync(gameInstanceId, userId));
+        var body = new { message = outcome.Message };
+        return outcome.Error switch
+        {
+            RiftContractError.NoSuchRift or RiftContractError.NoContract => NotFound(body),
+            RiftContractError.NotYours or RiftContractError.OwnContract => StatusCode(403, body),
+            RiftContractError.AlreadyPosted or RiftContractError.Held => Conflict(body),
+            _ => BadRequest(body),
+        };
+    }
+
+    // -----------------------------------------------------------------
     // Debug (Development only; Combat Debug → Rifts)
     // -----------------------------------------------------------------
 

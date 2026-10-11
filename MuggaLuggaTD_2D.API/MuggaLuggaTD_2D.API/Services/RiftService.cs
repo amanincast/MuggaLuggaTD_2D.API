@@ -17,7 +17,8 @@ public record RiftView(
     Guid Id, RiftKind Kind, RiftStage Stage, string RegionId, string? TargetUserId, string? TargetName,
     DateTime OmenAt, DateTime OpensAt, DateTime ClosesAt, DateTime? InvadedAt,
     int BreachMax, int Breach, DateTime? SealedAt, string? SealedByName,
-    int MyBreach, ItemRarityTypes? MyChest, bool MyChestOpened, List<RiftContributor> Top);
+    int MyBreach, ItemRarityTypes? MyChest, bool MyChestOpened, List<RiftContributor> Top,
+    RiftContractView? Contract = null);
 
 /// <summary>The rifts a realm's map shows: every live one, and the recently ended ones.</summary>
 public record RiftsResponse(List<RiftView> Live, List<RiftView> Recent);
@@ -39,7 +40,7 @@ public enum RiftChestError { None, NoSuchRift, NoChest, AlreadyOpened, NothingTo
 /// rifts first, so a restart never skips one. Phase 1 only marks an erupted or invaded region; the
 /// Riftborn faction and the invasion's ambushes come in later phases.</para>
 /// </summary>
-public class RiftService
+public partial class RiftService
 {
     private const int TopShown = 10;
     private static readonly TimeSpan RecentFor = TimeSpan.FromHours(24);
@@ -54,6 +55,7 @@ public class RiftService
     private readonly WarLogService? _warLog;
     private readonly LetterService? _letters;
     private readonly SeasonScoreService? _scores;
+    private readonly GoldService? _gold;
 
     private static readonly Random Dice = new();
 
@@ -61,7 +63,7 @@ public class RiftService
 
     public RiftService(ApplicationDbContext context, IGameContentProvider content, ItemLedgerService items,
         ISessionLog sessionLog, ILogger<RiftService> logger, IHubContext<GameHub> hub, RealmPresence presence,
-        WarLogService? warLog = null, LetterService? letters = null, SeasonScoreService? scores = null)
+        WarLogService? warLog = null, LetterService? letters = null, SeasonScoreService? scores = null, GoldService? gold = null)
     {
         _context = context;
         _content = content;
@@ -73,6 +75,7 @@ public class RiftService
         _warLog = warLog;
         _letters = letters;
         _scores = scores;
+        _gold = gold;
     }
 
     // -----------------------------------------------------------------
@@ -115,6 +118,7 @@ public class RiftService
             .ToListAsync();
         foreach (var rift in live)
             if (await MoveOnAsync(rift, now)) changed++;
+        changed += await LapseHoldsAsync(gameInstanceId, now);
 
         var world = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
         if (world == null) return changed;
@@ -160,6 +164,8 @@ public class RiftService
             }
             moved++;
             _sessionLog.Log("RIFT", $"realm={gameInstanceId} rift={rift.Id} region={rift.RegionId} lord {was} -> {rift.TargetUserId}");
+            // The old lord's contract was theirs to make (R7): it ends, and its gold goes back.
+            await VoidForNewLordAsync(rift);
             await BroadcastAsync(rift);
         }
         return moved;
@@ -421,7 +427,11 @@ public class RiftService
             await _context.SaveChangesAsync();
         });
 
-        if (sealedNow && rift != null) await PayAsync(rift);
+        if (sealedNow && rift != null)
+        {
+            if (rift.Kind == RiftKind.Lesser) await SettleContractAsync(rift, userId);
+            await PayAsync(rift);
+        }
         else if (taken > 0 && rift != null) await BroadcastAsync(rift);   // the Breach bars move for everyone
         return taken;
     }
@@ -515,9 +525,13 @@ public class RiftService
 
         var ids = live.Concat(recent).Select(r => r.Id).ToList();
         var shares = await _context.RiftContributions.AsNoTracking().Where(c => ids.Contains(c.RiftId)).ToListAsync();
+        var contracts = await _context.RiftContracts.AsNoTracking()
+            .Where(c => ids.Contains(c.RiftId) && (c.Status == RiftContractStatus.Posted || c.Status == RiftContractStatus.Taken))
+            .ToListAsync();
 
         var people = shares.Select(s => s.UserId)
             .Concat(live.Concat(recent).SelectMany(r => new[] { r.TargetUserId, r.SealedByUserId }))
+            .Concat(contracts.SelectMany(c => new[] { c.OwnerUserId, c.HolderUserId }))
             .Where(id => id != null).Distinct().ToList();
         var names = await _context.Users.AsNoTracking()
             .Where(u => people.Contains(u.Id))
@@ -532,7 +546,15 @@ public class RiftService
             return new RiftView(r.Id, r.Kind, r.Stage, r.RegionId, r.TargetUserId, NameOf(r.TargetUserId),
                 Utc(r.OmenAt), Utc(r.OpensAt), Utc(r.ClosesAt), Utc(r.InvadedAt),
                 r.BreachMax, r.Breach, Utc(r.SealedAt), NameOf(r.SealedByUserId),
-                me?.Breach ?? 0, me?.ChestRarity, me?.ChestOpenedAt != null, top);
+                me?.Breach ?? 0, me?.ChestRarity, me?.ChestOpenedAt != null, top, ContractOf(r));
+        }
+
+        RiftContractView? ContractOf(Rift r)
+        {
+            var c = contracts.Where(x => x.RiftId == r.Id).OrderByDescending(x => x.PostedAt).FirstOrDefault();
+            if (c == null) return null;
+            return new RiftContractView(c.Kind, c.Status, c.Price, NameOf(c.OwnerUserId)!, NameOf(c.HolderUserId),
+                Utc(c.PostedAt), Utc(c.HeldUntil), c.OwnerUserId == userId, c.HolderUserId == userId);
         }
 
         return new RiftsResponse(live.Select(View).ToList(), recent.Select(View).ToList());

@@ -241,7 +241,12 @@ faction per realm, and `FactionRaid` rows for what they do.
     `HiringService.SettleAllAsync`).
   - **Following the land:** `FollowTheLandAsync` in `AdvanceAsync` hands a Lesser Rift to its region's new player
     owner.
-- **Not yet:** the Riftborn faction and rift contracts (phases 5–6); an erupted region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
+- **Rift contracts** (phase 5, 1.59.0, `RiftService.Contracts.cs`, table `RiftContracts`): Sell/Hire on a Lesser
+  Rift, `rifts/{id}/contract` (POST post, DELETE withdraw, POST take). Gold is held in `Escrow` (a Hire's fee from
+  posting, a Sell's price from taking); paid out when the holder seals it (`SettleContractAsync` in
+  `RecordWinAsync`), handed back on every other ending (withdrawn, lord closed it, new lord, season end
+  `ExpireContractsAsync`). Holds lapse in `AdvanceAsync` unless the holder's rift fight is under way.
+- **Not yet:** the Riftborn faction (phase 6); an erupted region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
 ## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0, phase 2 1.56.0; spec: Forge)
 
