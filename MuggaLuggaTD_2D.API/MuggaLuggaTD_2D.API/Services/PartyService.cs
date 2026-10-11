@@ -390,6 +390,23 @@ public class PartyService
             : null;
     }
 
+    /// <summary>
+    /// The company of this player's at rest anywhere in <paramref name="regionId"/>, or null. A rift's
+    /// sites are not places on the road, so a company fights one from wherever it stands in the region.
+    /// </summary>
+    public static async Task<PlayerParty?> CompanyInRegionAsync(ApplicationDbContext context, Guid gameInstanceId,
+        string userId, Guid partyId, string regionId)
+    {
+        var party = await context.PlayerParties
+            .FirstOrDefaultAsync(p => p.Id == partyId && p.GameInstanceId == gameInstanceId && p.UserId == userId);
+        if (party == null || party.AutoMode) return null;
+        if (SettleArrival(party, DateTime.UtcNow)) await context.SaveChangesAsync();
+        return party.State == CompanyState.Idle && party.SiteId != null
+               && string.Equals(SiteSpec.RegionIdOf(party.SiteId), regionId, StringComparison.Ordinal)
+            ? party
+            : null;
+    }
+
     /// <summary>A company halted by an ambush or landed, noticed by a settle: its owner's letter.</summary>
     private readonly record struct RoadEvent(PlayerParty Party, LetterKind Kind, DateTime At, string? RegionId);
 

@@ -39,6 +39,31 @@ namespace MuggaLuggaTD.Shared.Gameplay
     }
 
     /// <summary>
+    /// A twist on a rift fight (Invasions spec §4.3). Each is a client-side combat rule; the server only
+    /// names which ones a fight has. Appended only: the integers go over the wire.
+    /// </summary>
+    public enum RiftMutator
+    {
+        /// <summary>Riftborn burst on death: a ring telegraph, then damage to anyone in it.</summary>
+        Unstable = 0,
+
+        /// <summary>Enemies move 25% faster.</summary>
+        Hasted = 1,
+
+        /// <summary>One enemy in five splits in two on death.</summary>
+        Splitting = 2,
+
+        /// <summary>Elites carry a Ward that must be broken first.</summary>
+        Warded = 3,
+
+        // Phase 7 (polish): not rolled yet.
+        Grasping = 4,
+        Starless = 5,
+        Echoing = 6,
+        Fractured = 7,
+    }
+
+    /// <summary>
     /// Rifts from other realms (Invasions spec, revision R1–R7). When rifts come, where they open, how
     /// big a Great Rift's Breach is, and what sealing one pays. Every number here is a first pass
     /// (tune).
@@ -253,6 +278,147 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const double LesserSealPoints = 40.0;
 
         // -----------------------------------------------------------------
+        // Fighting it (§4, R3, R6 phase 3)
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// A rift site's id: <c>rift:{riftId}:{index}</c>. It is not a region's site (those are
+        /// <c>{regionId}:{index}</c>), so it never resolves in the world blob and is never generated.
+        /// It is also the id a player's lockout is kept under (<c>PlayerSiteClear</c>).
+        /// </summary>
+        public const string SitePrefix = "rift:";
+
+        public static string SiteId(string riftId, int index) => $"{SitePrefix}{riftId}:{index}";
+
+        public static bool IsSiteId(string siteId) =>
+            siteId != null && siteId.StartsWith(SitePrefix, StringComparison.Ordinal);
+
+        /// <summary>Splits a rift site's id; false for any other id.</summary>
+        public static bool TryParseSiteId(string siteId, out string riftId, out int index)
+        {
+            riftId = null;
+            index = -1;
+            if (!IsSiteId(siteId)) return false;
+
+            int split = siteId.LastIndexOf(':');
+            if (split <= SitePrefix.Length) return false;
+            if (!int.TryParse(siteId.Substring(split + 1), out index) || index < 0) return false;
+            riftId = siteId.Substring(SitePrefix.Length, split - SitePrefix.Length);
+            return riftId.Length > 0;
+        }
+
+        /// <summary>A Great Rift has three sites (Breach, Hollow, Heart); a Lesser Rift one.</summary>
+        public static int SiteCount(RiftKind kind) => kind == RiftKind.Great ? 3 : 1;
+
+        public const int HighestTier = 4;
+
+        /// <summary>
+        /// A rift site's tier: the region's for the Breach and a Lesser Rift, one more (at most IV) for
+        /// the Hollow and the Heart (§4.2).
+        /// </summary>
+        public static int SiteTier(RiftKind kind, int regionTier, int index)
+        {
+            int tier = Math.Max(1, Math.Min(HighestTier, regionTier));
+            return kind == RiftKind.Great && index > 0 ? Math.Min(HighestTier, tier + 1) : tier;
+        }
+
+        /// <summary>
+        /// A rift site's enemy level: the middle of a cave's spread at that tier (a cave is
+        /// <c>tier × 5 − 4</c> plus 0–3).
+        /// </summary>
+        public static int SiteLevel(int tier) => Math.Max(1, tier) * 5 - 4 + 2;
+
+        /// <summary>
+        /// How a rift fight is fought and priced: an open-field wave clearing, as a portal is. The
+        /// type is never written anywhere; it is what the arena and the reward roll are told.
+        /// </summary>
+        public const LocationType SiteType = LocationType.Portal;
+
+        /// <summary>
+        /// Where the Riftborn come from: another biome's roster, never the region's own (§4.1), rolled
+        /// from the rift.
+        /// </summary>
+        public static BiomeType DonorBiome(string riftId, BiomeType regionBiome)
+        {
+            var others = ((BiomeType[])Enum.GetValues(typeof(BiomeType))).Where(b => b != regionBiome).ToList();
+            var random = RandomForRift(riftId, "donor");
+            return others[random.Next(others.Count)];
+        }
+
+        /// <summary>The mutators rolled so far. Phase 7 adds Grasping, Starless, Echoing and Fractured.</summary>
+        public static readonly RiftMutator[] RolledMutators =
+            { RiftMutator.Unstable, RiftMutator.Hasted, RiftMutator.Splitting, RiftMutator.Warded };
+
+        /// <summary>How many mutators a site has: the Breach and a Lesser Rift 1, the Hollow and the Heart 2.</summary>
+        public static int MutatorCount(RiftKind kind, int index) => kind == RiftKind.Great && index > 0 ? 2 : 1;
+
+        /// <summary>
+        /// A rift site's mutators. Each rift rolls two from its seed (§4.3); the Breach and a Lesser
+        /// Rift take the first, the Hollow and the Heart both.
+        /// </summary>
+        public static List<RiftMutator> Mutators(string riftId, RiftKind kind, int index)
+        {
+            var pool = RolledMutators.ToList();
+            var random = RandomForRift(riftId, "mutators");
+            random.Shuffle(pool);
+            return pool.Take(MutatorCount(kind, index)).ToList();
+        }
+
+        /// <summary>A rift fight pays a run at its level and tier, times this (§4.4).</summary>
+        public const double RewardMultiplier = 1.25;
+
+        public static long Boosted(long amount) => amount <= 0 ? 0 : (long)Math.Round(amount * RewardMultiplier);
+
+        /// <summary>A player who won at a rift site may fight there again after this (R3).</summary>
+        public static readonly TimeSpan SiteLockout = TimeSpan.FromMinutes(20);
+
+        public static DateTime LockedUntil(DateTime? lastWonUtc) =>
+            lastWonUtc.HasValue ? lastWonUtc.Value + SiteLockout : DateTime.MinValue;
+
+        /// <summary>
+        /// The Breach one win at a Great Rift's site wears away: Breach 40, Hollow 60, Heart 100 (the
+        /// spec's 1 : 1.5 : 2.5). A fixed figure rather than the run's experience ÷ 10, so a rift
+        /// sized for its realm's players (<see cref="BreachMax"/>) takes the same work at any level.
+        /// A Lesser Rift has no Breach to speak of: one win seals it.
+        /// </summary>
+        public static int BreachPerWin(RiftKind kind, int index)
+        {
+            if (kind == RiftKind.Lesser) return int.MaxValue;
+            switch (index)
+            {
+                case 0: return 40;
+                case 1: return 60;
+                default: return 100;
+            }
+        }
+
+        // Combat numbers for the mutators (client-side rules; here so the Codex and the tests agree).
+
+        /// <summary>Hasted: enemy move speed ×1.25.</summary>
+        public const float HastedSpeed = 1.25f;
+
+        /// <summary>Splitting: one enemy in five splits on death, into two at this share of its health.</summary>
+        public const int SplitOneIn = 5;
+        public const float SplitHealthShare = 0.4f;
+
+        /// <summary>
+        /// Unstable: the burst's radius (world units), its warning, and its damage before the enemy level's
+        /// scaling (<c>EnemyStatScaling.EnemyAbilityDamage</c>, as a gauntlet's hazards are scaled).
+        /// </summary>
+        public const float UnstableRadius = 1.6f;
+        public const float UnstableDelaySeconds = 0.9f;
+        public const long UnstableBaseDamage = 40;
+
+        /// <summary>Warded: an elite's Ward takes this much off each hit, until it has taken this share of its health.</summary>
+        public const float WardReduction = 0.6f;
+        public const float WardBreaksAfter = 0.25f;
+
+        // -----------------------------------------------------------------
+
+        private static DeterministicRandom RandomForRift(string riftId, string purpose) =>
+            DeterministicRandom.ForSubject(
+                Naming.Hash((riftId ?? "").ToLowerInvariant()),
+                Naming.Hash($"rift-fight:{purpose}"));
 
         private static DeterministicRandom RandomFor(string realmId, RiftKind kind, int eventNumber, string purpose) =>
             DeterministicRandom.ForSubject(

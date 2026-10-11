@@ -24,7 +24,32 @@ public record PveBeginRequest(
     Guid? PartyId = null
 );
 
-public record PveBeginResponse(Guid RunId);
+public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null);
+
+/// <summary>
+/// The fight at a rift site (Invasions spec §5.3), sent with the run so the client builds what the
+/// server will pay for: its level and tier, whose roster pours through, and the mutators.
+/// </summary>
+public record RiftEncounterDto(
+    Guid RiftId,
+    MuggaLuggaTD.Shared.Gameplay.RiftKind Kind,
+    int SiteIndex,
+    string RegionId,
+    int Level,
+    int Tier,
+    MuggaLuggaTD.Shared.World.BiomeType DonorBiome,
+    List<MuggaLuggaTD.Shared.Gameplay.RiftMutator> Mutators);
+
+/// <summary>What a win at a rift site did to the rift: the Breach it wore away, and whether that sealed it.</summary>
+public record RiftWinDto(
+    Guid RiftId,
+    MuggaLuggaTD.Shared.Gameplay.RiftKind Kind,
+    int SiteIndex,
+    int BreachTaken,
+    int Breach,
+    int BreachMax,
+    MuggaLuggaTD.Shared.Gameplay.RiftStage Stage,
+    bool SealedByMe);
 
 /// <summary>
 /// Claims the conquest for a completed run. Carries no outcome — the server derives that from the
@@ -89,7 +114,9 @@ public record PveClaimResponse(
     /// <summary>When this player may fight the site again (the ten-minute lockout); null for a capture.</summary>
     DateTime? LockedUntil = null,
     /// <summary>When a clear here will shape the realm again for this player; null for a capture.</summary>
-    DateTime? WorldRewardsBackAt = null
+    DateTime? WorldRewardsBackAt = null,
+    /// <summary>A rift site's win (Invasions spec, phase 3); null for any other run.</summary>
+    RiftWinDto? Rift = null
 );
 
 /// <summary>
