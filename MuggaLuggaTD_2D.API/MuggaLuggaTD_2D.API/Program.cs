@@ -111,6 +111,7 @@ builder.Services.AddScoped<InviteCodeService>();
 builder.Services.AddScoped<RealmMembershipService>();
 builder.Services.AddScoped<RealmGoalService>();
 builder.Services.AddScoped<RiftService>();
+builder.Services.AddScoped<ForgeService>();
 builder.Services.AddSingleton<RealmPresence>();
 
 // Hardening 8: per-player token buckets, with every refusal tallied for review (RateLimits).

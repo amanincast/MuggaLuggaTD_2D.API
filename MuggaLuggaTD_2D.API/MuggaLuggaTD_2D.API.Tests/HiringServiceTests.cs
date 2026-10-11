@@ -253,7 +253,8 @@ public class HiringServiceTests : IDisposable
     [Fact]
     public async Task GatheringPaysWholeGoods_AndKeepsTheFraction()
     {
-        var (_, site, trade) = await WorldAsync();
+        var (region, site, trade) = await WorldAsync();
+        ToAFairFreeDay(region.RegionId);
         var worker = await WorkerAsync(trade);
         await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
         double rate = worker.RatePerHour;
@@ -299,6 +300,7 @@ public class HiringServiceTests : IDisposable
     public async Task LosingTheLandSendsWorkersHome_AfterPayingThem()
     {
         var (region, site, trade) = await WorldAsync();
+        ToAFairFreeDay(region.RegionId);
         var worker = await WorkerAsync(trade);
         await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
         double rate = worker.RatePerHour;
@@ -322,6 +324,20 @@ public class HiringServiceTests : IDisposable
     /// Moves the clock to the start of a day that holds at least one harried hour for the region, and
     /// no Harvest Fair there (the region is the only one held), so only the raiders change its goods.
     /// </summary>
+    /// <summary>
+    /// Moves the clock to the start of a day with no Harvest Fair in the region. A fair is rolled from the
+    /// realm's id, which is random per test, so a test that prices plain work must step around one.
+    /// </summary>
+    private void ToAFairFreeDay(string regionId)
+    {
+        for (int day = 0; day < 200; day++)
+        {
+            var start = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(day);
+            if (FairHours(regionId, HarassmentRules.HourOf(start)) == 0) { _now = start; return; }
+        }
+        throw new InvalidOperationException("two hundred days of fairs");
+    }
+
     private int ToATroubledDay(string regionId)
     {
         for (int day = 0; day < 200; day++)

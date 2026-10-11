@@ -263,6 +263,65 @@ public class ItemLedgerService
         _sessionLog.Log("ITEM-UNSAVED", $"user={userId} item={itemId} realm={gameInstanceId}");
     }
 
+    // -----------------------------------------------------------------
+    // The Forge
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// The item as the player holds it, from the ledger (never the client's copy), and whether it is on the
+    /// Bazaar. Null when the player holds no such item.
+    /// </summary>
+    public async Task<(ItemSaveData Item, bool Listed)?> FindAsync(Guid gameInstanceId, string userId, string? itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return null;
+        await EnsureAdoptedAsync(gameInstanceId, userId);
+        var grant = await _context.ItemGrants.FirstOrDefaultAsync(g =>
+            g.GameInstanceId == gameInstanceId && g.UserId == userId && g.ItemId == itemId);
+        var item = grant == null ? null : JsonSerializer.Deserialize<ItemSaveData>(grant.ItemJson);
+        return item == null ? null : (item, grant!.ListingId != null);
+    }
+
+    /// <summary>
+    /// A forged item: the grant becomes what it is now, and so does the stored save's copy (whoever wears it
+    /// keeps it on), so server-side power counts the change at once. Leaves both for the caller to commit.
+    /// </summary>
+    public async Task ReplaceAsync(Guid gameInstanceId, string userId, ItemSaveData item, string source)
+    {
+        var grants = await _context.ItemGrants.Where(g =>
+            g.GameInstanceId == gameInstanceId && g.UserId == userId && g.ItemId == item.Id && g.ListingId == null).ToListAsync();
+        string json = Canonical(item);
+        foreach (var grant in grants)
+        {
+            grant.ItemJson = json;
+            grant.Source = Trim(source);
+        }
+
+        var row = await _context.PlayerGameData.FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+        var save = ParseOrNull(row?.GameData);
+        if (row != null && SaveItems(save) is JsonArray items)
+        {
+            for (int i = 0; i < items.Count; i++)
+            {
+                if (items[i] is not JsonObject old || IsMaterial(old) || ReadString(old["Id"]) != item.Id) continue;
+                var now = JsonNode.Parse(json) as JsonObject ?? new JsonObject();
+                if (old[EquippedField] is { } wearer) now[EquippedField] = wearer.DeepClone();
+                items[i] = now;
+            }
+            row.GameData = save!.ToJsonString();
+        }
+        _sessionLog.Log("ITEM-FORGED", $"user={userId} item={item.Id} realm={gameInstanceId} {source}");
+    }
+
+    /// <summary>An item the Forge used up: its grant goes, and it leaves the stored save. Leaves both for the caller to commit.</summary>
+    public async Task RevokeAsync(Guid gameInstanceId, string userId, string itemId, string reason)
+    {
+        // Every grant of it: an adopted item can, rarely, have been recorded twice.
+        _context.ItemGrants.RemoveRange(await _context.ItemGrants.Where(g =>
+            g.GameInstanceId == gameInstanceId && g.UserId == userId && g.ItemId == itemId && g.ListingId == null).ToListAsync());
+        await RemoveFromStoredSaveAsync(gameInstanceId, userId, itemId);
+        _sessionLog.Log("ITEM-REVOKED", $"user={userId} item={itemId} realm={gameInstanceId} {reason}");
+    }
+
     /// <summary>A cancelled listing gives the item back to its seller.</summary>
     public async Task ReleaseAsync(Guid gameInstanceId, Guid listingId)
     {

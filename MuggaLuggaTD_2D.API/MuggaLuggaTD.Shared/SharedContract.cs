@@ -234,6 +234,9 @@ namespace MuggaLuggaTD.Shared
         // 1.53.0 - Rifts, phase 1 (Invasions spec R1–R7). RiftRules: Great Rifts (4 a day, a realm's shared Breach,
         //   erupt if unsealed) and Lesser Rifts (6–8 a day in an online player's region, invade it if unsealed); their
         //   timing, placement, Breach and pay. New letter kinds, SeasonDeed.RiftSealed.
-        public const string Version = "1.53.0";
+        // 1.54.0 - The Forge, phase 1 (Forge spec). ForgeRules: Temper (tier +1, capped by the best hero's level), Ascend
+        //   (rarity +1 to Legendary, eating a second piece of the slot) and Salvage; an upgrade keeps each value's roll
+        //   quality, drifting ±5%, and rolls the slots it opens. Gear can now change after it drops.
+        public const string Version = "1.54.0";
     }
 }

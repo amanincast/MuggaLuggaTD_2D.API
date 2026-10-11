@@ -66,7 +66,8 @@ public record BazaarPurchase(BazaarOutcome Outcome, long Spent = 0, int Quantity
 /// </summary>
 public class BazaarService
 {
-    private static readonly SemaphoreSlim TradeLock = new(1, 1);
+    /// <summary>One trade at a time; the Forge takes it too, so a piece can't be forged and listed at once.</summary>
+    internal static readonly SemaphoreSlim TradeLock = new(1, 1);
 
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
