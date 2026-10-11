@@ -23,6 +23,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RegionRaid> RegionRaids => Set<RegionRaid>();
     public DbSet<SeasonScore> SeasonScores => Set<SeasonScore>();
     public DbSet<SeasonResult> SeasonResults => Set<SeasonResult>();
+    public DbSet<SlayerTally> SlayerTallies => Set<SlayerTally>();
+    public DbSet<LeaderboardSnapshot> LeaderboardSnapshots => Set<LeaderboardSnapshot>();
     public DbSet<Siege> Sieges => Set<Siege>();
     public DbSet<WarLogEntry> WarLog => Set<WarLogEntry>();
     public DbSet<Letter> Letters => Set<Letter>();
@@ -274,15 +276,33 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // And read across instances, for what a player has won anywhere — the carry-over's path.
             entity.HasIndex(e => new { e.UserId, e.SeasonEndedAt });
 
+            // The rate boards: a month's qualified seasons by rate, and crowns by player.
+            entity.HasIndex(e => new { e.EndedMonth, e.Qualifies, e.AverageRate });
+            entity.HasIndex(e => new { e.Crowned, e.UserId });
+
+            // A result outlives its realm (Leaderboards row 8).
             entity.HasOne(e => e.GameInstance)
                 .WithMany()
                 .HasForeignKey(e => e.GameInstanceId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // The Slayers board: one row per player per UTC day.
+        builder.Entity<SlayerTally>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Day }).IsUnique();
+            entity.HasIndex(e => e.Day);
+        });
+
+        // A living board's last build: one per board and bracket.
+        builder.Entity<LeaderboardSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.Board, e.Bracket }).IsUnique();
         });
 
         // Configure PlayerMaterial (one row per player per material per realm; the wallet reads and

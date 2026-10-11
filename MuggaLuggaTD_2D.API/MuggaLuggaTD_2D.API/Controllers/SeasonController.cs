@@ -167,11 +167,11 @@ public class SeasonHistoryController : ControllerBase
     }
 
     [HttpGet("me")]
-    public async Task<ActionResult<IReadOnlyList<SeasonResultEntry>>> MyHistory()
+    public async Task<ActionResult<IReadOnlyList<SeasonResultEntry>>> MyHistory([FromQuery] int skip = 0, [FromQuery] int take = 20)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null) return Unauthorized();
 
-        return Ok(await _seasons.HistoryForUserAsync(userId));
+        return Ok(await _seasons.HistoryForUserAsync(userId, Math.Clamp(take, 1, 50), skip));
     }
 }

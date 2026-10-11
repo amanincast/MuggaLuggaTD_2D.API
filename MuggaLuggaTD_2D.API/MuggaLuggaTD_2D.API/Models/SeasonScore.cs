@@ -55,4 +55,13 @@ public class SeasonScore
 
     /// <summary>Points earned from raiding and from repelling raids.</summary>
     public double RaidingPoints { get; set; }
+
+    /// <summary>
+    /// When the player joined this season: when the row was made, or the season's start if earlier. The
+    /// rate boards count a player's hours from here. Null on rows made before it was kept.
+    /// </summary>
+    public DateTime? JoinedAt { get; set; }
+
+    /// <summary>Enemies slain this season, as the quests count them (clamped to each fight).</summary>
+    public long Kills { get; set; }
 }

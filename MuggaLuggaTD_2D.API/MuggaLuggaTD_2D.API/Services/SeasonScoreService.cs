@@ -276,13 +276,14 @@ public class SeasonScoreService
         string UserId, double Total, double Holding, double Clearing, double Raiding, double Rate, int RegionsHeld);
 
     /// <summary>What a player has already won, anywhere. The carry-over's data, waiting for a use.</summary>
-    public async Task<IReadOnlyList<SeasonResultEntry>> HistoryForUserAsync(string userId, int limit = 20)
+    public async Task<IReadOnlyList<SeasonResultEntry>> HistoryForUserAsync(string userId, int limit = 20, int skip = 0)
     {
         var results = await _context.SeasonResults
             .Include(r => r.User)
             .Include(r => r.GameInstance)
             .Where(r => r.UserId == userId)
             .OrderByDescending(r => r.SeasonEndedAt)
+            .Skip(Math.Max(0, skip))
             .Take(limit)
             .ToListAsync();
 
@@ -386,6 +387,11 @@ public class SeasonScoreService
                 .Concat(factions.Select(f => (Points: f.SettledPoints, Player: (SeasonScore?)null, Faction: (FactionSeasonScore?)f)))
                 .OrderByDescending(e => e.Points)
                 .ToList();
+            var names = await DisplayNamesAsync(scores.Select(s => s.UserId).ToList());
+            // Everyone ranked, factions too: the rank counts them, so "3rd of 3" must as well.
+            int ranked = scores.Count + factions.Count;
+            // Contested: anyone else in the table, player or faction. A lone first is not a crown.
+            bool contested = table.Count > 1;
             var ranks = new int[table.Count];
             for (int i = 0; i < table.Count; i++)
             {
@@ -420,8 +426,18 @@ public class SeasonScoreService
                     RegionsHeld = regions.Count(r => r.IsOwnedByPlayer(score.UserId)),
                     SeasonStartedAt = startedAt,
                     SeasonEndedAt = endedAt,
-                    ChestRarity = SeasonEndRules.ChestFor(score.SettledPoints, startedAt, endedAt)
+                    ChestRarity = SeasonEndRules.ChestFor(score.SettledPoints, startedAt, endedAt),
                 };
+                // For the leaderboards (Leaderboards spec §4.1), fixed at the close.
+                result.RealmName = Trim64(instance.Name);
+                result.PlayerName = Trim64(names.TryGetValue(score.UserId, out var named) ? named : null);
+                result.SeasonLengthDays = instance.SeasonLengthDays;
+                result.PlayersInSeason = ranked;
+                result.AverageRate = Math.Round(SeasonEndRules.AverageRate(score.SettledPoints, startedAt, endedAt), 2);
+                result.Crowned = rank == 1 && contested;
+                result.HoursInSeason = Math.Round(LeaderboardRules.HoursIn(score.JoinedAt, startedAt, endedAt), 2);
+                result.Qualifies = LeaderboardRules.Qualifies(result.SeasonLengthDays, result.HoursInSeason, result.RegionsHeld);
+                result.EndedMonth = LeaderboardRules.MonthOf(endedAt);
 
                 written.Add(result);
                 _context.SeasonResults.Add(result);
@@ -654,23 +670,13 @@ public class SeasonScoreService
         var crowns = new Dictionary<string, int>(StringComparer.Ordinal);
         if (userIds.Count == 0) return crowns;
 
-        var firsts = await _context.SeasonResults.AsNoTracking()
-            .Where(r => userIds.Contains(r.UserId) && r.Rank == 1)
-            .Select(r => new { r.UserId, r.GameInstanceId, r.SeasonNumber })
+        // Crowned is decided at the close (and backfilled by the Leaderboards migration), so this is one query.
+        var counts = await _context.SeasonResults.AsNoTracking()
+            .Where(r => userIds.Contains(r.UserId) && r.Crowned)
+            .GroupBy(r => r.UserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
             .ToListAsync();
-
-        foreach (var first in firsts)
-        {
-            bool contested =
-                await _context.SeasonResults.AnyAsync(r =>
-                    r.GameInstanceId == first.GameInstanceId && r.SeasonNumber == first.SeasonNumber && r.UserId != first.UserId)
-                || await _context.FactionSeasonScores.AnyAsync(f =>
-                    f.GameInstanceId == first.GameInstanceId && f.SeasonNumber == first.SeasonNumber && f.Rank != null);
-            if (!contested) continue;
-
-            crowns[first.UserId] = crowns.TryGetValue(first.UserId, out var n) ? n + 1 : 1;
-        }
-
+        foreach (var row in counts) crowns[row.UserId] = row.Count;
         return crowns;
     }
 
@@ -757,7 +763,8 @@ public class SeasonScoreService
             GameInstanceId = instance.Id,
             UserId = userId,
             SeasonNumber = instance.SeasonNumber,
-            LastSettledAt = from
+            LastSettledAt = from,
+            JoinedAt = from,
         };
     }
 
@@ -774,17 +781,19 @@ public class SeasonScoreService
     {
         var users = await _context.Users
             .Where(u => userIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.UserName })
+            .Select(u => new { u.Id, u.UserName, u.DisplayName })
             .ToListAsync();
 
-        return users.ToDictionary(u => u.Id, u => u.UserName ?? "Unknown", StringComparer.Ordinal);
+        return users.ToDictionary(u => u.Id, u => PlayerNames.Of(u.DisplayName, u.UserName), StringComparer.Ordinal);
     }
+
+    private static string? Trim64(string? text) => text == null ? null : text.Length <= 64 ? text : text[..64];
 
     private static SeasonResultEntry ToEntry(SeasonResult result) => new(
         result.SeasonNumber,
         result.Rank,
         result.UserId,
-        result.User?.UserName ?? "Unknown",
+        PlayerNames.Of(result.User?.DisplayName, result.User?.UserName ?? result.PlayerName),
         result.TotalPoints,
         result.HoldingPoints,
         result.ClearingPoints,
@@ -792,5 +801,16 @@ public class SeasonScoreService
         result.RegionsHeld,
         result.SeasonStartedAt,
         result.SeasonEndedAt,
-        result.GameInstance?.Name);
+        result.GameInstance?.Name ?? result.RealmName)
+    {
+        AverageRate = result.AverageRate,
+        Crowned = result.Crowned,
+        Qualifies = result.Qualifies,
+        WhyNotRanked = result.SeasonLengthDays == 0 ? null
+            : LeaderboardRules.WhyNot(result.SeasonLengthDays, result.HoursInSeason, result.RegionsHeld),
+        PlayersInSeason = result.PlayersInSeason,
+        Chest = result.ChestRarity,
+        EndedMonth = result.EndedMonth,
+        GameInstanceId = result.GameInstanceId,
+    };
 }

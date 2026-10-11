@@ -19,11 +19,14 @@ public class SeasonResult
     [Key]
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    [Required]
-    public Guid GameInstanceId { get; set; }
+    /// <summary>
+    /// The realm. Null once the realm is deleted: a result outlives its realm, so nobody's crowns go with it
+    /// (Leaderboards row 8). <see cref="RealmName"/> keeps what it was called.
+    /// </summary>
+    public Guid? GameInstanceId { get; set; }
 
     [ForeignKey(nameof(GameInstanceId))]
-    public GameInstance GameInstance { get; set; } = null!;
+    public GameInstance? GameInstance { get; set; }
 
     [Required]
     public string UserId { get; set; } = string.Empty;
@@ -63,4 +66,34 @@ public class SeasonResult
 
     /// <summary>When the player first saw the season-end page. Null: show it on their next return.</summary>
     public DateTime? SeenAt { get; set; }
+
+    // ---- Written at the close for the leaderboards (Leaderboards spec §4.1) ----
+
+    /// <summary>The realm's name at the close, kept if the realm is deleted.</summary>
+    [MaxLength(64)]
+    public string? RealmName { get; set; }
+
+    /// <summary>The player's name at the close, for the record. Boards show the current name.</summary>
+    [MaxLength(64)]
+    public string? PlayerName { get; set; }
+
+    public int SeasonLengthDays { get; set; }
+
+    /// <summary>How many were ranked that season, factions included ("3rd of 7").</summary>
+    public int PlayersInSeason { get; set; }
+
+    /// <summary>Points per hour over the season (<c>SeasonEndRules.AverageRate</c>): what the rate boards rank.</summary>
+    public double AverageRate { get; set; }
+
+    /// <summary>First in a contested season: a crown. Stored at the close rather than worked out per row.</summary>
+    public bool Crowned { get; set; }
+
+    /// <summary>How long the player was in the season (<c>LeaderboardRules.HoursIn</c>).</summary>
+    public double HoursInSeason { get; set; }
+
+    /// <summary>Whether the season counts on the rate boards (<c>LeaderboardRules.Qualifies</c>).</summary>
+    public bool Qualifies { get; set; }
+
+    /// <summary>The month it counts in, yyyymm (<c>LeaderboardRules.MonthOf</c>).</summary>
+    public int EndedMonth { get; set; }
 }

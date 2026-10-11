@@ -192,6 +192,10 @@ public class QuestService
     {
         if (string.IsNullOrEmpty(userId) || deed == null) return;
 
+        // The Slayers board counts the same kills, already clamped to the fight (Leaderboards L1). It never throws.
+        await LeaderboardService.TallyKillsAsync(_context, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            gameInstanceId, userId, deed.Kills, Clock());
+
         // The realm's goal of the day counts the same deeds (Active Content B). It never throws.
         if (_goals != null) await _goals.RecordAsync(gameInstanceId, userId, deed);
         try
