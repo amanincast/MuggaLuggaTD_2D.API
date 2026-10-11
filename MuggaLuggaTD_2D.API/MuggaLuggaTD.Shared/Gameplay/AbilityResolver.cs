@@ -96,7 +96,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ValidTargetTags = template.ValidTargetTags?.ToList(),
                 HealTargets = template.HealTargets,
                 WardReduction = template.WardReduction,
-                WardSeconds = template.WardSeconds
+                WardSeconds = template.WardSeconds,
+                Shape = template.Shape,
+                ArcDegrees = template.ArcDegrees,
+                WaveEveryNthCast = template.WaveEveryNthCast,
+                WaveDamageShare = template.WaveDamageShare,
+                AuraTicks = template.AuraTicks,
+                AuraTickSeconds = template.AuraTickSeconds
             };
 
             ability.Range = Clone(template.Range) ?? ability.Range;
