@@ -407,6 +407,39 @@ public class HiringServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AnInvasionHarriesTheDiggingsEveryHour_PatrolOrNot_UntilItsRiftIsSealed()
+    {
+        var (region, site, trade) = await WorldAsync();
+        // A day without a Harvest Fair, so every hour pays the same.
+        for (int day = 0; FairHours(region.RegionId, HarassmentRules.HourOf(_now)) > 0; day++)
+            _now = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc).AddDays(day);
+        var worker = await WorkerAsync(trade);
+        worker.LastSettledAt = _now;
+        await Hiring.AssignAsync(_realm, Player, worker.Id, site.SiteId);
+        double rate = worker.RatePerHour;
+
+        // A patrol keeps the raiders off, so only the invasion can harry it. Invaded now; sealed 12 hours on.
+        _db.PlayerParties.Add(new PlayerParty
+        {
+            GameInstanceId = _realm, UserId = Player, Name = "The Watch", CharacterIdsJson = "[\"hero-1\"]",
+            AutoMode = true, AutoOrder = AutoOrder.Patrol, AutoRegionId = region.RegionId, AutoStatus = AutoStatus.Patrolling,
+        });
+        _db.Rifts.Add(new Rift
+        {
+            GameInstanceId = _realm, SeasonNumber = 1, Kind = RiftKind.Lesser, EventNumber = 1, RegionId = region.RegionId,
+            TargetUserId = Player, Stage = RiftStage.Sealed, OmenAt = _now.AddHours(-2), OpensAt = _now.AddHours(-1.5),
+            ClosesAt = _now, InvadedAt = _now, SealedAt = _now.AddHours(12), SealedByUserId = Player, BreachMax = 1,
+        });
+        await _db.SaveChangesAsync();
+
+        _now += TimeSpan.FromHours(24);
+        await Hiring.SettlePlayerAsync(_realm, Player);
+
+        double expected = rate * (24 - 12 * (1 - HarassmentRules.HarriedFactor));
+        Assert.Equal((int)Math.Floor(expected), await GoodsAsync(trade));
+    }
+
+    [Fact]
     public async Task APatrolKeepsTheRaidersOff()
     {
         var (region, site, trade) = await WorldAsync();

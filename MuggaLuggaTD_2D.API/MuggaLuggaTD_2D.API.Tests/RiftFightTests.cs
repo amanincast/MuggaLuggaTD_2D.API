@@ -176,6 +176,24 @@ public class RiftFightTests : IDisposable
         Assert.Equal(RiftRules.RolledMutators.Length, seen.Count);
     }
 
+    [Fact]
+    public void AnInvasion_HarriesEveryHourItTouches_PatrolOrNot()
+    {
+        var from = new DateTime(2026, 10, 11, 12, 30, 0, DateTimeKind.Utc);
+        var invasion = new Invasion { RiftId = "r", RegionId = "r1", From = from, Until = from.AddHours(2) };
+        long hour = HarassmentRules.HourOf(from);
+        Assert.False(invasion.CoversHour(hour - 1));
+        Assert.True(invasion.CoversHour(hour));
+        Assert.True(invasion.CoversHour(hour + 2));   // 14:00-14:30 is still invaded
+        Assert.False(invasion.CoversHour(hour + 3));
+
+        var all = new[] { invasion };
+        Assert.True(RiftRules.IsHarried("realm", "r1", hour + 1, patrolled: true, all));
+        Assert.False(RiftRules.IsHarried("realm", "r2", hour + 1, patrolled: true, all));
+        Assert.Equal(RiftRules.InvadedAmbushFactor, RiftRules.AmbushChanceFactor(all, "r1", from.AddMinutes(5)));
+        Assert.Equal(1.0, RiftRules.AmbushChanceFactor(all, "r1", from.AddHours(3)));
+    }
+
     // -----------------------------------------------------------------
     // Going in
     // -----------------------------------------------------------------
@@ -278,6 +296,29 @@ public class RiftFightTests : IDisposable
         var mine = await _db.RiftContributions.AsNoTracking().SingleAsync(c => c.RiftId == rift.Id);
         Assert.Equal(RiftRules.LesserChest, mine.ChestRarity);
         Assert.Contains(_hub.Sent, s => s.Method == "RiftUpdated");
+    }
+
+    [Fact]
+    public async Task ALesserRift_GoesWithTheLand()
+    {
+        await RealmAsync();
+        var rift = await RiftAsync(RiftKind.Lesser, "r1", RiftStage.Invaded);
+
+        // The rival takes r1: the rift (and its invasion) is now theirs to close, not the player's.
+        var row = await _db.WorldViewGameData.SingleAsync(w => w.GameInstanceId == _realm);
+        var world = System.Text.Json.Nodes.JsonNode.Parse(row.GameData);
+        WorldRegionBlob.CaptureRegion(WorldRegionBlob.FindRegion(world, "r1")!, TestIds.Rival, TestIds.Rival);
+        row.GameData = world!.ToJsonString();
+        await _db.SaveChangesAsync();
+
+        string site = RiftRules.SiteId(rift.Id.ToString(), 0);
+        var (player, _, _) = await Pve.BeginRiftAsync(_realm, TestIds.Player, await CompanyAtAsync("r1:0", site));
+        Assert.Equal(PveError.NotPveTarget, player.Error);
+        var (rival, _, _) = await Pve.BeginRiftAsync(_realm, TestIds.Rival, await CompanyAtAsync("r1:1", site, TestIds.Rival));
+        Assert.True(rival.Succeeded, rival.Message);
+
+        await Rifts().AdvanceAsync(_realm);
+        Assert.Equal(TestIds.Rival, (await _db.Rifts.AsNoTracking().SingleAsync(r => r.Id == rift.Id)).TargetUserId);
     }
 
     [Fact]

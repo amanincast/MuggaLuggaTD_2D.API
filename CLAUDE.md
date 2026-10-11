@@ -232,8 +232,16 @@ faction per realm, and `FactionRaid` rows for what they do.
   - Claim pays a run at the site's level and tier ×1.25 and calls `RecordWinAsync` with `BreachPerWin` (40 / 60 / 100;
     all of a Lesser Rift). It returns no world (nothing in the blob changes), so the controller skips the write.
     `RecordWinAsync` now broadcasts `RiftUpdated` on every win that took Breach, not only on the seal.
-- **Not yet:** the Riftborn faction, invasion ambushes and harried workers, rift contracts (phases 4–6); an erupted
-  or invaded region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
+- **The invasion** (phase 4, 1.58.0): `RiftService.InvasionsAsync` → `RiftRules.Invasion` windows (InvadedAt to
+  SealedAt, open while Invaded).
+  - **Ambushes:** a road leg through an invaded region is ×2 as likely to be ambushed (`AmbushChanceFactor`, in
+    `PartyService` travel and `AutoFightService.StartWalk`). `AmbushOf` marks an ambush struck there
+    `Riftborn` (the donor biome and `AmbushMutators`).
+  - **Harried workers:** workers are harried every hour of the invasion, patrol or not (`RiftRules.IsHarried` in
+    `HiringService.SettleAllAsync`).
+  - **Following the land:** `FollowTheLandAsync` in `AdvanceAsync` hands a Lesser Rift to its region's new player
+    owner.
+- **Not yet:** the Riftborn faction and rift contracts (phases 5–6); an erupted region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
 ## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0, phase 2 1.56.0; spec: Forge)
 

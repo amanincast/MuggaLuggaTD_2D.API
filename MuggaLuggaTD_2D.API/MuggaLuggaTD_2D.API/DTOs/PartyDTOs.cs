@@ -49,7 +49,16 @@ public record AmbushDto(
     string SiteId,
     int Level,
     int Tier,
-    int Waves
+    int Waves,
+    /// <summary>Struck in an invaded region (Invasions R4): the warband is Riftborn. Null otherwise.</summary>
+    RiftbornDto? Riftborn = null
+);
+
+/// <summary>A Riftborn warband: the rift it poured from, whose roster it is, and the mutator it brings.</summary>
+public record RiftbornDto(
+    Guid RiftId,
+    MuggaLuggaTD.Shared.World.BiomeType DonorBiome,
+    List<MuggaLuggaTD.Shared.Gameplay.RiftMutator> Mutators
 );
 
 /// <summary>An ambush run opened: the id its claim names, and the fight to load.</summary>

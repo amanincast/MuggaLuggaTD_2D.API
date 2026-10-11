@@ -352,13 +352,16 @@ public class PartyService
         var byId = regions.ToDictionary(r => r.RegionId);
         var patrolled = parties.Where(p => p.AutoMode && AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
             .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal);
-        // Hunting Season makes its region's road likelier to be struck (Active Content C).
+        // Hunting Season makes its region's road likelier to be struck (Active Content C), and so, twice over,
+        // does an invasion (Invasions R4).
         var conditions = RegionConditionRules.For(gameInstanceId.ToString(), HarassmentRules.HourOf(now), regions);
+        var invasions = await RiftService.InvasionsAsync(_context, gameInstanceId);
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {
             var land = byId[leg.RegionId];
             var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
-            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId));
+            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId))
+                          * RiftRules.AmbushChanceFactor(invasions, leg.RegionId, now);
             return (land.Tier, land.IsOwnedByPlayer(userId), walk, patrolled.Contains(leg.RegionId), hunt);
         }));
         party.AmbushAt = AmbushRules.Roll(chance, Dice);
@@ -533,7 +536,7 @@ public class PartyService
         if (party.State != CompanyState.Ambushed)
             return (new PartyOutcome(PartyError.NotAmbushed, $"Nobody has {party.Name} halted."), null);
 
-        var ambush = AmbushOf(party, world);
+        var ambush = AmbushOf(party, world, await RiftService.InvasionsAsync(_context, gameInstanceId));
         if (ambush == null) return (new PartyOutcome(PartyError.SiteNotFound, "The road it was on is no longer in this world."), null);
 
         var fighters = MarchingArmy.ReadIds(party.CharacterIdsJson);
@@ -612,7 +615,7 @@ public class PartyService
         if (request.Won && elapsed < WorldPveService.MinimumRunDuration)
             return (new PartyOutcome(PartyError.RunTooFast, "That fight ended implausibly fast."), null);
 
-        var ambush = AmbushOf(party, world);
+        var ambush = AmbushOf(party, world, await RiftService.InvasionsAsync(_context, gameInstanceId));
         run.ClaimedAt = now;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
@@ -672,7 +675,8 @@ public class PartyService
                 RegionId = struck?.RegionId,
                 AmbushWon = true,
                 Kills = struck == null ? new Dictionary<string, int>()
-                    : new Dictionary<string, int>(_quests.ClampKills(request.Kills, struck.Biome, AmbushRules.SkirmishTier, null))
+                    : new Dictionary<string, int>(_quests.ClampKills(request.Kills,
+                        ambush!.Riftborn?.DonorBiome ?? struck.Biome, AmbushRules.SkirmishTier, null))
             });
         }
 
@@ -714,24 +718,37 @@ public class PartyService
     /// the level of that region's sites. The site named is one in that region, which is what gives
     /// the fight its biome and brings the player back there after.
     /// </summary>
-    private static AmbushDto? AmbushOf(PlayerParty p, JsonNode world)
+    ///
+    /// <para>Struck in a region under invasion at that moment (Invasions R4), the warband is Riftborn: the rift's
+    /// donor roster and its first mutator. It pays as any ambush does.</para>
+    private static AmbushDto? AmbushOf(PlayerParty p, JsonNode world, IReadOnlyList<Invasion> invasions)
     {
         if (p.State != CompanyState.Ambushed || string.IsNullOrEmpty(p.ToSiteId)) return null;
         var destination = WorldRegionBlob.ResolveSite(world, p.ToSiteId);
         if (destination == null) return null;
 
+        AmbushDto Riftborn(AmbushDto dto, WorldRegionData struck)
+        {
+            var invasion = p.HaltedAt is DateTime at ? RiftRules.InvasionAt(invasions, struck.RegionId, at) : null;
+            return invasion == null || !Guid.TryParse(invasion.RiftId, out var riftId) ? dto
+                : dto with { Riftborn = new RiftbornDto(riftId, RiftRules.DonorBiome(invasion.RiftId, struck.Biome),
+                    RiftRules.AmbushMutators(invasion.RiftId)) };
+        }
+
         var regionId = p.HaltedAt is DateTime halted ? RegionAlong(p, halted) : null;
         if (regionId == null || regionId == destination.Region.RegionId)
-            return new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves),
+                destination.Region);
 
         var region = WorldRegionBlob.ReadAllRegions(world).FirstOrDefault(r => r.RegionId == regionId);
         var sites = region == null ? null : RegionGenerator.Generate(region).Sites;
         if (sites == null || sites.Count == 0)
-            return new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves);
+            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves),
+                destination.Region);
 
         var keep = sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? sites[0];
         int level = (int)Math.Round(sites.Average(s => Math.Max(1, s.Level)));
-        return new AmbushDto(keep.SiteId, Math.Max(1, level), AmbushRules.SkirmishTier, SkirmishWaves);
+        return Riftborn(new AmbushDto(keep.SiteId, Math.Max(1, level), AmbushRules.SkirmishTier, SkirmishWaves), region!);
     }
 
     /// <summary>The region a company was struck in: where it stood when halted, else where it was bound.</summary>
@@ -981,10 +998,12 @@ public class PartyService
         var commitments = await CommitmentsAsync(_context, world, gameInstanceId, userId);
         var now = DateTime.UtcNow;
         var bloodied = await AutoFightService.BloodiedAsync(_context, gameInstanceId, userId, now);
+        var invasions = parties.Any(p => p.State == CompanyState.Ambushed)
+            ? await RiftService.InvasionsAsync(_context, gameInstanceId) : new List<Invasion>();
 
         return new PartiesResponse(
             parties.Select(p => new PartyDto(p.Id, p.Name, p.Banner, MarchingArmy.ReadIds(p.CharacterIdsJson),
-                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world), AutoOf(p))).ToList(),
+                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world, invasions), AutoOf(p))).ToList(),
             CompanyRules.MaxCompanies(standing.Cap),
             CompanyRules.MaxSize,
             standing.Cap,

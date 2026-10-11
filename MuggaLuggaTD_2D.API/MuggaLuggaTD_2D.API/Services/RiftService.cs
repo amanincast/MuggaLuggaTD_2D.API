@@ -120,12 +120,68 @@ public class RiftService
         if (world == null) return changed;
         var regions = WorldRegionBlob.ReadAllRegions(JsonNode.Parse(world.GameData));
 
+        changed += await FollowTheLandAsync(gameInstanceId, instance.SeasonNumber, regions);
+
         int active = await ActivePlayersAsync(gameInstanceId, now);
         if (active == 0) return changed;
 
         foreach (var kind in new[] { RiftKind.Great, RiftKind.Lesser })
             if (await AnnounceIfDueAsync(instance, kind, regions, active, now) != null) changed++;
         return changed;
+    }
+
+    /// <summary>
+    /// A Lesser Rift and its invasion go with the land (R4): when its region has a new player lord, the rift is
+    /// theirs to close. Land no player holds keeps the rift's last lord.
+    /// </summary>
+    private async Task<int> FollowTheLandAsync(Guid gameInstanceId, int season, IReadOnlyList<WorldRegionData> regions)
+    {
+        var lesser = await _context.Rifts
+            .Where(r => r.GameInstanceId == gameInstanceId && r.SeasonNumber == season && r.Kind == RiftKind.Lesser &&
+                        (r.Stage == RiftStage.Omen || r.Stage == RiftStage.Open || r.Stage == RiftStage.Invaded))
+            .ToListAsync();
+        int moved = 0;
+        foreach (var rift in lesser)
+        {
+            var region = regions.FirstOrDefault(r => r.RegionId == rift.RegionId);
+            if (region == null || region.Ownership != LocationOwnership.Player || string.IsNullOrEmpty(region.OwnerUserId)) continue;
+            if (string.Equals(region.OwnerUserId, rift.TargetUserId, StringComparison.Ordinal)) continue;
+
+            string? was = rift.TargetUserId;
+            rift.TargetUserId = region.OwnerUserId;
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await _context.Entry(rift).ReloadAsync();
+                continue;
+            }
+            moved++;
+            _sessionLog.Log("RIFT", $"realm={gameInstanceId} rift={rift.Id} region={rift.RegionId} lord {was} -> {rift.TargetUserId}");
+            await BroadcastAsync(rift);
+        }
+        return moved;
+    }
+
+    /// <summary>
+    /// The realm's invasions (R4), ongoing and ended, for the rules that ask whether a region was invaded at a
+    /// moment: its roads' ambushes and its diggings. A season's reset deletes its rifts, so these are this season's.
+    /// </summary>
+    public static async Task<List<Invasion>> InvasionsAsync(ApplicationDbContext context, Guid gameInstanceId)
+    {
+        var rows = await context.Rifts.AsNoTracking()
+            .Where(r => r.GameInstanceId == gameInstanceId && r.Kind == RiftKind.Lesser && r.InvadedAt != null)
+            .Select(r => new { r.Id, r.RegionId, r.InvadedAt, r.Stage, r.SealedAt })
+            .ToListAsync();
+        return rows.Select(r => new Invasion
+        {
+            RiftId = r.Id.ToString(),
+            RegionId = r.RegionId,
+            From = Utc(r.InvadedAt!.Value),
+            Until = r.Stage == RiftStage.Invaded ? null : Utc(r.SealedAt) ?? Utc(r.InvadedAt!.Value),
+        }).ToList();
     }
 
     /// <summary>One rift's stage, brought up to <paramref name="now"/>. False if nothing was due, or another request moved it first.</summary>

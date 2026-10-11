@@ -246,6 +246,9 @@ namespace MuggaLuggaTD.Shared
         // 1.57.0 - Rifts, phase 3 (Invasions spec §4, R3). RiftRules: rift sites (rift:{id}:{n}) are fought as open-field
         //   wave clearings at their tier (the Hollow and Heart one higher), with a donor biome's roster and 1-2 mutators
         //   rolled from the rift; a win pays x1.25 and wears the Breach down (40/60/100; a Lesser Rift seals on one win).
-        public const string Version = "1.57.0";
+        // 1.58.0 - Rifts, phase 4: the Invasion (spec R4). RiftRules.Invasion: an invaded region's roads are twice as
+        //   likely to be ambushed (by Riftborn: the rift's donor roster and first mutator), and its workers are harried
+        //   every hour, patrol or not, until the rift is sealed. Ambush chances and goods gathered change.
+        public const string Version = "1.58.0";
     }
 }
