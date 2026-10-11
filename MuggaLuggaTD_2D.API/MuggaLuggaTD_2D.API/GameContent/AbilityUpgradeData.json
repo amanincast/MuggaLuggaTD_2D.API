@@ -72,66 +72,6 @@
       ]
     },
     {
-      "AbilityLinkName": "Arcane_Shield_1",
-      "Upgrades": [
-        {
-          "Name": "Hardened Ward",
-          "Description": "Reduce the cooldown of Arcane Shield by 8%.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 5,
-              "Value": 0.08,
-              "Property": "ActivationCooldown"
-            }
-          ]
-        },
-        {
-          "Name": "Swift Ward",
-          "Description": "Reduce the cooldown of Arcane Shield by a further 5%.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 5,
-              "Value": 0.05,
-              "Property": "ActivationCooldown"
-            }
-          ]
-        },
-        {
-          "Name": "Retaliation",
-          "Description": "Arcane Shield deals 10 more damage to what breaks against it.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 4,
-              "Value": 10,
-              "Property": "Damage"
-            }
-          ]
-        },
-        {
-          "Name": "Greater Retaliation",
-          "Description": "Increase the damage of Arcane Shield by 15%.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 1,
-              "Value": 0.15,
-              "Property": "Damage"
-            }
-          ]
-        },
-        {
-          "Name": "Broader Ward",
-          "Description": "Increase the size of Arcane Shield by 25%.",
-          "Modifiers": [
-            {
-              "UpgradeModifierType": 2,
-              "Value": 0.25,
-              "Property": "CollisionScale"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "AbilityLinkName": "Bow_Attack_1",
       "Upgrades": [
         {
@@ -721,6 +661,55 @@
               "UpgradeModifierType": 2,
               "Value": 0.3,
               "Property": "CollisionScale"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "AbilityLinkName": "Whirlwind_1",
+      "Upgrades": [
+        {
+          "Name": "Honed Edge",
+          "Description": "Increase the damage of Whirlwind by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Swift Spin",
+          "Description": "Reduce the cooldown of Whirlwind by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Wide Spin",
+          "Description": "Increase the reach of Whirlwind by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Long Spin",
+          "Description": "Whirlwind cuts one more time.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "AuraTicks"
             }
           ]
         }

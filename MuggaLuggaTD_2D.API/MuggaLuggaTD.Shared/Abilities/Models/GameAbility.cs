@@ -156,8 +156,14 @@ namespace Abilities.Models
         /// <summary>Share of the blow's damage the wave deals.</summary>
         public float WaveDamageShare { get; set; }
 
-        /// <summary>How many times an aura hits, and how far apart.</summary>
-        public int AuraTicks { get; set; }
+        /// <summary>How many times an aura hits. Modifiable, so awakening and level-up picks can add
+        /// cuts (Whirlwind's Tempest of Steel, Long Spin).</summary>
+        public AbilityModifiableProperty<long?> AuraTicks { get; set; } = new AbilityModifiableProperty<long?>
+        {
+            BaseValue = 0
+        };
+
+        /// <summary>Seconds between an aura's hits.</summary>
 
         public float AuraTickSeconds { get; set; }
 
