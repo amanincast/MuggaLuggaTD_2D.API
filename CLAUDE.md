@@ -248,6 +248,30 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Debug routes** (Development): `forge/debug/stock` (essences, shards, Minor crystals, 5,000 gold) and
   `forge/debug/pieces` (two Common tier-1 pieces of one kind).
 
+## Leaderboards (`LeaderboardService`, `LeaderboardController`, `LeaderboardRules`; spec: Leaderboards, revised)
+
+- **Rate boards** read `SeasonResult`, whose leaderboard columns are written at the close (and backfilled by
+  the `Leaderboards` migration):
+  - `RealmName`, `PlayerName`, `SeasonLengthDays`;
+  - `PlayersInSeason` (factions included, as the rank counts them);
+  - `AverageRate`, `Crowned` (first, with anyone else ranked), `HoursInSeason`, `Qualifies` and `EndedMonth`.
+
+  `GET leaderboards/now` projects every realm's running season, unstored. `GET leaderboards/month/{yyyymm}`
+  ranks each player's best qualified season in that month. `GET leaderboards/alltime` ranks crowns, then best rate.
+- **Crowns come from the stored `Crowned` flag** (one query, no longer worked out per row).
+- **A result outlives its realm.** `GameInstanceId` is nullable, with SetNull on delete, and `RealmName` keeps the name.
+- **Living boards** (`GET leaderboards/living/{heroes|companies|conquerors}/{short|standard|long}`, and
+  `living/slayers/{week|alltime}`) are built from what the server holds:
+  - heroes and companies are priced from the stored saves;
+  - conquerors come from the world blobs;
+  - slayers come from `SlayerTally`.
+
+  They are stored in `LeaderboardSnapshot` and rebuilt when asked and over an hour old, one build at a time.
+- **Kills:** `QuestService.RecordAsync` hands every fight's clamped kills to `LeaderboardService.TallyKillsAsync`,
+  which adds them to the player's UTC day (`SlayerTally`) and to `SeasonScore.Kills`. It never throws.
+- **Names:** `PlayerNames.Of(displayName, userName)` everywhere, the standings included.
+- **Debug** (Development): `POST leaderboards/debug/seed` writes 30 made-up results for users "chronicler1–10".
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log

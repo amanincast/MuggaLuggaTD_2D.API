@@ -1060,6 +1060,37 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("ItemLedgerStates");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.LeaderboardSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Board")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Bracket")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("BuiltAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RowsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Board", "Bracket")
+                        .IsUnique();
+
+                    b.ToTable("LeaderboardSnapshots");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Letter", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1905,6 +1936,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<double>("AverageRate")
+                        .HasColumnType("double precision");
+
                     b.Property<string>("ChestItemName")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -1918,11 +1952,30 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<double>("ClearingPoints")
                         .HasColumnType("double precision");
 
-                    b.Property<Guid>("GameInstanceId")
+                    b.Property<bool>("Crowned")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("EndedMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("GameInstanceId")
                         .HasColumnType("uuid");
 
                     b.Property<double>("HoldingPoints")
                         .HasColumnType("double precision");
+
+                    b.Property<double>("HoursInSeason")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("PlayerName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PlayersInSeason")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Qualifies")
+                        .HasColumnType("boolean");
 
                     b.Property<double>("RaidingPoints")
                         .HasColumnType("double precision");
@@ -1930,11 +1983,18 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<int>("Rank")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RealmName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("RegionsHeld")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("SeasonEndedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SeasonLengthDays")
+                        .HasColumnType("integer");
 
                     b.Property<int>("SeasonNumber")
                         .HasColumnType("integer");
@@ -1954,7 +2014,11 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Crowned", "UserId");
+
                     b.HasIndex("UserId", "SeasonEndedAt");
+
+                    b.HasIndex("EndedMonth", "Qualifies", "AverageRate");
 
                     b.HasIndex("GameInstanceId", "SeasonNumber", "Rank");
 
@@ -1975,6 +2039,12 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
                     b.Property<double>("HoldingPoints")
                         .HasColumnType("double precision");
+
+                    b.Property<DateTime?>("JoinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Kills")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("LastSettledAt")
                         .HasColumnType("timestamp with time zone");
@@ -2080,6 +2150,32 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.HasIndex("GameInstanceId", "RegionId", "State");
 
                     b.ToTable("Sieges");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.SlayerTally", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Day")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Kills")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day");
+
+                    b.HasIndex("UserId", "Day")
+                        .IsUnique();
+
+                    b.ToTable("SlayerTallies");
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.TavernLure", b =>
@@ -2786,8 +2882,7 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", "GameInstance")
                         .WithMany()
                         .HasForeignKey("GameInstanceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("MuggaLuggaTD_2D.API.Models.ApplicationUser", "User")
                         .WithMany()

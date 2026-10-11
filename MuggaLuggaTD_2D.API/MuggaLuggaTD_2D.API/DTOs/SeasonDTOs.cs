@@ -53,7 +53,34 @@ public record SeasonResultEntry(
     string? RealmName,
     /// <summary>Seasons this player has won, anywhere. Factions have none.</summary>
     int Crowns = 0
-);
+)
+{
+    // For the Chronicles and the leaderboards (Leaderboards spec). Zero on a faction's row.
+
+    /// <summary>Points per hour over the season: what the rate boards rank.</summary>
+    public double AverageRate { get; init; }
+
+    /// <summary>This season was won, and contested.</summary>
+    public bool Crowned { get; init; }
+
+    /// <summary>Whether it counts on the rate boards.</summary>
+    public bool Qualifies { get; init; }
+
+    /// <summary>Why it does not count, in the player's words; null when it does (or for a season closed before this was kept).</summary>
+    public string? WhyNotRanked { get; init; }
+
+    /// <summary>How many were ranked, factions included ("3rd of 7").</summary>
+    public int PlayersInSeason { get; init; }
+
+    /// <summary>The chest the finish earned.</summary>
+    public Enums.ItemRarityTypes? Chest { get; init; }
+
+    /// <summary>The month it counts in, yyyymm.</summary>
+    public int EndedMonth { get; init; }
+
+    /// <summary>The realm, or null once it is deleted.</summary>
+    public Guid? GameInstanceId { get; init; }
+}
 
 /// <summary>
 /// A season that has closed, as its end page shows it (<c>docs/design/season-end.md</c> §5): the final
