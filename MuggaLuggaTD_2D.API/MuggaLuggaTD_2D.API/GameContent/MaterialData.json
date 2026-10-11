@@ -11,7 +11,7 @@
             "Category": 0,
             "Tier": 1,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment power tier by 1 level."
+            "Description": "At the Forge: tempers gear to tiers 2–4; reforges tiers 1–4."
         },
         {
             "ItemName": "Greater Essence",
@@ -24,7 +24,7 @@
             "Category": 0,
             "Tier": 2,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment power tier by 2 levels."
+            "Description": "At the Forge: tempers gear to tiers 5–7; reforges tiers 5–7."
         },
         {
             "ItemName": "Supreme Essence",
@@ -37,7 +37,7 @@
             "Category": 0,
             "Tier": 3,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment power tier by 3 levels."
+            "Description": "At the Forge: tempers gear to tiers 8–10; reforges tiers 8–10."
         },
         {
             "ItemName": "Minor Physical Crystal",
@@ -51,7 +51,7 @@
             "Tier": 1,
             "AffinityType": 0,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Physical affinity influence by 1 star."
+            "Description": "Imbues gear with Physical at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Physical Crystal",
@@ -65,7 +65,7 @@
             "Tier": 2,
             "AffinityType": 0,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Physical affinity influence by 2 stars."
+            "Description": "Imbues gear with Physical at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Physical Crystal",
@@ -79,7 +79,7 @@
             "Tier": 3,
             "AffinityType": 0,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Physical affinity influence by 3 stars."
+            "Description": "Imbues gear with Physical at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Fire Crystal",
@@ -93,7 +93,7 @@
             "Tier": 1,
             "AffinityType": 1,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Fire affinity influence by 1 star."
+            "Description": "Imbues gear with Fire at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Fire Crystal",
@@ -107,7 +107,7 @@
             "Tier": 2,
             "AffinityType": 1,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Fire affinity influence by 2 stars."
+            "Description": "Imbues gear with Fire at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Fire Crystal",
@@ -121,7 +121,7 @@
             "Tier": 3,
             "AffinityType": 1,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Fire affinity influence by 3 stars."
+            "Description": "Imbues gear with Fire at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Water Crystal",
@@ -135,7 +135,7 @@
             "Tier": 1,
             "AffinityType": 2,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Water affinity influence by 1 star."
+            "Description": "Imbues gear with Water at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Water Crystal",
@@ -149,7 +149,7 @@
             "Tier": 2,
             "AffinityType": 2,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Water affinity influence by 2 stars."
+            "Description": "Imbues gear with Water at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Water Crystal",
@@ -163,7 +163,7 @@
             "Tier": 3,
             "AffinityType": 2,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Water affinity influence by 3 stars."
+            "Description": "Imbues gear with Water at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Earth Crystal",
@@ -177,7 +177,7 @@
             "Tier": 1,
             "AffinityType": 3,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Earth affinity influence by 1 star."
+            "Description": "Imbues gear with Earth at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Earth Crystal",
@@ -191,7 +191,7 @@
             "Tier": 2,
             "AffinityType": 3,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Earth affinity influence by 2 stars."
+            "Description": "Imbues gear with Earth at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Earth Crystal",
@@ -205,7 +205,7 @@
             "Tier": 3,
             "AffinityType": 3,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Earth affinity influence by 3 stars."
+            "Description": "Imbues gear with Earth at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Air Crystal",
@@ -219,7 +219,7 @@
             "Tier": 1,
             "AffinityType": 4,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Air affinity influence by 1 star."
+            "Description": "Imbues gear with Air at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Air Crystal",
@@ -233,7 +233,7 @@
             "Tier": 2,
             "AffinityType": 4,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Air affinity influence by 2 stars."
+            "Description": "Imbues gear with Air at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Air Crystal",
@@ -247,7 +247,7 @@
             "Tier": 3,
             "AffinityType": 4,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Air affinity influence by 3 stars."
+            "Description": "Imbues gear with Air at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Light Crystal",
@@ -261,7 +261,7 @@
             "Tier": 1,
             "AffinityType": 5,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Light affinity influence by 1 star."
+            "Description": "Imbues gear with Light at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Light Crystal",
@@ -275,7 +275,7 @@
             "Tier": 2,
             "AffinityType": 5,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Light affinity influence by 2 stars."
+            "Description": "Imbues gear with Light at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Light Crystal",
@@ -289,7 +289,7 @@
             "Tier": 3,
             "AffinityType": 5,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Light affinity influence by 3 stars."
+            "Description": "Imbues gear with Light at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Dark Crystal",
@@ -303,7 +303,7 @@
             "Tier": 1,
             "AffinityType": 6,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Dark affinity influence by 1 star."
+            "Description": "Imbues gear with Dark at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Dark Crystal",
@@ -317,7 +317,7 @@
             "Tier": 2,
             "AffinityType": 6,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Dark affinity influence by 2 stars."
+            "Description": "Imbues gear with Dark at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Dark Crystal",
@@ -331,7 +331,7 @@
             "Tier": 3,
             "AffinityType": 6,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Dark affinity influence by 3 stars."
+            "Description": "Imbues gear with Dark at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Minor Arcane Crystal",
@@ -345,7 +345,7 @@
             "Tier": 1,
             "AffinityType": 7,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Arcane affinity influence by 1 star."
+            "Description": "Imbues gear with Arcane at the Forge: one star, up to ★2."
         },
         {
             "ItemName": "Major Arcane Crystal",
@@ -359,7 +359,7 @@
             "Tier": 2,
             "AffinityType": 7,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Arcane affinity influence by 2 stars."
+            "Description": "Imbues gear with Arcane at the Forge: one star, up to ★4."
         },
         {
             "ItemName": "Perfect Arcane Crystal",
@@ -373,7 +373,7 @@
             "Tier": 3,
             "AffinityType": 7,
             "MaxStackSize": 999,
-            "Description": "Adds or upgrades Arcane affinity influence by 3 stars."
+            "Description": "Imbues gear with Arcane at the Forge: one star, up to ★5."
         },
         {
             "ItemName": "Common Shard",
@@ -386,7 +386,7 @@
             "Category": 2,
             "Tier": 1,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment rarity by 1 level."
+            "Description": "At the Forge: ascends gear to Uncommon or Magic."
         },
         {
             "ItemName": "Rare Shard",
@@ -399,7 +399,7 @@
             "Category": 2,
             "Tier": 2,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment rarity by 2 levels."
+            "Description": "At the Forge: ascends gear to Rare."
         },
         {
             "ItemName": "Legendary Shard",
@@ -412,7 +412,7 @@
             "Category": 2,
             "Tier": 3,
             "MaxStackSize": 999,
-            "Description": "Upgrades equipment rarity by 3 levels."
+            "Description": "At the Forge: ascends gear to Legendary."
         },
         {
             "ItemName": "Ore",

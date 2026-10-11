@@ -17,7 +17,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// <summary>
     /// The Forge (Forge spec, Mike 2026-10-10): improving a piece of gear on the server. Phase 1 is Temper (power
     /// tier +1), Ascend (rarity +1, eating a second piece of the same slot) and Salvage (break a piece into
-    /// materials). Every number here is a first pass (tune).
+    /// materials); phase 2 adds Imbue (an affinity star, from a crystal) and Reforge (re-roll the explicit
+    /// attributes, the deliberate gamble). Every number here is a first pass (tune).
     ///
     /// <para><b>An upgrade keeps a piece's rolls, nearly.</b> Each explicit value is raised to the new tier and
     /// rarity at its roll quality (its share of the most it could roll), and that quality drifts by up to
@@ -146,6 +147,153 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Raises the piece one rarity.</summary>
         public static void Ascend(IItemData item, Random random, List<ItemExplicitTypes> explicitPool = null) =>
             Raise(item, item.PowerTier, (ItemRarityTypes)Math.Min((int)AscendCap, (int)item.Rarity + 1), random, explicitPool);
+
+        // -----------------------------------------------------------------
+        // Imbue (phase 2)
+        // -----------------------------------------------------------------
+
+        /// <summary>The most stars a piece carries in all, as drops have.</summary>
+        public const int MostStars = 5;
+
+        /// <summary>Stars on the piece, every affinity together.</summary>
+        public static int StarsOn(IItemData item) => item?.Influences?.Sum(i => Math.Max(0, i.Stars)) ?? 0;
+
+        /// <summary>Stars of one affinity on the piece.</summary>
+        public static int StarsOf(IItemData item, AffinityTypes affinity) =>
+            item?.Influences?.Where(i => i.AffinityType == affinity).Sum(i => Math.Max(0, i.Stars)) ?? 0;
+
+        /// <summary>
+        /// The crystal grades that can give an affinity its star number <paramref name="newStars"/>, lowest first:
+        /// a Minor crystal (Tier1) up to 2 stars, a Major (Tier2) up to 4, a Perfect (Tier3) up to 5 (spec row 6).
+        /// The server spends the lowest one the player holds.
+        /// </summary>
+        public static List<MaterialTier> ImbueGrades(int newStars)
+        {
+            var grades = new List<MaterialTier>();
+            if (newStars <= 2) grades.Add(MaterialTier.Tier1);
+            if (newStars <= 4) grades.Add(MaterialTier.Tier2);
+            if (newStars <= MostStars) grades.Add(MaterialTier.Tier3);
+            return grades;
+        }
+
+        /// <summary>"Minor", "Major", "Perfect": a crystal grade in words.</summary>
+        public static string GradeName(MaterialTier tier) =>
+            tier == MaterialTier.Tier1 ? "Minor" : tier == MaterialTier.Tier2 ? "Major" : "Perfect";
+
+        /// <summary>Why a piece can't take another star, or null if it can.</summary>
+        public static string CantImbue(IItemData item)
+        {
+            if (!IsForgeable(item)) return "Only gear can be forged.";
+            if (StarsOn(item) >= MostStars) return "It already carries five stars, as many as gear can hold.";
+            return null;
+        }
+
+        /// <summary>
+        /// What imbuing <paramref name="item"/> with <paramref name="affinity"/> costs, spending
+        /// <paramref name="crystal"/>: the crystal, 100 gold for each star the affinity will have, and the Bazaar
+        /// worth the star adds (so imbuing to sell never pays).
+        /// </summary>
+        public static ForgeCost ImbueCost(IItemData item, AffinityTypes affinity, string crystal)
+        {
+            int stars = StarsOf(item, affinity) + 1;
+            var cost = Cost(crystal, 1, 100L * stars);
+            cost.Gold += Math.Max(0, BazaarAssay.PriceOf(PreviewImbue(item, affinity)) - BazaarAssay.PriceOf(item));
+            return cost;
+        }
+
+        /// <summary>Adds a star of <paramref name="affinity"/> (a new influence at one star if it had none) and the
+        /// influence bonus attribute that star brings, rolled fresh.</summary>
+        public static void Imbue(IItemData item, AffinityTypes affinity)
+        {
+            AddStar(item, affinity);
+            if (item.ExplicitAttributes == null) item.ExplicitAttributes = new List<ItemExplicitAttribute>();
+            var bonus = ItemAttributeRoller.RollInfluenceBonus(item.PowerTier, item.Rarity, affinity);
+            if (bonus != null) item.ExplicitAttributes.Add(bonus);
+        }
+
+        /// <summary>The piece after a star of <paramref name="affinity"/>, its new bonus shown as an empty placeholder.</summary>
+        public static StateManagement.Models.ItemSaveData PreviewImbue(IItemData item, AffinityTypes affinity)
+        {
+            var copy = Preview(item, item.PowerTier, item.Rarity);
+            AddStar(copy, affinity);
+            copy.ExplicitAttributes.Add(new ItemExplicitAttribute { AffinityType = affinity, Value = 0, IsInfluenceBonus = true });
+            return copy;
+        }
+
+        private static void AddStar(IItemData item, AffinityTypes affinity)
+        {
+            if (item.Influences == null) item.Influences = new List<ItemInfluence>();
+            var influence = item.Influences.FirstOrDefault(i => i.AffinityType == affinity);
+            if (influence != null) influence.Stars++;
+            else item.Influences.Add(new ItemInfluence { AffinityType = affinity, Stars = 1 });
+        }
+
+        // -----------------------------------------------------------------
+        // Reforge (phase 2)
+        // -----------------------------------------------------------------
+
+        /// <summary>The essence of a piece's tier band: Lesser for 1–4, Greater for 5–7, Supreme for 8–10.</summary>
+        public static string EssenceFor(ItemPowerTier tier)
+        {
+            int t = Math.Max(1, (int)tier);
+            return t <= 4 ? LesserEssence : t <= 7 ? GreaterEssence : SupremeEssence;
+        }
+
+        /// <summary>What reforging costs: one essence of the piece's band and 100 gold a tier.</summary>
+        public static ForgeCost ReforgeCost(IItemData item) =>
+            Cost(EssenceFor(item.PowerTier), 1, 100L * Math.Max(1, (int)item.PowerTier));
+
+        /// <summary>Why a piece can't be reforged, or null if it can.</summary>
+        public static string CantReforge(IItemData item)
+        {
+            if (!IsForgeable(item)) return "Only gear can be forged.";
+            if ((item.ExplicitAttributes?.Count(a => !a.IsInfluenceBonus) ?? 0) == 0) return "It has no attributes to re-roll.";
+            return null;
+        }
+
+        /// <summary>
+        /// Re-rolls every ordinary explicit attribute, as a drop of this tier and rarity would roll them: the same
+        /// number of them, fresh types and values. The implicit, the influences and their bonuses are kept. It can
+        /// come out worse; that is the gamble the player asked for.
+        /// </summary>
+        public static void Reforge(IItemData item, List<ItemExplicitTypes> explicitPool = null)
+        {
+            var kept = item.ExplicitAttributes?.Where(a => a.IsInfluenceBonus).ToList() ?? new List<ItemExplicitAttribute>();
+            int count = item.ExplicitAttributes?.Count(a => !a.IsInfluenceBonus) ?? 0;
+            var fresh = new List<ItemExplicitAttribute>();
+            for (int i = 0; i < count; i++)
+            {
+                var attribute = ItemAttributeRoller.RollAdditionalExplicit(item.PowerTier, item.Rarity, fresh.Select(a => a.Type), explicitPool);
+                if (attribute == null) break;
+                fresh.Add(attribute);
+            }
+            item.ExplicitAttributes = fresh.Concat(kept).ToList();
+        }
+
+        // -----------------------------------------------------------------
+        // What a material is for (the Vault's Forge row)
+        // -----------------------------------------------------------------
+
+        /// <summary>A material's job at the Forge, in a line, or null if the Forge doesn't use it.</summary>
+        public static string ForgeUse(MaterialCategory category, MaterialTier tier, AffinityTypes? affinity)
+        {
+            switch (category)
+            {
+                case MaterialCategory.Essence:
+                    return tier == MaterialTier.Tier1 ? "Tempers gear to tiers 2–4; reforges tiers 1–4"
+                        : tier == MaterialTier.Tier2 ? "Tempers gear to tiers 5–7; reforges tiers 5–7"
+                        : "Tempers gear to tiers 8–10; reforges tiers 8–10";
+                case MaterialCategory.RarityShard:
+                    return tier == MaterialTier.Tier1 ? "Ascends gear to Uncommon or Magic"
+                        : tier == MaterialTier.Tier2 ? "Ascends gear to Rare"
+                        : "Ascends gear to Legendary";
+                case MaterialCategory.AffinityCrystal:
+                    int most = tier == MaterialTier.Tier1 ? 2 : tier == MaterialTier.Tier2 ? 4 : MostStars;
+                    return $"Imbues gear with {(affinity.HasValue ? affinity.Value.ToString() : "its affinity")}, up to ★{most}";
+                default:
+                    return null;
+            }
+        }
 
         // -----------------------------------------------------------------
         // Salvage (spec §3.4)

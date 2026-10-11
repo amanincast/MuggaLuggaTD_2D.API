@@ -256,6 +256,11 @@ namespace Items.Utilities
             return RollSingleExplicitAttribute(tier, rarity, availableTypes, new HashSet<ItemExplicitTypes>(usedTypes), null, false);
         }
 
+        /// <summary>One influence bonus attribute of <paramref name="affinity"/>, as a drop rolls one per star. The
+        /// Forge's Imbue rolls one for the star it adds.</summary>
+        public static ItemExplicitAttribute RollInfluenceBonus(ItemPowerTier tier, ItemRarityTypes rarity, AffinityTypes affinity) =>
+            RollInfluenceBonusAttribute(tier, rarity, affinity);
+
         /// <summary>An implicit attribute's value at a tier (it has no roll: the tier decides it).</summary>
         public static float ImplicitValue(ItemImplicitTypes type, ItemPowerTier tier) => CalculateImplicitValue(type, tier);
 
