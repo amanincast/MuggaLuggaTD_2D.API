@@ -240,6 +240,9 @@ namespace MuggaLuggaTD.Shared
         // 1.55.0 - The Warrior, phase 3 (Warrior spec §5). PartyPowerCalculator prices a strike's shape: an arc sweep
         //   as 3 targets, an aura as its cuts x 3, and a Warrior's Bulwark as 15% more of the health term. Garrison,
         //   raid and siege power for Warriors (and any arc or aura) change. GameAbility.AuraTicks is modifiable.
-        public const string Version = "1.55.0";
+        // 1.56.0 - The Forge, phase 2 (Forge spec). ForgeRules.Imbue (an affinity star from a crystal: Minor up to 2,
+        //   Major up to 4, Perfect up to 5; five on a piece in all; its bonus attribute rolled fresh) and Reforge (the
+        //   ordinary explicit attributes re-rolled, the implicit and influences kept). Gear can change in two more ways.
+        public const string Version = "1.56.0";
     }
 }

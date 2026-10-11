@@ -5,9 +5,10 @@ using MuggaLuggaTD_2D.API.Services;
 
 namespace MuggaLuggaTD_2D.API.Controllers;
 
-public record ForgeRequest(string? ItemId, string? SecondId);
+/// <summary>A Forge action's body: the piece, the piece Ascend eats, and the affinity Imbue adds.</summary>
+public record ForgeRequest(string? ItemId, string? SecondId, Enums.AffinityTypes? Affinity = null);
 
-/// <summary>The Forge (Forge spec): Temper, Ascend and Salvage, and the debug hooks.</summary>
+/// <summary>The Forge (Forge spec): Temper, Ascend, Imbue, Reforge and Salvage, and the debug hooks.</summary>
 [ApiController]
 [Route("api/gameinstance/{gameInstanceId:guid}/forge")]
 [Authorize]
@@ -38,6 +39,20 @@ public class ForgeController : ControllerBase
         return userId == null ? Forbid() : Answer(await _forge.AscendAsync(gameInstanceId, userId, request.ItemId, request.SecondId));
     }
 
+    [HttpPost("imbue")]
+    public async Task<ActionResult<ForgeResponse>> Imbue(Guid gameInstanceId, [FromBody] ForgeRequest request)
+    {
+        var userId = await MemberAsync(gameInstanceId);
+        return userId == null ? Forbid() : Answer(await _forge.ImbueAsync(gameInstanceId, userId, request.ItemId, request.Affinity));
+    }
+
+    [HttpPost("reforge")]
+    public async Task<ActionResult<ForgeResponse>> Reforge(Guid gameInstanceId, [FromBody] ForgeRequest request)
+    {
+        var userId = await MemberAsync(gameInstanceId);
+        return userId == null ? Forbid() : Answer(await _forge.ReforgeAsync(gameInstanceId, userId, request.ItemId));
+    }
+
     [HttpPost("salvage")]
     public async Task<ActionResult<ForgeResponse>> Salvage(Guid gameInstanceId, [FromBody] ForgeRequest request)
     {
@@ -45,7 +60,7 @@ public class ForgeController : ControllerBase
         return userId == null ? Forbid() : Answer(await _forge.SalvageAsync(gameInstanceId, userId, request.ItemId));
     }
 
-    /// <summary>Development only (Combat Debug): essences, shards, Minor crystals and 5,000 gold.</summary>
+    /// <summary>Development only (Combat Debug): essences, shards, crystals of every grade and 5,000 gold.</summary>
     [HttpPost("debug/stock")]
     public async Task<IActionResult> DebugStock(Guid gameInstanceId)
     {

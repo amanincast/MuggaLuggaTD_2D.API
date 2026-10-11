@@ -226,7 +226,7 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Phase 1 only marks** an erupted or invaded region: no Riftborn faction, no invasion ambushes, no rift fights
   yet (phases 3–5). Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
-## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0; spec: Forge)
+## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0, phase 2 1.56.0; spec: Forge)
 
 - **Three actions in phase 1**, each `POST api/gameinstance/{id}/forge/temper|ascend|salvage` with
   `{ itemId, secondId }`:
@@ -236,6 +236,16 @@ faction per realm, and `FactionRaid` rows for what they do.
     one rarity lower.
   - **Salvage:** destroys an unworn piece for essence (by tier), a shard (by rarity, some on a chance)
     and a Minor crystal per influence.
+- **Phase 2 adds two** (`forge/imbue` with `{ itemId, affinity }`, `forge/reforge` with `{ itemId }`):
+  - **Imbue:** one star of an affinity (a new influence at ★1 if absent) and its influence bonus attribute,
+    rolled fresh (`ItemAttributeRoller.RollInfluenceBonus`). Five stars on a piece in all. The service
+    spends the **lowest crystal grade held** that can give the star (`ImbueGrades`: Minor to ★2, Major to
+    ★4, Perfect to ★5); none held is NotEnough naming the grade. Cost: the crystal + 100 gold per star the
+    affinity reaches + `WorthAdded`.
+  - **Reforge:** re-rolls the non-bonus explicits from the content pool (same count); the implicit,
+    influences and their bonuses are kept. Cost: one essence of the tier's band (`EssenceFor`) + 100 gold
+    a tier. No worth-added: it is a gamble, not a step up.
+  - `ForgeRules.ForgeUse` is the Vault's line for a material (null for goods).
 - **Rolls keep their quality** (where in its range each value sat), `±Drift` (5%), so a perfect roll
   stays near-perfect but never exactly. A step that opens slots rolls the new ones from the piece's
   content pool; the implicit is re-valued for the tier.
@@ -245,7 +255,7 @@ faction per realm, and `FactionRaid` rows for what they do.
   (which also rewrites the stored save, so a worn piece's hero is stronger everywhere at once) or taken with
   `RevokeAsync`. One transaction under `BazaarService.TradeLock`: a piece can't be listed and forged at
   once. Materials are spent before gold, and refunded if the gold fails.
-- **Debug routes** (Development): `forge/debug/stock` (essences, shards, Minor crystals, 5,000 gold) and
+- **Debug routes** (Development): `forge/debug/stock` (essences, shards, crystals of every grade, 5,000 gold) and
   `forge/debug/pieces` (two Common tier-1 pieces of one kind).
 
 ## Leaderboards (`LeaderboardService`, `LeaderboardController`, `LeaderboardRules`; spec: Leaderboards, revised)

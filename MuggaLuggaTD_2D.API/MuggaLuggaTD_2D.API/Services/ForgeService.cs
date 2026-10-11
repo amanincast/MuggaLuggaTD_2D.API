@@ -19,8 +19,8 @@ public record ForgeOutcome(ForgeError Error, string? Message = null, ForgeRespon
 }
 
 /// <summary>
-/// The Forge (Forge spec, phase 1): Temper, Ascend and Salvage, done by the server on the ledger's copy of a
-/// piece. Each action is one transaction:
+/// The Forge (Forge spec, phases 1 and 2): Temper, Ascend, Imbue, Reforge and Salvage, done by the server on the
+/// ledger's copy of a piece. Each action is one transaction:
 /// <list type="number">
 /// <item>read the piece from the ledger;</item>
 /// <item>check the rule (<see cref="ForgeRules"/>);</item>
@@ -97,6 +97,51 @@ public class ForgeService
                 $"Ascended: {item.ItemName} is {item.Rarity}.");
         });
 
+    /// <summary>
+    /// Adds a star of <paramref name="affinity"/> to a piece, spending the lowest grade of that affinity's crystal
+    /// the player holds that can give the star (Minor up to 2, Major up to 4, Perfect up to 5).
+    /// </summary>
+    public Task<ForgeOutcome> ImbueAsync(Guid realm, string userId, string? itemId, AffinityTypes? affinity) =>
+        RunAsync(realm, userId, itemId, async item =>
+        {
+            if (affinity == null) return new ForgeOutcome(ForgeError.Refused, "Choose an affinity.");
+            if (ForgeRules.CantImbue(item) is { } why) return new ForgeOutcome(ForgeError.Refused, why);
+
+            int stars = ForgeRules.StarsOf(item, affinity.Value) + 1;
+            var grades = ForgeRules.ImbueGrades(stars);
+            var held = await _wallet.ReadAsync(realm, userId);
+            string? crystal = grades.Select(g => CrystalOf(affinity.Value, g))
+                .FirstOrDefault(name => name != null && held.Any(m => m.MaterialName == name && m.Quantity > 0));
+            if (crystal == null)
+                return new ForgeOutcome(ForgeError.NotEnough,
+                    $"You need a {ForgeRules.GradeName(grades.First())} {affinity.Value} Crystal{(grades.Count > 1 ? " or better" : "")}.");
+
+            var cost = ForgeRules.ImbueCost(item, affinity.Value, crystal);
+            if (await PayAsync(realm, userId, cost, $"forge-imbue {item.Id}") is { } unpaid) return unpaid;
+
+            ForgeRules.Imbue(item, affinity.Value);
+            await _items.ReplaceAsync(realm, userId, item, $"forge imbue {affinity.Value} -> {stars}");
+            await _context.SaveChangesAsync();
+            return await DoneAsync(realm, userId, item, null, cost, new List<MaterialGrant>(),
+                $"Imbued: {item.ItemName} carries {affinity.Value} {new string('★', stars)}.");
+        });
+
+    /// <summary>Re-rolls a piece's ordinary explicit attributes: the gamble a player asks for.</summary>
+    public Task<ForgeOutcome> ReforgeAsync(Guid realm, string userId, string? itemId) =>
+        RunAsync(realm, userId, itemId, async item =>
+        {
+            if (ForgeRules.CantReforge(item) is { } why) return new ForgeOutcome(ForgeError.Refused, why);
+
+            var cost = ForgeRules.ReforgeCost(item);
+            if (await PayAsync(realm, userId, cost, $"forge-reforge {item.Id}") is { } unpaid) return unpaid;
+
+            ForgeRules.Reforge(item, PoolOf(item));
+            await _items.ReplaceAsync(realm, userId, item, "forge reforge");
+            await _context.SaveChangesAsync();
+            return await DoneAsync(realm, userId, item, null, cost, new List<MaterialGrant>(),
+                $"Reforged: {item.ItemName} has new attributes.");
+        });
+
     /// <summary>Breaks a piece down into materials.</summary>
     public Task<ForgeOutcome> SalvageAsync(Guid realm, string userId, string? itemId) =>
         RunAsync(realm, userId, itemId, async item =>
@@ -171,9 +216,12 @@ public class ForgeService
         _content.DroppableItems.FirstOrDefault(t => t.ItemName == item.ItemName)?.ExplicitPool;
 
     /// <summary>The Minor crystal of an affinity, from content.</summary>
-    private string? MinorCrystalOf(AffinityTypes affinity) =>
+    private string? MinorCrystalOf(AffinityTypes affinity) => CrystalOf(affinity, MaterialTier.Tier1);
+
+    /// <summary>An affinity's crystal of a grade, from content.</summary>
+    private string? CrystalOf(AffinityTypes affinity, MaterialTier grade) =>
         _content.Materials.FirstOrDefault(m => m.Category == MaterialCategory.AffinityCrystal &&
-                                               m.Tier == MaterialTier.Tier1 && m.AffinityType == affinity)?.MaterialName;
+                                               m.Tier == grade && m.AffinityType == affinity)?.MaterialName;
 
     /// <summary>The level of the player's best hero, from their stored save.</summary>
     private async Task<int> HighestHeroLevelAsync(Guid realm, string userId)
@@ -187,16 +235,18 @@ public class ForgeService
     // Debug (Development only; Combat Debug → Forge)
     // -----------------------------------------------------------------
 
-    /// <summary>Fills the wallet for trying the Forge: every essence and shard, Minor crystals, and gold.</summary>
+    /// <summary>Fills the wallet for trying the Forge: every essence and shard, crystals of every grade (3 Minor,
+    /// 2 Major, 1 Perfect of each affinity), and gold.</summary>
     public async Task DebugStockAsync(Guid realm, string userId)
     {
         var grants = _content.Materials
             .Where(m => m.Category == MaterialCategory.Essence || m.Category == MaterialCategory.RarityShard ||
-                        (m.Category == MaterialCategory.AffinityCrystal && m.Tier == MaterialTier.Tier1))
+                        m.Category == MaterialCategory.AffinityCrystal)
             .Select(m => new MaterialGrant
             {
                 MaterialName = m.MaterialName,
-                Quantity = m.Category == MaterialCategory.Essence ? 20 : m.Category == MaterialCategory.RarityShard ? 5 : 3,
+                Quantity = m.Category == MaterialCategory.Essence ? 20 : m.Category == MaterialCategory.RarityShard ? 5
+                    : m.Tier == MaterialTier.Tier1 ? 3 : m.Tier == MaterialTier.Tier2 ? 2 : 1,
             })
             .ToList();
         await _wallet.GrantAsync(realm, userId, grants, "debug forge stock");

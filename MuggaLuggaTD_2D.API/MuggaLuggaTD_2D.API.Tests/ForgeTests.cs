@@ -38,6 +38,8 @@ public class ForgeTests : IDisposable
             new MaterialTemplate { MaterialName = "Greater Essence", Category = MaterialCategory.Essence, Tier = MaterialTier.Tier2 },
             new MaterialTemplate { MaterialName = "Common Shard", Category = MaterialCategory.RarityShard, Tier = MaterialTier.Tier1 },
             new MaterialTemplate { MaterialName = "Minor Fire Crystal", Category = MaterialCategory.AffinityCrystal, Tier = MaterialTier.Tier1, AffinityType = AffinityTypes.Fire },
+            new MaterialTemplate { MaterialName = "Major Fire Crystal", Category = MaterialCategory.AffinityCrystal, Tier = MaterialTier.Tier2, AffinityType = AffinityTypes.Fire },
+            new MaterialTemplate { MaterialName = "Perfect Fire Crystal", Category = MaterialCategory.AffinityCrystal, Tier = MaterialTier.Tier3, AffinityType = AffinityTypes.Fire },
         }
     };
 
@@ -342,5 +344,106 @@ public class ForgeTests : IDisposable
         var result = await Ledger.ReconcileSaveAsync(_realm, Me, old);
         Assert.Equal(1, result.Corrected);
         Assert.Equal((int)ItemPowerTier.Tier3, (int)ItemLedgerService.SaveItems(old)![0]!["PowerTier"]!);
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 2: Imbue and Reforge
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void ACrystalsGrade_DecidesHowFarItCanTakeAnAffinity()
+    {
+        Assert.Equal(new[] { MaterialTier.Tier1, MaterialTier.Tier2, MaterialTier.Tier3 }, ForgeRules.ImbueGrades(1));
+        Assert.Equal(new[] { MaterialTier.Tier1, MaterialTier.Tier2, MaterialTier.Tier3 }, ForgeRules.ImbueGrades(2));
+        Assert.Equal(new[] { MaterialTier.Tier2, MaterialTier.Tier3 }, ForgeRules.ImbueGrades(3));
+        Assert.Equal(new[] { MaterialTier.Tier3 }, ForgeRules.ImbueGrades(5));
+        Assert.Empty(ForgeRules.ImbueGrades(6));
+    }
+
+    [Fact]
+    public void FiveStars_IsAsManyAsAPieceHolds()
+    {
+        var item = Blade("blade");
+        item.Influences = new List<ItemInfluence> { new() { AffinityType = AffinityTypes.Fire, Stars = 3 }, new() { AffinityType = AffinityTypes.Water, Stars = 1 } };
+        Assert.Null(ForgeRules.CantImbue(item));
+        item.Influences[1].Stars = 2;
+        Assert.NotNull(ForgeRules.CantImbue(item));
+    }
+
+    [Fact]
+    public void AnImbue_CostsMoreThanThePriceItAdds()
+    {
+        var item = Blade("blade", ItemRarityTypes.Rare, tier: 6);
+        long added = BazaarAssay.PriceOf(ForgeRules.PreviewImbue(item, AffinityTypes.Fire)) - BazaarAssay.PriceOf(item);
+        Assert.True(added > 0);
+        Assert.True(ForgeRules.ImbueCost(item, AffinityTypes.Fire, "Minor Fire Crystal").Gold > added);
+    }
+
+    [Fact]
+    public async Task Imbuing_AddsAStarAndItsBonus_SpendingTheLowestCrystalThatCan()
+    {
+        await RealmAsync(12, Blade("blade"));
+        await Give("Minor Fire Crystal", 1);
+        await Give("Major Fire Crystal", 1);
+        await Gold.GrantAsync(_realm, Me, 5000, "test");
+
+        var outcome = await Forge.ImbueAsync(_realm, Me, "blade", AffinityTypes.Fire);
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var item = outcome.Response!.Item!;
+        Assert.Equal(1, ForgeRules.StarsOf(item, AffinityTypes.Fire));
+        Assert.Single(item.ExplicitAttributes, a => a.IsInfluenceBonus && a.AffinityType == AffinityTypes.Fire);
+        Assert.Equal(0, await Held("Minor Fire Crystal"));
+        Assert.Equal(1, await Held("Major Fire Crystal"));
+    }
+
+    [Fact]
+    public async Task AThirdStar_WantsAMajorCrystal()
+    {
+        var blade = Blade("blade");
+        blade.Influences = new List<ItemInfluence> { new() { AffinityType = AffinityTypes.Fire, Stars = 2 } };
+        await RealmAsync(12, blade);
+        await Give("Minor Fire Crystal", 3);
+        await Gold.GrantAsync(_realm, Me, 5000, "test");
+
+        var refused = await Forge.ImbueAsync(_realm, Me, "blade", AffinityTypes.Fire);
+        Assert.Equal(ForgeError.NotEnough, refused.Error);
+        Assert.Contains("Major", refused.Message);
+        Assert.Equal(5000, await Gold.BalanceAsync(_realm, Me));
+
+        await Give("Major Fire Crystal", 1);
+        var outcome = await Forge.ImbueAsync(_realm, Me, "blade", AffinityTypes.Fire);
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.Equal(3, ForgeRules.StarsOf(outcome.Response!.Item!, AffinityTypes.Fire));
+        Assert.Equal(3, await Held("Minor Fire Crystal"));
+    }
+
+    [Fact]
+    public async Task Reforging_ReRollsTheAttributes_KeepingTheImplicitAndTheStars()
+    {
+        var blade = Blade("blade", tier: 3);
+        blade.Influences = new List<ItemInfluence> { new() { AffinityType = AffinityTypes.Fire, Stars = 1 } };
+        blade.ExplicitAttributes.Add(new ItemExplicitAttribute { Type = ItemExplicitTypes.AffinityDamageFlat, AffinityType = AffinityTypes.Fire, Value = 3, IsInfluenceBonus = true });
+        await RealmAsync(12, blade);
+        await Give("Lesser Essence", 1);
+        await Gold.GrantAsync(_realm, Me, 1000, "test");
+
+        var outcome = await Forge.ReforgeAsync(_realm, Me, "blade");
+        Assert.True(outcome.Succeeded, outcome.Message);
+        var item = outcome.Response!.Item!;
+        Assert.Equal(2, item.ExplicitAttributes.Count(a => !a.IsInfluenceBonus));
+        Assert.Single(item.ExplicitAttributes, a => a.IsInfluenceBonus && a.Value == 3);
+        Assert.Equal(blade.ImplicitAttribute!.Value, item.ImplicitAttribute!.Value);
+        Assert.Equal(1, ForgeRules.StarsOf(item, AffinityTypes.Fire));
+        Assert.Equal(0, await Held("Lesser Essence"));
+        Assert.Equal(1000 - 300, await Gold.BalanceAsync(_realm, Me));
+    }
+
+    [Fact]
+    public void TheVault_SaysWhatEachMaterialIsForAtTheForge()
+    {
+        Assert.Equal("Tempers gear to tiers 5–7; reforges tiers 5–7", ForgeRules.ForgeUse(MaterialCategory.Essence, MaterialTier.Tier2, null));
+        Assert.Equal("Ascends gear to Legendary", ForgeRules.ForgeUse(MaterialCategory.RarityShard, MaterialTier.Tier3, null));
+        Assert.Equal("Imbues gear with Fire, up to ★4", ForgeRules.ForgeUse(MaterialCategory.AffinityCrystal, MaterialTier.Tier2, AffinityTypes.Fire));
+        Assert.Null(ForgeRules.ForgeUse(MaterialCategory.Goods, MaterialTier.Tier1, null));
     }
 }
