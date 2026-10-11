@@ -308,6 +308,9 @@ public class AutoFightService
 
         /// <summary>The regions this player has a company ordered to patrol: their roads are safer (§6).</summary>
         public required HashSet<string> Patrolled { get; init; }
+
+        /// <summary>The realm's invasions: an invaded region's roads are twice as dangerous (Invasions R4).</summary>
+        public required List<Invasion> Invasions { get; init; }
         /// <summary>When each wounded character recovers; read untracked, written after the companies are.</summary>
         public required Dictionary<string, DateTime> Bloodied { get; init; }
 
@@ -380,6 +383,7 @@ public class AutoFightService
             Committed = committed,
             Patrolled = parties.Where(p => AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
                 .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal),
+            Invasions = await RiftService.InvasionsAsync(_context, gameInstanceId),
             Bloodied = await _context.BloodiedCharacters.AsNoTracking()
                 .Where(b => b.GameInstanceId == gameInstanceId && b.UserId == userId)
                 .ToDictionaryAsync(b => b.CharacterId, b => b.RecoversAt, StringComparer.Ordinal),
@@ -631,7 +635,8 @@ public class AutoFightService
         {
             day.Regions.TryGetValue(leg.RegionId, out var land);
             var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
-            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId));
+            double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId))
+                          * RiftRules.AmbushChanceFactor(day.Invasions, leg.RegionId, t);
             return (land?.Tier ?? 1, land != null && land.IsOwnedByPlayer(day.UserId), walk, day.Patrolled.Contains(leg.RegionId), hunt);
         }));
         if (RollRoad(chance, party.Id.ToString(), t) is double strikes)

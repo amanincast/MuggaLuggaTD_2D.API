@@ -64,6 +64,28 @@ namespace MuggaLuggaTD.Shared.Gameplay
     }
 
     /// <summary>
+    /// A region's invasion (R4): from when its Lesser Rift ran out to when it was sealed, or still going
+    /// (<see cref="Until"/> null). The season's end clears it with the rest of the rifts.
+    /// </summary>
+    public sealed class Invasion
+    {
+        public string RiftId { get; set; }
+        public string RegionId { get; set; }
+        public DateTime From { get; set; }
+        public DateTime? Until { get; set; }
+
+        public bool Covers(DateTime at) => at >= From && (!Until.HasValue || at < Until.Value);
+
+        /// <summary>Whether any of the hour <paramref name="hourIndex"/> (<c>HarassmentRules.HourOf</c>) fell inside it.</summary>
+        public bool CoversHour(long hourIndex)
+        {
+            var start = new DateTime(hourIndex * TimeSpan.TicksPerHour, DateTimeKind.Utc);
+            var end = start.AddHours(1);
+            return end > From && (!Until.HasValue || start < Until.Value);
+        }
+    }
+
+    /// <summary>
     /// Rifts from other realms (Invasions spec, revision R1–R7). When rifts come, where they open, how
     /// big a Great Rift's Breach is, and what sealing one pays. Every number here is a first pass
     /// (tune).
@@ -412,6 +434,38 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Warded: an elite's Ward takes this much off each hit, until it has taken this share of its health.</summary>
         public const float WardReduction = 0.6f;
         public const float WardBreaksAfter = 0.25f;
+
+        // -----------------------------------------------------------------
+        // The Invasion (R4, R6 phase 4)
+        // -----------------------------------------------------------------
+
+        /// <summary>An invaded region's roads are this many times as likely to be ambushed (R4: "twice as often").</summary>
+        public const double InvadedAmbushFactor = 2.0;
+
+        /// <summary>The invasion holding <paramref name="regionId"/> at <paramref name="at"/>, or null.</summary>
+        public static Invasion InvasionAt(IEnumerable<Invasion> invasions, string regionId, DateTime at) =>
+            invasions?.FirstOrDefault(i => i != null && i.RegionId == regionId && i.Covers(at));
+
+        /// <summary>The ambush factor for a road through <paramref name="regionId"/> at <paramref name="at"/>: 2 while it is invaded, else 1.</summary>
+        public static double AmbushChanceFactor(IEnumerable<Invasion> invasions, string regionId, DateTime at) =>
+            InvasionAt(invasions, regionId, at) != null ? InvadedAmbushFactor : 1.0;
+
+        /// <summary>
+        /// Whether a region's diggings are harried in an hour: <b>every</b> hour of an invasion, patrol or not
+        /// ("only closing the rift ends it"), else the raiders' one hour in ten while nobody patrols it
+        /// (<see cref="HarassmentRules"/>).
+        /// </summary>
+        public static bool IsHarried(string realmId, string regionId, long hourIndex, bool patrolled, IEnumerable<Invasion> invasions)
+        {
+            if (invasions != null && invasions.Any(i => i != null && i.RegionId == regionId && i.CoversHour(hourIndex))) return true;
+            return !patrolled && HarassmentRules.IsHarried(realmId, regionId, hourIndex);
+        }
+
+        /// <summary>
+        /// The mutator a Riftborn warband brings to an ambush in an invaded region: the rift's first, as its own site
+        /// has (R4: "the tint, a mutator").
+        /// </summary>
+        public static List<RiftMutator> AmbushMutators(string riftId) => Mutators(riftId, RiftKind.Lesser, 0);
 
         // -----------------------------------------------------------------
 

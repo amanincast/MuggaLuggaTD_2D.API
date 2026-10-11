@@ -955,6 +955,32 @@ public class PartyServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AnAmbushStruckInAnInvadedRegion_IsRiftborn()
+    {
+        var (instance, _, company) = await AmbushedAsync();
+        Assert.Null(company.Ambush!.Riftborn);
+
+        string struck = SiteSpec.RegionIdOf(company.Ambush.SiteId)!;
+        var now = DateTime.UtcNow;
+        _db.Rifts.Add(new Rift
+        {
+            GameInstanceId = instance, SeasonNumber = 1, Kind = RiftKind.Lesser, EventNumber = 1, RegionId = struck,
+            TargetUserId = TestIds.Player, Stage = RiftStage.Invaded, OmenAt = now.AddHours(-3), OpensAt = now.AddHours(-2.5),
+            ClosesAt = now.AddHours(-1), InvadedAt = now.AddHours(-1), BreachMax = 1, Breach = 1,
+        });
+        await _db.SaveChangesAsync();
+
+        var (_, listed) = await Service.ListAsync(instance, TestIds.Player);
+        var riftborn = listed!.Parties[0].Ambush!.Riftborn;
+        Assert.NotNull(riftborn);
+        Assert.Single(riftborn!.Mutators);
+
+        var (fought, opened) = await Service.FightAmbushAsync(instance, TestIds.Player, company.Id, Order);
+        Assert.True(fought.Succeeded, fought.Message);
+        Assert.Equal(riftborn.DonorBiome, opened!.Ambush.Riftborn!.DonorBiome);
+    }
+
+    [Fact]
     public async Task WinningAnAmbushPays_AndTheCompanyMarchesOnWithoutBeingStoppedTwice()
     {
         var (instance, _, company) = await AmbushedAsync();

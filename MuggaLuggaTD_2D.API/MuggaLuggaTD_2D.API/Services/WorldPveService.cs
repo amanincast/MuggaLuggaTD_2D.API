@@ -495,9 +495,6 @@ public class WorldPveService
                 ? "The rift has not opened yet."
                 : "That rift is closed."), Guid.Empty, null);
 
-        if (rift.Kind == RiftKind.Lesser && !string.Equals(rift.TargetUserId, userId, StringComparison.Ordinal))
-            return (new PveOutcome(PveError.NotPveTarget, "Only the lord of this land can close this rift."), Guid.Empty, null);
-
         var now = DateTime.UtcNow;
         var clear = await ClearOfAsync(gameInstanceId, userId, request.SiteId);
         if (now < RiftRules.LockedUntil(clear?.LastClearedAt))
@@ -517,6 +514,16 @@ public class WorldPveService
         if (regionNode == null)
             return (new PveOutcome(PveError.LocationNotFound, "The rift's region is gone."), Guid.Empty, null);
         var region = WorldRegionBlob.ReadRegion(regionNode);
+
+        // A Lesser Rift is its land's lord's to close (R4), and goes with the land: whoever holds the region now.
+        // Land no player holds leaves it with its last lord.
+        if (rift.Kind == RiftKind.Lesser)
+        {
+            string? lord = region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId)
+                ? region.OwnerUserId : rift.TargetUserId;
+            if (!string.Equals(lord, userId, StringComparison.Ordinal))
+                return (new PveOutcome(PveError.NotPveTarget, "Only the lord of this land can close this rift."), Guid.Empty, null);
+        }
 
         if (request.PartyId == null)
             return (new PveOutcome(PveError.NoCompanyThere, "Send a company into the region first."), Guid.Empty, null);

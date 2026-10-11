@@ -270,6 +270,7 @@ public class HiringService
         var pay = new Dictionary<string, Dictionary<string, int>>();
         var guarded = await GuardedAsync(gameInstanceId, onlyUserId);
         string realm = gameInstanceId.ToString();
+        var invasions = await RiftService.InvasionsAsync(_context, gameInstanceId);
         int season = await SeasonAsync(gameInstanceId);
 
         // A Harvest Fair lifts a region's goods for its hour (Active Content C). One factor per region,
@@ -287,14 +288,18 @@ public class HiringService
         {
             if (until > worker.LastSettledAt)
             {
-                // Raiders harry the diggings of a region nobody patrols, now and then (auto-fight.md §7).
+                // Raiders harry the diggings of a region nobody patrols, now and then (auto-fight.md §7); an
+                // invasion harries them every hour, patrol or not, until its rift is sealed (Invasions R4).
                 string regionId = SiteSpec.RegionIdOf(worker.SiteId!);
                 bool patrolled = guarded.Contains((worker.UserId, regionId));
+                var invaded = invasions.Where(i => i.RegionId == regionId).ToList();
+                Func<long, bool>? harried = patrolled && invaded.Count == 0 ? null
+                    : h => RiftRules.IsHarried(realm, regionId, h, patrolled, invaded);
                 byId.TryGetValue(regionId, out var siteRegion);
                 var sheet = worker.Sheet();
                 double gathered = worker.Carry + WorkerLevelRules.Gathered(worker.RatePerHour, worker.LastSettledAt, until,
                     sheet, worker.Id.ToString(),
-                    patrolled ? null : h => HarassmentRules.IsHarried(realm, regionId, h), worker.AssignedAt, FairsIn(regionId));
+                    harried, worker.AssignedAt, FairsIn(regionId));
                 int whole = (int)Math.Floor(gathered);
                 worker.Carry = gathered - whole;
                 worker.LifetimeOutput += whole;
