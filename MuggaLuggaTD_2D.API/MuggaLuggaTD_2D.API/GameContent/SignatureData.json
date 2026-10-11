@@ -161,6 +161,70 @@
       ]
     },
     {
+      "SignatureId": "warrior_whirl",
+      "DisplayName": "Whirlwind",
+      "Description": "A spinning storm of steel that cuts everything standing close, again and again.",
+      "Class": "Warrior",
+      "BaseAbilityLinkName": "Whirlwind_1",
+      "Awakening": [
+        {
+          "Stage": 2,
+          "Description": "The signature hits harder - and its status effect bites harder with it, because a burn is priced from the hit that lit it.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.3,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Stage": 3,
+          "Description": "The spin reaches half a pace further.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 0.5,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Stage": 4,
+          "Description": "A second power step, and the signature comes round faster.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.4,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.2,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Stage": 5,
+          "Name": "Tempest of Steel",
+          "Description": "The storm does not stop: two more cuts, each one heavier.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.6,
+              "Property": "Damage"
+            },
+            {
+              "UpgradeModifierType": 4,
+              "Value": 2,
+              "Property": "AuraTicks"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "SignatureId": "archer_snipe",
       "DisplayName": "Snipe Shot",
       "Description": "One arrow, from further than anything can answer, through two of them.",

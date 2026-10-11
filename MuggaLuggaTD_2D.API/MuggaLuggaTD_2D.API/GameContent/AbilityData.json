@@ -84,6 +84,38 @@
       "TravelSpeed": 100
     },
     {
+      "AbilityName": "Whirlwind",
+      "Description": "The Warrior spins, cutting everything within reach five times over.",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Whirlwind_1",
+      "MovementType": 1,
+      "Shape": 2,
+      "AuraTicks": {
+        "BaseValue": 5
+      },
+      "AuraTickSeconds": 0.5,
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 8
+      },
+      "Range": {
+        "BaseValue": 2.5
+      },
+      "AnimationPrefix": "Attack",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 30
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100
+    },
+    {
       "AbilityName": "Magic Missile",
       "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
       "AbilityLinkName": "Magic_Missile_1",
@@ -191,30 +223,6 @@
       "TravelSpeed": 80
     },
     {
-      "AbilityName": "Arcane Shield",
-      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Arcane_Shield_1",
-      "AbilityLinkName": "Arcane_Shield_1",
-      "AnimationState": {
-        "ActivationFrameCount": 1
-      },
-      "ActivationCooldown": {
-        "BaseValue": 10
-      },
-      "Duration": 5,
-      "DamageMultiplier": 0.5,
-      "MaxActivations": 1,
-      "AnimationPrefix": "SpellCast",
-      "AffinityStats": [
-        {
-          "AffinityType": 7,
-          "Damage": {
-            "BaseValue": 50
-          }
-        }
-      ],
-      "Classification": 2
-    },
-    {
       "AbilityName": "Snipe Shot",
       "PrefabAssetLocation": "Prefabs/Abilities/Offense/Bow_Attack_1",
       "SpriteLibraryAssetLocation": "Animation/Abilities/Offense/Arrow_1",
@@ -242,38 +250,6 @@
       ],
       "Classification": 1,
       "TravelSpeed": 120
-    },
-    {
-      "AbilityName": "Evasion",
-      "PrefabLocation": "Prefabs/Abilities/Defense/Evasion_1",
-      "AbilityLinkName": "Evasion_1",
-      "ActivationCooldown": {
-        "BaseValue": 8
-      },
-      "Duration": 4,
-      "DodgeChance": 0.25,
-      "AnimationPrefix": "SpellCast"
-    },
-    {
-      "AbilityName": "Shield Bash",
-      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Shield_Bash_1",
-      "AbilityLinkName": "Shield_Bash_1",
-      "ActivationCooldown": {
-        "BaseValue": 6
-      },
-      "StunDuration": 2,
-      "AnimationPrefix": "Attack"
-    },
-    {
-      "AbilityName": "Fortify",
-      "PrefabAssetLocation": "Prefabs/Abilities/Defense/Fortify_1",
-      "AbilityLinkName": "Fortify_1",
-      "ActivationCooldown": {
-        "BaseValue": 12
-      },
-      "Duration": 5,
-      "DamageReduction": 0.3,
-      "AnimationPrefix": "SpellCast"
     },
     {
       "AbilityName": "Inferno Blast",
@@ -489,14 +465,14 @@
         "BaseValue": 5
       },
       "CollisionScale": {
-        "BaseValue": 1.5
+        "BaseValue": 3.2
       },
       "AnimationPrefix": "Attack",
       "AffinityStats": [
         {
           "AffinityType": 0,
           "Damage": {
-            "BaseValue": 85
+            "BaseValue": 110
           }
         }
       ],

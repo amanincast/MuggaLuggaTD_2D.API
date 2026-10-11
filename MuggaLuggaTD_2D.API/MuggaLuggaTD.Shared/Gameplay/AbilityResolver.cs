@@ -101,7 +101,6 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ArcDegrees = template.ArcDegrees,
                 WaveEveryNthCast = template.WaveEveryNthCast,
                 WaveDamageShare = template.WaveDamageShare,
-                AuraTicks = template.AuraTicks,
                 AuraTickSeconds = template.AuraTickSeconds
             };
 
@@ -114,6 +113,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             ability.Healing = Clone(template.Healing) ?? ability.Healing;
             ability.HealTargetCount = Clone(template.HealTargetCount) ?? ability.HealTargetCount;
             ability.SupportRadius = Clone(template.SupportRadius) ?? ability.SupportRadius;
+            ability.AuraTicks = Clone(template.AuraTicks) ?? ability.AuraTicks;
 
             if (template.AffinityStats != null)
             {

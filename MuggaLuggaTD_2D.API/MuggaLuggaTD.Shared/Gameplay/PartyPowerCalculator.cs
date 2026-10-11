@@ -24,6 +24,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const float POWER_PER_HP = 0.5f;
         public const float POWER_PER_DAMAGE = 2f;
 
+        // Shapes (Warrior spec §5). A strike that picks its own targets is priced for the crowd it
+        // expects to catch; a Point strike (a bolt, a placed blast) is still priced as one hit.
+        /// <summary>Enemies an arc sweep is expected to catch.</summary>
+        public const float EXPECTED_ARC_TARGETS = 3f;
+
+        /// <summary>Enemies each cut of an aura is expected to catch.</summary>
+        public const float EXPECTED_AURA_TARGETS = 3f;
+
+        /// <summary>Bulwark (the Warrior's guard) as a flat survivability price: this share of the
+        /// health term again.</summary>
+        public const float BULWARK_HEALTH_SHARE = 0.15f;
+
         // Equipment power weights
         public const float POWER_PER_ITEM_TIER = 25f;
         public const float POWER_PER_EXPLICIT_ATTRIBUTE = 15f;
@@ -74,6 +86,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
             // Health: the saved AdjustedBaseValue is the level-scaled value; fall back to the base.
             var health = character.MaxHealth?.AdjustedBaseValue ?? character.MaxHealth?.BaseValue ?? 0L;
             power += health * POWER_PER_HP;
+
+            // A Warrior's Bulwark (ward and retaliate on a cycle) is priced as more health. The class
+            // is read from the signature: the save does not carry it, and every recruit has one.
+            if (IsWarrior(character, signatures))
+                power += health * POWER_PER_HP * BULWARK_HEALTH_SHARE;
 
             power += CalculateAbilityPower(character, abilityTemplates, signatures);
             power += CalculateEquipmentPower(character, inventory);
@@ -130,11 +147,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
                 if (resolved.AffinityStats != null)
                 {
+                    float shape = ShapeFactor(resolved);
                     foreach (var stat in resolved.AffinityStats)
                     {
                         var damage = stat?.Damage?.GetCurrentValue();
                         if (damage.HasValue)
-                            power += damage.Value * POWER_PER_DAMAGE;
+                            power += damage.Value * POWER_PER_DAMAGE * shape;
                     }
                 }
 
@@ -151,6 +169,32 @@ namespace MuggaLuggaTD.Shared.Gameplay
             }
 
             return power;
+        }
+
+        /// <summary>
+        /// How many hits one cast of <paramref name="ability"/> is priced as: an arc's expected crowd,
+        /// an aura's cuts times its expected crowd, otherwise one.
+        /// </summary>
+        public static float ShapeFactor(GameAbility ability)
+        {
+            switch (ability?.Shape ?? AbilityShapes.Point)
+            {
+                case AbilityShapes.Arc:
+                    return EXPECTED_ARC_TARGETS;
+                case AbilityShapes.Aura:
+                    long ticks = ability.AuraTicks?.GetCurrentValue() ?? 0;
+                    return System.Math.Max(1L, ticks) * EXPECTED_AURA_TARGETS;
+                default:
+                    return 1f;
+            }
+        }
+
+        /// <summary>Whether the character's signature belongs to the Warrior class (and so carries Bulwark).</summary>
+        public static bool IsWarrior(CharacterSaveData character, IReadOnlyCollection<SignatureDefinition> signatures)
+        {
+            if (character?.SignatureId == null || signatures == null) return false;
+            var signature = signatures.FirstOrDefault(s => s != null && s.SignatureId == character.SignatureId);
+            return signature != null && string.Equals(signature.Class, "Warrior", System.StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

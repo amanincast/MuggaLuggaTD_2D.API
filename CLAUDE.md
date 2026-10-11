@@ -608,6 +608,9 @@ A market **open to every realm** at prices **nobody sets**. Mike's calls, 2026-1
   - Every `POST playerdata/me` puts each character's talents back to what the stored save held
     (`ReconcileTalents`, run on the pre-merge blob). So power pricing reads them straight from the
     roster, and no table or migration was needed.
+- **Shapes in power** (Warrior spec, 1.55.0): `PartyPowerCalculator.ShapeFactor` prices an `Arc`
+  ability as 3 targets and an `Aura` as its cuts × 3. A Warrior (by signature class) gets Bulwark as
+  +15% of the health term.
 - **Power:** 25 a point (`PartyPowerCalculator`). Hold the Line multiplies a character on a
   garrison (`MarchingArmy.MusterAsync(..., onAGarrison: true)` from `WorldGarrisonService`).
 - Points come from the saved level, which is client-written and only clamped: the same gap as

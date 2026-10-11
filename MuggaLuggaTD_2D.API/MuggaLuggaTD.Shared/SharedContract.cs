@@ -237,6 +237,9 @@ namespace MuggaLuggaTD.Shared
         // 1.54.0 - The Forge, phase 1 (Forge spec). ForgeRules: Temper (tier +1, capped by the best hero's level), Ascend
         //   (rarity +1 to Legendary, eating a second piece of the slot) and Salvage; an upgrade keeps each value's roll
         //   quality, drifting ±5%, and rolls the slots it opens. Gear can now change after it drops.
-        public const string Version = "1.54.0";
+        // 1.55.0 - The Warrior, phase 3 (Warrior spec §5). PartyPowerCalculator prices a strike's shape: an arc sweep
+        //   as 3 targets, an aura as its cuts x 3, and a Warrior's Bulwark as 15% more of the health term. Garrison,
+        //   raid and siege power for Warriors (and any arc or aura) change. GameAbility.AuraTicks is modifiable.
+        public const string Version = "1.55.0";
     }
 }
