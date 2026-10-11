@@ -140,6 +140,27 @@ namespace Abilities.Models
 
         public float WardSeconds { get; set; }
 
+        // ---- Shape: what a strike covers (the Warrior spec) ----
+
+        /// <summary>What the strike covers. An <see cref="AbilityShapes.Arc"/> or
+        /// <see cref="AbilityShapes.Aura"/> picks its own targets around the caster, out to Range.</summary>
+        public AbilityShapes Shape { get; set; } = AbilityShapes.Point;
+
+        /// <summary>The width of an arc, in degrees, before CollisionScale widens it.</summary>
+        public float ArcDegrees { get; set; }
+
+        /// <summary>Every Nth cast also throws a wave of the same blow along the swing (the Warrior's
+        /// Sword Wave). Zero means never.</summary>
+        public int WaveEveryNthCast { get; set; }
+
+        /// <summary>Share of the blow's damage the wave deals.</summary>
+        public float WaveDamageShare { get; set; }
+
+        /// <summary>How many times an aura hits, and how far apart.</summary>
+        public int AuraTicks { get; set; }
+
+        public float AuraTickSeconds { get; set; }
+
         /// <summary>True for an ability that does anything for the caster's side.</summary>
         public bool IsSupport =>
             (HealTargets != AbilitySupportTargeting.None && (Healing?.GetCurrentValue() ?? 0) > 0)

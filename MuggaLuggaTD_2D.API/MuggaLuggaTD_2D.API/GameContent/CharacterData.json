@@ -3330,9 +3330,10 @@
       "ClassName": "Warrior",
       "Description": "The line holder. Slowest to die, and wants to be surrounded.",
       "HealthGrowthPerLevel": 0.08,
+      "BaseDefense": 25,
       "BasicAbilities": [
         {
-          "AbilityLinkName": "Melee_Slash_1",
+          "AbilityLinkName": "Sweeping_Slash_1",
           "ValidTargetTags": [
             "Enemy"
           ]

@@ -656,6 +656,77 @@
       ]
     },
     {
+      "AbilityLinkName": "Sweeping_Slash_1",
+      "Upgrades": [
+        {
+          "Name": "Honed Edge",
+          "Description": "Increase the damage of Sweeping Slash by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Swift Swing",
+          "Description": "Reduce the cooldown of Sweeping Slash by 5%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 5,
+              "Value": 0.05,
+              "Property": "ActivationCooldown"
+            }
+          ]
+        },
+        {
+          "Name": "Long Sweep",
+          "Description": "Increase the reach of Sweeping Slash by 10%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 1,
+              "Value": 0.1,
+              "Property": "Range"
+            }
+          ]
+        },
+        {
+          "Name": "Cleaving Blow",
+          "Description": "Sweeping Slash deals 8 more damage.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 8,
+              "Property": "Damage"
+            }
+          ]
+        },
+        {
+          "Name": "Follow Through",
+          "Description": "The Sword Wave cuts through one more enemy.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 4,
+              "Value": 1,
+              "Property": "PierceCount"
+            }
+          ]
+        },
+        {
+          "Name": "Wide Arc",
+          "Description": "Widen the sweep of Sweeping Slash by 30%.",
+          "Modifiers": [
+            {
+              "UpgradeModifierType": 2,
+              "Value": 0.3,
+              "Property": "CollisionScale"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "AbilityLinkName": "Melee_Stab_1",
       "Upgrades": [
         {

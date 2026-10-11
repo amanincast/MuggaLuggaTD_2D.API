@@ -53,6 +53,37 @@
       "TravelSpeed": 100
     },
     {
+      "AbilityName": "Sweeping Slash",
+      "Description": "The Warrior's swing: a 110° sweep that hits every enemy in front of it. Every third swing also throws a Sword Wave.",
+      "PrefabAssetLocation": "Prefabs/Abilities/Offense/Melee_Attack_1",
+      "AbilityLinkName": "Sweeping_Slash_1",
+      "MovementType": 1,
+      "Shape": 1,
+      "ArcDegrees": 110,
+      "WaveEveryNthCast": 3,
+      "WaveDamageShare": 0.6,
+      "AnimationState": {
+        "ActivationFrameCount": 1
+      },
+      "ActivationCooldown": {
+        "BaseValue": 2
+      },
+      "Range": {
+        "BaseValue": 2.2
+      },
+      "AnimationPrefix": "Attack",
+      "AffinityStats": [
+        {
+          "AffinityType": 0,
+          "Damage": {
+            "BaseValue": 40
+          }
+        }
+      ],
+      "Classification": 1,
+      "TravelSpeed": 100
+    },
+    {
       "AbilityName": "Magic Missile",
       "PrefabAssetLocation": "Prefabs/Abilities/Offense/Magic_Missile_1",
       "AbilityLinkName": "Magic_Missile_1",
