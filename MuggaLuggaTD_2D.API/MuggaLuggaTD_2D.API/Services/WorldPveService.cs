@@ -75,6 +75,9 @@ public class WorldPveService
     /// <summary>Counts the clear and the kills toward the player's quests. Optional so tests can leave it out.</summary>
     private readonly QuestService? _quests;
 
+    /// <summary>Wears a rift's Breach down and seals it (Invasions spec, phase 3). Optional so tests can leave it out.</summary>
+    private readonly RiftService? _rifts;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -85,8 +88,10 @@ public class WorldPveService
         ItemLedgerService items,
         FirstStepsService? firstSteps = null,
         HiringService? hiring = null,
-        QuestService? quests = null)
+        QuestService? quests = null,
+        RiftService? rifts = null)
     {
+        _rifts = rifts;
         _quests = quests;
         _hiring = hiring;
         _firstSteps = firstSteps;
@@ -233,6 +238,12 @@ public class WorldPveService
 
         if (elapsed > RunExpiry)
             return (new PveOutcome(PveError.RunNotFound, "That run has expired."), null, null);
+
+        if (RiftRules.IsSiteId(run.LocationId))
+        {
+            var (riftOutcome, riftResponse) = await ClaimRiftAsync(gameInstanceId, userId, run, request);
+            return (riftOutcome, riftResponse, null);
+        }
 
         var worldRow = await _context.WorldViewGameData
             .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
@@ -449,13 +460,192 @@ public class WorldPveService
             .ToListAsync();
 
         var clears = rows
-            .Select(c => new SiteClearDto(c.SiteId,
-                SiteRotationRules.LockedUntil(c.LastClearedAt),
-                SiteRotationRules.WorldRewardsBackAt(c.WorldRewardsAt)))
+            .Select(c => RiftRules.IsSiteId(c.SiteId)
+                ? new SiteClearDto(c.SiteId, RiftRules.LockedUntil(c.LastClearedAt), DateTime.MinValue)
+                : new SiteClearDto(c.SiteId,
+                    SiteRotationRules.LockedUntil(c.LastClearedAt),
+                    SiteRotationRules.WorldRewardsBackAt(c.WorldRewardsAt)))
             .Where(c => c.LockedUntil > now || c.WorldRewardsBackAt > now)
             .OrderBy(c => c.SiteId, StringComparer.Ordinal)
             .ToList();
         return new SiteClearsResponse(clears, now);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rift sites (Invasions spec §5.3, R3, R6 phase 3)
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Opens a run at a rift site (<c>rift:{riftId}:{index}</c>). The rift must be open (or invading);
+    /// a Lesser Rift is its region's owner's alone (R4); the player's own 20-minute lockout must have
+    /// passed; and a company must be at rest somewhere in the rift's region. Returns the encounter, so
+    /// the client fights what the claim will pay for.
+    /// </summary>
+    public async Task<(PveOutcome Outcome, Guid RunId, RiftEncounterDto? Encounter)> BeginRiftAsync(
+        Guid gameInstanceId, string userId, PveBeginRequest request)
+    {
+        if (!ContractMatches(request.SharedContractVersion, out var mismatch))
+            return (mismatch, Guid.Empty, null);
+
+        var (rift, index, refusal) = await RiftSiteAsync(gameInstanceId, request.SiteId);
+        if (rift == null) return (refusal!, Guid.Empty, null);
+
+        if (!RiftRules.CanSeal(rift.Stage))
+            return (new PveOutcome(PveError.NotPveTarget, rift.Stage == RiftStage.Omen
+                ? "The rift has not opened yet."
+                : "That rift is closed."), Guid.Empty, null);
+
+        if (rift.Kind == RiftKind.Lesser && !string.Equals(rift.TargetUserId, userId, StringComparison.Ordinal))
+            return (new PveOutcome(PveError.NotPveTarget, "Only the lord of this land can close this rift."), Guid.Empty, null);
+
+        var now = DateTime.UtcNow;
+        var clear = await ClearOfAsync(gameInstanceId, userId, request.SiteId);
+        if (now < RiftRules.LockedUntil(clear?.LastClearedAt))
+        {
+            var minutes = Math.Max(1, (int)Math.Ceiling((RiftRules.LockedUntil(clear!.LastClearedAt) - now).TotalMinutes));
+            return (new PveOutcome(PveError.SiteLocked,
+                $"You fought here moments ago. Try another of the rift's sites; this one is open to you again in {minutes} min."),
+                Guid.Empty, null);
+        }
+
+        var worldRow = await _context.WorldViewGameData.AsNoTracking()
+            .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        if (worldRow == null)
+            return (new PveOutcome(PveError.WorldNotFound, "World view data not found."), Guid.Empty, null);
+        var world = JsonNode.Parse(worldRow.GameData);
+        var regionNode = WorldRegionBlob.FindRegion(world, rift.RegionId);
+        if (regionNode == null)
+            return (new PveOutcome(PveError.LocationNotFound, "The rift's region is gone."), Guid.Empty, null);
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+
+        if (request.PartyId == null)
+            return (new PveOutcome(PveError.NoCompanyThere, "Send a company into the region first."), Guid.Empty, null);
+        var company = await PartyService.CompanyInRegionAsync(_context, gameInstanceId, userId, request.PartyId.Value, rift.RegionId);
+        if (company == null)
+            return (new PveOutcome(PveError.NoCompanyThere,
+                "That company is not at rest in the rift's region. Send it there, and fight when it arrives."), Guid.Empty, null);
+
+        var fighters = MarchingArmy.ReadIds(company.CharacterIdsJson)
+            .Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
+        var why = await PartyService.WhyCannotFightAsync(_context, _logger, world, gameInstanceId, userId, fighters);
+        if (why != null)
+            return (new PveOutcome(PveError.FightersUnavailable, why), Guid.Empty, null);
+
+        var existing = await _context.PveRuns
+            .Where(r => r.GameInstanceId == gameInstanceId && r.UserId == userId
+                        && r.LocationId == request.SiteId && r.ClaimedAt == null)
+            .ToListAsync();
+        if (existing.Count > 0) _context.PveRuns.RemoveRange(existing);
+
+        var run = new PveRun
+        {
+            GameInstanceId = gameInstanceId,
+            UserId = userId,
+            LocationId = request.SiteId,
+            LocationType = (int)RiftRules.SiteType,
+            FighterIdsJson = MarchingArmy.WriteIds(fighters),
+            StartedAt = now
+        };
+        _context.PveRuns.Add(run);
+        await _context.SaveChangesAsync();
+
+        var encounter = EncounterOf(rift, index, region);
+        _logger.LogInformation("Rift run {RunId} opened by {User} at {Site} (tier {Tier}, {Donor}, {Mutators}).",
+            run.Id, userId, request.SiteId, encounter.Tier, encounter.DonorBiome, string.Join("+", encounter.Mutators));
+        return (new PveOutcome(PveError.None), run.Id, encounter);
+    }
+
+    /// <summary>A rift site's fight: a pure function of the rift and its region (<see cref="RiftRules"/>).</summary>
+    public static RiftEncounterDto EncounterOf(Rift rift, int index, WorldRegionData region)
+    {
+        int tier = RiftRules.SiteTier(rift.Kind, region.Tier, index);
+        string key = rift.Id.ToString();
+        return new RiftEncounterDto(rift.Id, rift.Kind, index, rift.RegionId, RiftRules.SiteLevel(tier), tier,
+            RiftRules.DonorBiome(key, region.Biome), RiftRules.Mutators(key, rift.Kind, index));
+    }
+
+    /// <summary>The rift a rift site's id names, in this realm, and which of its sites; or why not.</summary>
+    private async Task<(Rift? Rift, int Index, PveOutcome? Refusal)> RiftSiteAsync(Guid gameInstanceId, string siteId)
+    {
+        if (!RiftRules.TryParseSiteId(siteId, out var key, out var index) || !Guid.TryParse(key, out var riftId))
+            return (null, -1, new PveOutcome(PveError.LocationNotFound, "No such rift site."));
+
+        var rift = await _context.Rifts.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == riftId && r.GameInstanceId == gameInstanceId);
+        if (rift == null || index >= RiftRules.SiteCount(rift.Kind))
+            return (null, -1, new PveOutcome(PveError.LocationNotFound, "No such rift site."));
+        return (rift, index, null);
+    }
+
+    /// <summary>
+    /// Pays a won rift run: a run at the site's level and tier, ×1.25 (§4.4), and the Breach it wore
+    /// away (<see cref="RiftService.RecordWinAsync"/>, which seals the rift and pays its chests when
+    /// that empties it). A rift that closed while the player fought still pays the run, but takes no
+    /// Breach. Nothing about the world changes, so there is no world to write back.
+    /// </summary>
+    private async Task<(PveOutcome Outcome, PveClaimResponse? Response)> ClaimRiftAsync(
+        Guid gameInstanceId, string userId, PveRun run, PveClaimRequest request)
+    {
+        var (rift, index, refusal) = await RiftSiteAsync(gameInstanceId, run.LocationId);
+        var worldRow = rift == null ? null : await _context.WorldViewGameData.AsNoTracking()
+            .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        var regionNode = worldRow == null ? null : WorldRegionBlob.FindRegion(JsonNode.Parse(worldRow.GameData), rift!.RegionId);
+        if (rift == null || regionNode == null)
+        {
+            run.ClaimedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return (refusal ?? new PveOutcome(PveError.LocationNotFound, "That rift is gone."), null);
+        }
+
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        var encounter = EncounterOf(rift, index, region);
+        var now = DateTime.UtcNow;
+        run.ClaimedAt = now;
+
+        var clear = await ClearOfAsync(gameInstanceId, userId, run.LocationId);
+        if (clear == null)
+        {
+            clear = new PlayerSiteClear { GameInstanceId = gameInstanceId, UserId = userId, SiteId = run.LocationId };
+            _context.PlayerSiteClears.Add(clear);
+        }
+        clear.LastClearedAt = now;
+        await _context.SaveChangesAsync();
+
+        var rewards = RunRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
+            _content.DroppableItems, Random.Shared, site: RiftRules.SiteType);
+        rewards.Experience = RiftRules.Boosted(rewards.Experience);
+        rewards.Gold = RiftRules.Boosted(rewards.Gold);
+        var materials = MaterialRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
+            _content.Materials, Random.Shared, site: RiftRules.SiteType);
+        foreach (var grant in materials) grant.Quantity = (int)RiftRules.Boosted(grant.Quantity);
+
+        await _wallet.GrantAsync(gameInstanceId, userId, materials, $"rift-claim run={run.Id}");
+        await _items.GrantAsync(gameInstanceId, userId, rewards.Items, $"rift-claim run={run.Id}");
+        long goldBalance = await _gold.GrantAsync(gameInstanceId, userId, rewards.Gold, $"rift-claim run={run.Id}");
+
+        int taken = _rifts == null ? 0 : await _rifts.RecordWinAsync(rift.Id, userId, RiftRules.BreachPerWin(rift.Kind, index));
+        var after = await _context.Rifts.AsNoTracking().FirstAsync(r => r.Id == rift.Id);
+
+        if (_quests != null)
+        {
+            await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
+            {
+                RegionId = rift.RegionId,
+                Kills = new Dictionary<string, int>(_quests.ClampKills(
+                    request.Kills, encounter.DonorBiome, encounter.Tier, RiftRules.SiteType))
+            });
+        }
+
+        _logger.LogInformation(
+            "Rift win at {Site} by {User} (run {RunId}): {Xp} XP, {Items} item(s), Breach -{Taken} -> {Breach} ({Stage}).",
+            run.LocationId, userId, run.Id, rewards.Experience, rewards.Items.Count, taken, after.Breach, after.Stage);
+
+        var win = new RiftWinDto(rift.Id, rift.Kind, index, taken, after.Breach, after.BreachMax, after.Stage,
+            after.Stage == RiftStage.Sealed && string.Equals(after.SealedByUserId, userId, StringComparison.Ordinal));
+        return (new PveOutcome(PveError.None), new PveClaimResponse(
+            run.LocationId, nameof(ConquestOutcome.RemoveLocation), rewards.Experience, rewards.Items, 0, materials,
+            rewards.Gold, goldBalance, WorldRewards: true, LockedUntil: RiftRules.LockedUntil(now), WorldRewardsBackAt: null,
+            Rift: win));
     }
 
     private static bool ContractMatches(string clientVersion, out PveOutcome mismatch)

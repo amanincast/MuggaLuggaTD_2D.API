@@ -54,15 +54,23 @@ public class PveController : ControllerBase
         // so the closing happens here too rather than only when the map is opened.
         await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
 
-        var (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
+        // A rift's site (Invasions spec, phase 3) is not a place in the world blob: it has a path of its own.
+        RiftEncounterDto? rift = null;
+        PveOutcome outcome;
+        Guid runId;
+        if (RiftRules.IsSiteId(request.SiteId))
+            (outcome, runId, rift) = await _pve.BeginRiftAsync(gameInstanceId, userId, request);
+        else
+            (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
         {
             _sessionLog.Log("PVE-BEGIN-DENY", $"user={userId} site={request.SiteId} {outcome.Error}: {outcome.Message}");
             return ToError(outcome);
         }
 
-        _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}");
-        return Ok(new PveBeginResponse(runId));
+        _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}" +
+            (rift == null ? "" : $" rift tier={rift.Tier} donor={rift.DonorBiome} mutators={string.Join("+", rift.Mutators)}"));
+        return Ok(new PveBeginResponse(runId, rift));
     }
 
     /// <summary>
@@ -95,6 +103,15 @@ public class PveController : ControllerBase
         {
             _sessionLog.Log("PVE-CLAIM-DENY", $"user={userId} run={request.RunId} {outcome.Error}: {outcome.Message}");
             return ToError(outcome);
+        }
+
+        // A rift win changes no land: it was paid, and the rift's own broadcast told the realm.
+        if (response?.Rift != null)
+        {
+            _sessionLog.Log("PVE-CLAIM",
+                $"user={userId} site={response.SiteId} rift={response.Rift.RiftId} breach=-{response.Rift.BreachTaken}" +
+                $"->{response.Rift.Breach} stage={response.Rift.Stage} xp={response.Experience} items={response.Items.Count}");
+            return Ok(response);
         }
 
         if (updatedWorld == null || response == null)

@@ -366,6 +366,7 @@ public class RiftService
         });
 
         if (sealedNow && rift != null) await PayAsync(rift);
+        else if (taken > 0 && rift != null) await BroadcastAsync(rift);   // the Breach bars move for everyone
         return taken;
     }
 

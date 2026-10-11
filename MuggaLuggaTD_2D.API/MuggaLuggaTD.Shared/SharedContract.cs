@@ -243,6 +243,9 @@ namespace MuggaLuggaTD.Shared
         // 1.56.0 - The Forge, phase 2 (Forge spec). ForgeRules.Imbue (an affinity star from a crystal: Minor up to 2,
         //   Major up to 4, Perfect up to 5; five on a piece in all; its bonus attribute rolled fresh) and Reforge (the
         //   ordinary explicit attributes re-rolled, the implicit and influences kept). Gear can change in two more ways.
-        public const string Version = "1.56.0";
+        // 1.57.0 - Rifts, phase 3 (Invasions spec §4, R3). RiftRules: rift sites (rift:{id}:{n}) are fought as open-field
+        //   wave clearings at their tier (the Hollow and Heart one higher), with a donor biome's roster and 1-2 mutators
+        //   rolled from the rift; a win pays x1.25 and wears the Breach down (40/60/100; a Lesser Rift seals on one win).
+        public const string Version = "1.57.0";
     }
 }

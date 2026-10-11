@@ -223,8 +223,17 @@ faction per realm, and `FactionRaid` rows for what they do.
   letters. Chests are rolled when opened (`POST rifts/{id}/chest`).
 - **Presence** (`RealmPresence`, singleton, in memory): `GameHub.JoinGameInstance` marks a player in; leaving or
   disconnecting stamps when they were last seen. A restart forgets it, and clients rejoin at once.
-- **Phase 1 only marks** an erupted or invaded region: no Riftborn faction, no invasion ambushes, no rift fights
-  yet (phases 3–5). Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
+- **Fighting it** (phase 3, 1.57.0): `pve/begin` and `pve/claim` take a rift site id `rift:{riftId}:{n}`
+  (`PveController` branches to `WorldPveService.BeginRiftAsync`; the claim branches inside `ClaimAsync`).
+  - Begin needs the rift Open or Invaded, a Lesser Rift's target player, the player's own 20-minute lockout on that
+    site passed (`PlayerSiteClear` under the rift site id), and a company at rest anywhere in the rift's region
+    (`PartyService.CompanyInRegionAsync`). It answers with the encounter (`RiftEncounterDto`: level, tier, donor
+    biome, mutators), all derived from the rift id by `RiftRules`, nothing stored.
+  - Claim pays a run at the site's level and tier ×1.25 and calls `RecordWinAsync` with `BreachPerWin` (40 / 60 / 100;
+    all of a Lesser Rift). It returns no world (nothing in the blob changes), so the controller skips the write.
+    `RecordWinAsync` now broadcasts `RiftUpdated` on every win that took Breach, not only on the seal.
+- **Not yet:** the Riftborn faction, invasion ambushes and harried workers, rift contracts (phases 4–6); an erupted
+  or invaded region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
 ## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0, phase 2 1.56.0; spec: Forge)
 
