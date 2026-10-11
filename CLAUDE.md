@@ -226,6 +226,28 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Phase 1 only marks** an erupted or invaded region: no Riftborn faction, no invasion ambushes, no rift fights
   yet (phases 3–5). Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
+## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0; spec: Forge)
+
+- **Three actions in phase 1**, each `POST api/gameinstance/{id}/forge/temper|ascend|salvage` with
+  `{ itemId, secondId }`:
+  - **Temper:** power tier +1, capped at what a drop could reach at the best hero's level
+    (`TemperCap` = 1 + level / 3, read from the stored save).
+  - **Ascend:** rarity +1, up to Legendary, eating a second, unworn piece of the same slot that is at most
+    one rarity lower.
+  - **Salvage:** destroys an unworn piece for essence (by tier), a shard (by rarity, some on a chance)
+    and a Minor crystal per influence.
+- **Rolls keep their quality** (where in its range each value sat), `±Drift` (5%), so a perfect roll
+  stays near-perfect but never exactly. A step that opens slots rolls the new ones from the piece's
+  content pool; the implicit is re-valued for the tier.
+- **Costs** are the table (`TemperTable`/`AscendTable`) **plus `WorthAdded`**, the Bazaar price the step
+  adds. Without it, a cheap temper sold for more than it cost. A test checks every step.
+- **The ledger is the truth:** the piece is read from the grant, rewritten with `ItemLedgerService.ReplaceAsync`
+  (which also rewrites the stored save, so a worn piece's hero is stronger everywhere at once) or taken with
+  `RevokeAsync`. One transaction under `BazaarService.TradeLock`: a piece can't be listed and forged at
+  once. Materials are spent before gold, and refunded if the gold fails.
+- **Debug routes** (Development): `forge/debug/stock` (essences, shards, Minor crystals, 5,000 gold) and
+  `forge/debug/pieces` (two Common tier-1 pieces of one kind).
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log

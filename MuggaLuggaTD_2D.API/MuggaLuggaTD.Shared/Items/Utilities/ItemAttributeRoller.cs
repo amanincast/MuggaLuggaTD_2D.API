@@ -232,6 +232,34 @@ namespace Items.Utilities
         }
 
         /// <summary>
+        /// The most an explicit attribute of this type can roll at this tier and rarity: a value is rolled
+        /// between half of this and all of it. An influence bonus is a tenth of an ordinary one, scaled by the
+        /// tier once more. The Forge raises a value by its share of this (ForgeRules).
+        /// </summary>
+        public static float MaxExplicitValue(ItemExplicitTypes type, ItemPowerTier tier, ItemRarityTypes rarity, bool influenceBonus)
+        {
+            float tierMultiplier = 1.0f + ((int)tier - 1) * 0.15f;
+            float max = GetRarityScaledMax(GetBaseMaxValue(type), rarity) * tierMultiplier;
+            return influenceBonus ? max * 0.1f * tierMultiplier : max;
+        }
+
+        /// <summary>
+        /// One more ordinary explicit attribute for an item that already has <paramref name="usedTypes"/>, as a
+        /// drop would roll it (null if the pool has nothing left). The Forge uses it for the slot an upgrade opens.
+        /// </summary>
+        public static ItemExplicitAttribute RollAdditionalExplicit(
+            ItemPowerTier tier, ItemRarityTypes rarity, IEnumerable<ItemExplicitTypes> usedTypes, List<ItemExplicitTypes> explicitPool = null)
+        {
+            ItemExplicitTypes[] availableTypes = explicitPool != null && explicitPool.Count > 0
+                ? explicitPool.ToArray()
+                : (ItemExplicitTypes[])Enum.GetValues(typeof(ItemExplicitTypes));
+            return RollSingleExplicitAttribute(tier, rarity, availableTypes, new HashSet<ItemExplicitTypes>(usedTypes), null, false);
+        }
+
+        /// <summary>An implicit attribute's value at a tier (it has no roll: the tier decides it).</summary>
+        public static float ImplicitValue(ItemImplicitTypes type, ItemPowerTier tier) => CalculateImplicitValue(type, tier);
+
+        /// <summary>
         /// Calculates the value for an explicit attribute based on type, tier, and rarity.
         /// </summary>
         private static float CalculateExplicitValue(ItemExplicitTypes type, ItemPowerTier tier, ItemRarityTypes rarity)
