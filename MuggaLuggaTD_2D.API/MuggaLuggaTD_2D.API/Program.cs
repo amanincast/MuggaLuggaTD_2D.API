@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -111,6 +112,24 @@ builder.Services.AddScoped<RealmMembershipService>();
 builder.Services.AddScoped<RealmGoalService>();
 builder.Services.AddScoped<RiftService>();
 builder.Services.AddSingleton<RealmPresence>();
+
+// Hardening 8: per-player token buckets, with every refusal tallied for review (RateLimits).
+builder.Services.AddSingleton<RateLimitTally>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = RateLimits.Create(
+        builder.Configuration.GetValue("RateLimits:General", RateLimits.GeneralTokens),
+        builder.Configuration.GetValue("RateLimits:Trade", RateLimits.TradeTokens));
+    options.OnRejected = async (rejected, token) =>
+    {
+        var http = rejected.HttpContext;
+        http.RequestServices.GetRequiredService<RateLimitTally>().Add(http);
+        var retry = rejected.Lease.TryGetMetadata(MetadataName.RetryAfter, out var after) ? after : RateLimits.Period;
+        http.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        http.Response.Headers.RetryAfter = ((int)Math.Ceiling(retry.TotalSeconds)).ToString();
+        await http.Response.WriteAsJsonAsync(new { success = false, message = RateLimits.Refused, errors = new[] { RateLimits.Refused } }, token);
+    };
+});
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger with JWT support
@@ -180,6 +199,10 @@ if (args.Contains("migrate"))
 if (args.Contains(InviteCodeService.Command))
     return await InviteCodeService.RunFromCommandLineAsync(app.Services, args);
 
+// `rate-limits [--days n]`: prints the refusals tallied, for reviewing the limits (Hardening 8).
+if (args.Contains(RateLimits.Command))
+    return await RateLimits.RunFromCommandLineAsync(app.Services, args);
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -204,6 +227,8 @@ app.UseHttpsRedirection();
 app.UseMiddleware<ClientVersionGate>();
 
 app.UseAuthentication();
+// After authentication, so a player is limited by who they are rather than by their address.
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

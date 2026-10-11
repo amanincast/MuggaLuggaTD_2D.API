@@ -190,6 +190,21 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Hunting Season:** a per-leg factor in `AmbushRules.ChanceForRoute` at departure (`PartyService.TravelAsync`,
   `AutoFightService.StartWalk`), ×1.5. The pay is ×1.5 by the hour struck (`ClaimAmbushAsync`, auto `Ambushed`).
 
+## Rate limits (`RateLimits`, Hardening 8)
+
+- **Per-player token buckets,** chained:
+  - general: 120 per 10 s;
+  - trade: 20 per 10 s, for non-GET requests under `/bazaar`, `/quests` and `/hiring`.
+- **Keyed** by the user id, or the IP before login. `UseRateLimiter` runs after `UseAuthentication` so the
+  key is the user.
+- **Exempt:** `/api/content`, login and register, `POST .../playerdata/me` (a save is never refused),
+  `/hubs/`, `/api/client` and `/healthz`.
+- **A refusal** is a 429 with Retry-After and `{ message: "Slow down a moment." }`.
+- **The tally:** `RateLimitTally` counts refusals in memory, and the scheduler writes them each minute to
+  `RateLimitRefusals` (day, policy, route without ids, who, count).
+- **Read it** with `dotnet run -- rate-limits [--days n]`.
+- **Tune it** with `RateLimits:General` and `RateLimits:Trade` in config.
+
 ## Rifts (`RiftRules`, `RiftService`, shared 1.53.0; spec: Invasions R1–R7)
 
 - **Two kinds.** A **Great Rift** is the realm's event: about 4 a day, 1 h omen, 4 h open, one live at a time, a

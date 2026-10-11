@@ -1582,6 +1582,44 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("QuestBoardStates");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.RateLimitRefusal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("LastAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Policy")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Who")
+                        .IsRequired()
+                        .HasMaxLength(460)
+                        .HasColumnType("character varying(460)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day", "Policy", "Route", "Who")
+                        .IsUnique();
+
+                    b.ToTable("RateLimitRefusals");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.RealmGoal", b =>
                 {
                     b.Property<Guid>("Id")

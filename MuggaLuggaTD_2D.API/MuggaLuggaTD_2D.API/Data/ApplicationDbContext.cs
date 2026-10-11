@@ -53,6 +53,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RealmGoal> RealmGoals => Set<RealmGoal>();
     public DbSet<RealmGoalShare> RealmGoalShares => Set<RealmGoalShare>();
     public DbSet<Rift> Rifts => Set<Rift>();
+    public DbSet<RateLimitRefusal> RateLimitRefusals => Set<RateLimitRefusal>();
     public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
 
     // Hardening 4: every update to a revisioned row raises its revision, which is the row's
@@ -327,6 +328,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Kind, e.EventNumber }).IsUnique();
             entity.HasIndex(e => new { e.GameInstanceId, e.Stage });
             entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<RateLimitRefusal>(entity =>
+        {
+            entity.HasIndex(e => new { e.Day, e.Policy, e.Route, e.Who }).IsUnique();
         });
         builder.Entity<RiftContribution>(entity =>
         {
