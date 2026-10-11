@@ -261,8 +261,10 @@ public class RiftTests : IDisposable
         await Rifts().AdvanceAsync(_realm);
         Assert.Equal(RiftStage.Erupted, (await RiftsAsync(RiftKind.Great)).Single(r => r.Id == rift.Id).Stage);
 
+        // The first rift's own lines. The next Great Rift may be announced the moment this one ends (its gap is
+        // rolled from the realm's random id), which is right, so only the first three are this rift's.
         var log = await WarLogKindsAsync();
-        Assert.Equal(new[] { "RiftOmen", "RiftOpened", "RiftErupted" }, log.Where(k => k.StartsWith("Rift")));
+        Assert.Equal(new[] { "RiftOmen", "RiftOpened", "RiftErupted" }, log.Where(k => k.StartsWith("Rift")).Take(3));
         Assert.Contains(_hub.Sent, s => s.Method == "RiftUpdated");
     }
 
@@ -354,7 +356,7 @@ public class RiftTests : IDisposable
         Assert.Contains(await LettersToAsync(TestIds.Player), l => l.Kind == nameof(LetterKind.RiftOmen));
 
         // A Lesser Rift's omen is the player's news, not the realm's.
-        Assert.DoesNotContain("RiftOmen", (await _db.WarLog.AsNoTracking().Where(w => w.RegionId == "r2").Select(w => w.Kind).ToListAsync()));
+        Assert.DoesNotContain(await _db.WarLog.AsNoTracking().ToListAsync(), w => w.Kind == "RiftOmen" && w.Detail == "Lesser");
     }
 
     [Fact]

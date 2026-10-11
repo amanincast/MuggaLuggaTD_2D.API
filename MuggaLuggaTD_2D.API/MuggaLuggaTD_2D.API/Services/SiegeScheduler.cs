@@ -64,6 +64,12 @@ public class SiegeScheduler : BackgroundService
                 if (settled > 0)
                     _logger.LogInformation("Faction sieges settled: {Count}.", settled);
 
+                // Rate-limit refusals counted since the last sweep are written down (Hardening 8).
+                int refused = await scope.ServiceProvider.GetRequiredService<RateLimitTally>()
+                    .FlushAsync(scope.ServiceProvider.GetRequiredService<MuggaLuggaTD_2D.API.Data.ApplicationDbContext>());
+                if (refused > 0)
+                    _logger.LogWarning("Rate limits refused {Count} request(s) in the last minute.", refused);
+
                 // Rifts are announced, opened and run out on the same sweep (Invasions spec §5.2).
                 var rifts = scope.ServiceProvider.GetRequiredService<RiftService>();
                 int moved = await rifts.AdvanceAllAsync();
