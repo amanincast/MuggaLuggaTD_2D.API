@@ -56,10 +56,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Elites carry a Ward that must be broken first.</summary>
         Warded = 3,
 
-        // Phase 7 (polish): not rolled yet.
+        /// <summary>Every few seconds void hands tug the hero toward the nearest Riftborn; a dodge slips them.</summary>
         Grasping = 4,
+
+        /// <summary>The field is dark beyond a small light round the hero.</summary>
         Starless = 5,
+
+        /// <summary>Each wave, the first Riftborn to die comes back once as a ghost.</summary>
         Echoing = 6,
+
+        /// <summary>A gift: every Riftborn is weak to two elements, twice over, and immune to none.</summary>
         Fractured = 7,
     }
 
@@ -428,9 +434,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return others[random.Next(others.Count)];
         }
 
-        /// <summary>The mutators rolled so far. Phase 7 adds Grasping, Starless, Echoing and Fractured.</summary>
+        /// <summary>Every mutator a rift rolls from (all eight since phase 7).</summary>
         public static readonly RiftMutator[] RolledMutators =
-            { RiftMutator.Unstable, RiftMutator.Hasted, RiftMutator.Splitting, RiftMutator.Warded };
+        {
+            RiftMutator.Unstable, RiftMutator.Hasted, RiftMutator.Splitting, RiftMutator.Warded,
+            RiftMutator.Grasping, RiftMutator.Starless, RiftMutator.Echoing, RiftMutator.Fractured,
+        };
 
         /// <summary>How many mutators a site has: the Breach and a Lesser Rift 1, the Hollow and the Heart 2.</summary>
         public static int MutatorCount(RiftKind kind, int index) => kind == RiftKind.Great && index > 0 ? 2 : 1;
@@ -439,13 +448,59 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// A rift site's mutators. Each rift rolls two from its seed (§4.3); the Breach and a Lesser
         /// Rift take the first, the Hollow and the Heart both.
         /// </summary>
-        public static List<RiftMutator> Mutators(string riftId, RiftKind kind, int index)
+        public static List<RiftMutator> Mutators(string riftId, RiftKind kind, int index) =>
+            Shuffled(riftId).Take(MutatorCount(kind, index)).ToList();
+
+        private static List<RiftMutator> Shuffled(string riftId)
         {
             var pool = RolledMutators.ToList();
             var random = RandomForRift(riftId, "mutators");
             random.Shuffle(pool);
-            return pool.Take(MutatorCount(kind, index)).ToList();
+            return pool;
         }
+
+        // -----------------------------------------------------------------
+        // The Rift Lord (§4.1, §4.2, §6.3; phase 7)
+        // -----------------------------------------------------------------
+
+        /// <summary>The Rift Heart: a Great Rift's third site, where the Rift Lord always waits.</summary>
+        public const int HeartIndex = 2;
+
+        /// <summary>Whether this site's last wave brings the Rift Lord: the Heart's, whatever its tier.</summary>
+        public static bool HasRiftLord(RiftKind kind, int index) => kind == RiftKind.Great && index == HeartIndex;
+
+        /// <summary>The Rift Lord stands this much larger than the boss it was.</summary>
+        public const float LordScale = 1.2f;
+
+        /// <summary>
+        /// The third mutator the Rift Lord brings (§4.3: "the Heart's boss adds 1 more"): the rift's next roll after
+        /// the Heart's two, so it is never one already on.
+        /// </summary>
+        public static RiftMutator LordMutator(string riftId) => Shuffled(riftId)[MutatorCount(RiftKind.Great, HeartIndex)];
+
+        // -----------------------------------------------------------------
+        // The four mutators of phase 7 (client rules; the numbers live here so tests and the Codex agree)
+        // -----------------------------------------------------------------
+
+        /// <summary>Grasping: how often the hands reach, the warning first, how far they tug and how fast.</summary>
+        public const float GraspEverySeconds = 8f;
+        public const float GraspWarningSeconds = 1f;
+        public const float GraspPullDistance = 2.5f;
+        public const float GraspPullSeconds = 0.35f;
+
+        /// <summary>Grasping reaches only for a Riftborn this close; with none near, the hands wait.</summary>
+        public const float GraspReach = 12f;
+
+        /// <summary>Starless: the light round the hero, in world units, and how dark the rest is (1 is black).</summary>
+        public const float StarlessLightRadius = 5.5f;
+        public const float StarlessDarkness = 0.82f;
+
+        /// <summary>Echoing: how long before the ghost rises, and the share of its health it comes back with.</summary>
+        public const float EchoDelaySeconds = 1f;
+        public const float EchoHealthShare = 0.5f;
+
+        /// <summary>Fractured: a weakness's damage multiplier (twice a boss's usual +25%).</summary>
+        public const float FracturedWeakMultiplier = 1.5f;
 
         /// <summary>A rift fight pays a run at its level and tier, times this (§4.4).</summary>
         public const double RewardMultiplier = 1.25;
@@ -570,6 +625,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             if (invasions != null && invasions.Any(i => i != null && i.RegionId == regionId && i.CoversHour(hourIndex))) return true;
             return !patrolled && HarassmentRules.IsHarried(realmId, regionId, hourIndex);
         }
+
+        /// <summary>A sealed Great Rift's top three contributors are its Wardens: a mark on their standings row for the season (row 6).</summary>
+        public const int WardenPlaces = 3;
 
         /// <summary>
         /// The mutator a Riftborn warband brings to an ambush in an invaded region: the rift's first, as its own site

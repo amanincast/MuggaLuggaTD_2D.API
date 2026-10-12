@@ -20,8 +20,11 @@ public record RiftView(
     int MyBreach, ItemRarityTypes? MyChest, bool MyChestOpened, List<RiftContributor> Top,
     RiftContractView? Contract = null, RiftEruption Eruption = RiftEruption.None);
 
-/// <summary>The rifts a realm's map shows: every live one, and the recently ended ones.</summary>
-public record RiftsResponse(List<RiftView> Live, List<RiftView> Recent);
+/// <summary>
+/// The rifts a realm's map shows: every live one, and the recently ended ones. <c>Scars</c> are the regions where a Great
+/// Rift was sealed this season: the hex keeps a faint mark until the season ends (§2.3, phase 7).
+/// </summary>
+public record RiftsResponse(List<RiftView> Live, List<RiftView> Recent, List<string>? Scars = null);
 
 /// <summary>What the hub sends when a rift changes stage; the client asks for the rest.</summary>
 public record RiftUpdatedNotification(Guid RiftId, RiftKind Kind, RiftStage Stage, string RegionId);
@@ -595,7 +598,30 @@ public partial class RiftService
                 Utc(c.PostedAt), Utc(c.HeldUntil), c.OwnerUserId == userId, c.HolderUserId == userId);
         }
 
-        return new RiftsResponse(live.Select(View).ToList(), recent.Select(View).ToList());
+        var scars = rifts.Where(r => r.Kind == RiftKind.Great && r.Stage == RiftStage.Sealed)
+            .Select(r => r.RegionId).Distinct().ToList();
+        return new RiftsResponse(live.Select(View).ToList(), recent.Select(View).ToList(), scars);
+    }
+
+    /// <summary>
+    /// How many Great Rifts each player was a Warden of this season (row 6): one of the top
+    /// <see cref="RiftRules.WardenPlaces"/> by Breach worn away on a rift that was sealed.
+    /// </summary>
+    public static async Task<Dictionary<string, int>> WardensAsync(ApplicationDbContext context, Guid gameInstanceId, int season)
+    {
+        var sealedIds = await context.Rifts.AsNoTracking()
+            .Where(r => r.GameInstanceId == gameInstanceId && r.SeasonNumber == season &&
+                        r.Kind == RiftKind.Great && r.Stage == RiftStage.Sealed)
+            .Select(r => r.Id).ToListAsync();
+        var shares = await context.RiftContributions.AsNoTracking()
+            .Where(c => sealedIds.Contains(c.RiftId) && c.Breach > 0)
+            .Select(c => new { c.RiftId, c.UserId, c.Breach }).ToListAsync();
+
+        var wardens = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var rift in shares.GroupBy(s => s.RiftId))
+            foreach (var top in rift.OrderByDescending(s => s.Breach).Take(RiftRules.WardenPlaces))
+                wardens[top.UserId] = wardens.TryGetValue(top.UserId, out int n) ? n + 1 : 1;
+        return wardens;
     }
 
     private static DateTime Utc(DateTime at) => DateTime.SpecifyKind(at, DateTimeKind.Utc);
