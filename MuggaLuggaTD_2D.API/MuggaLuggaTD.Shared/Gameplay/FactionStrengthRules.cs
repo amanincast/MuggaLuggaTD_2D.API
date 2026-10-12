@@ -56,11 +56,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public const double StrengthPerRansomGold = 1.0;
 
-        /// <summary>Whether a region is held by a faction rather than by a player or nobody.</summary>
-        public static bool IsFaction(FactionId faction) => faction == FactionId.Ashkin || faction == FactionId.Grimjaw;
-
-        /// <summary>The factions there are, in the order the Powers panel lists them.</summary>
-        public static readonly IReadOnlyList<FactionId> All = new[] { FactionId.Grimjaw, FactionId.Ashkin };
+        /// <summary>Whether a region is held by a faction rather than by a player or nobody (<see cref="FactionCatalog.Has"/>).</summary>
+        public static bool IsFaction(FactionId faction) => FactionCatalog.Has(faction);
 
         /// <summary>Whether <paramref name="faction"/> holds <paramref name="region"/>.</summary>
         public static bool Holds(FactionId faction, WorldRegionData region) =>

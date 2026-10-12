@@ -251,6 +251,8 @@ namespace MuggaLuggaTD.Shared
         //   every hour, patrol or not, until the rift is sealed. Ambush chances and goods gathered change.
         // 1.59.0 - Rifts, phase 5: Rift contracts (spec R7). RiftRules.MayCloseLesser: a contract's holder closes a
         //   Lesser Rift while the hold stands, its lord otherwise. New letter kinds.
-        public const string Version = "1.59.0";
+        // 1.60.0 - Factions 2, step 1: FactionCatalog replaces the hard-coded Grimjaw/Ashkin pair (no behaviour change,
+        //   but generation now names the Grimjaw "The Grimjaw", as every other writer did, not "Grimjaw Clan").
+        public const string Version = "1.60.0";
     }
 }

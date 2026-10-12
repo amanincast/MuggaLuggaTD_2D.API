@@ -43,6 +43,19 @@ public static class WorldRegionBlob
 
     public static JsonArray? GetRegions(JsonNode? world) => world?["Regions"] as JsonArray;
 
+    /// <summary>
+    /// The world's faction cast (Factions 2): the optional "Factions" array of faction ids, or the old pair for a world
+    /// that recorded none (<see cref="FactionCatalog.CastOrDefault"/>).
+    /// </summary>
+    public static IReadOnlyList<FactionId> ReadCast(JsonNode? world)
+    {
+        var ids = new List<FactionId>();
+        if (world?["Factions"] is JsonArray array)
+            foreach (var node in array)
+                if (node is JsonValue value && value.TryGetValue<int>(out int id)) ids.Add((FactionId)id);
+        return FactionCatalog.CastOrDefault(ids);
+    }
+
     public static JsonNode? FindRegion(JsonNode? world, string? regionId)
     {
         if (string.IsNullOrEmpty(regionId)) return null;

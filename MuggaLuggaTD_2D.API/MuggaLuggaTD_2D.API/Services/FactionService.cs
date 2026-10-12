@@ -166,7 +166,7 @@ public partial class FactionService
 
         if (request.CloseMuster)
         {
-            foreach (var faction in FactionStrengthRules.All.Where(f => all || f == only))
+            foreach (var faction in InPlay(regions).Where(f => all || f == only))
             {
                 var lines = await SettleDueSiegesAsync(gameInstanceId, now, force: faction);
                 report.AddRange(lines.Count > 0 ? lines : new List<string> { $"{TemperamentOf(faction).Name} has no siege mustering." });
@@ -180,7 +180,7 @@ public partial class FactionService
         {
             var action = Enum.TryParse<FactionAction>(request.Action, ignoreCase: true, out var asked) && asked != FactionAction.None
                 ? asked : FactionAction.Raid;
-            foreach (var faction in FactionStrengthRules.All.Where(f => all || f == only))
+            foreach (var faction in InPlay(regions).Where(f => all || f == only))
                 report.AddRange(await ActAsync(gameInstanceId, now, force: faction, forceAction: action));
             regions = await RegionsAsync(gameInstanceId) ?? regions;
             rows = await SettleAsync(gameInstanceId, regions, now);
@@ -530,14 +530,20 @@ public partial class FactionService
     /// <summary>The faction's temperament from content, or a plain one if content has none for it.</summary>
     public FactionTemperament TemperamentOf(FactionId faction) =>
         _content?.Factions?.FirstOrDefault(f => f.Id == faction)
-        ?? new FactionTemperament { Id = faction, Name = faction.ToString() };
+        ?? new FactionTemperament { Id = faction, Name = FactionCatalog.TitleOf(faction) };
+
+    /// <summary>The world's cast, as the last <see cref="RegionsAsync"/> read it; the old pair until then.</summary>
+    private IReadOnlyList<FactionId>? _cast;
+
+    /// <summary>The factions in play: the world's cast, and any other holding land (<see cref="FactionCatalog.InPlay"/>).</summary>
+    private IReadOnlyList<FactionId> InPlay(IReadOnlyCollection<WorldRegionData>? regions) => FactionCatalog.InPlay(_cast, regions);
 
     /// <summary>Each faction's row, made if missing and settled to <paramref name="now"/>. Not saved.</summary>
     private async Task<List<FactionState>> SettleAsync(Guid gameInstanceId, IReadOnlyCollection<WorldRegionData> regions, DateTime now)
     {
         var rows = await _context.FactionStates.Where(f => f.GameInstanceId == gameInstanceId).ToListAsync();
 
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in InPlay(regions))
         {
             double cap = FactionStrengthRules.Cap(faction, regions);
             var row = rows.FirstOrDefault(r => r.Faction == faction);
@@ -579,7 +585,7 @@ public partial class FactionService
         IReadOnlyDictionary<FactionId, string> mustering)
     {
         var list = new List<FactionStrengthResponse>();
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in InPlay(regions))
         {
             var row = rows.First(r => r.Faction == faction);
             double cap = FactionStrengthRules.Cap(faction, regions);
@@ -602,7 +608,9 @@ public partial class FactionService
     {
         var row = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
         if (row == null || string.IsNullOrEmpty(row.GameData)) return null;
-        var regions = WorldRegionBlob.ReadAllRegions(JsonNode.Parse(row.GameData));
+        var world = JsonNode.Parse(row.GameData);
+        _cast = WorldRegionBlob.ReadCast(world);
+        var regions = WorldRegionBlob.ReadAllRegions(world);
         return regions.Count == 0 ? null : regions;
     }
 }

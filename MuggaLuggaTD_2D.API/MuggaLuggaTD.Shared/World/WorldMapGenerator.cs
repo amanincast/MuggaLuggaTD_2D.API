@@ -241,11 +241,12 @@ namespace MuggaLuggaTD.Shared.World
                 // Roughly half the dangerous ground has a banner over it; the rest is wild.
                 if (!random.Chance(5000)) continue;
 
-                bool ashkin = region.Biome == BiomeType.Volcanic || region.Biome == BiomeType.Highland;
+                // To the cast faction whose home the biome is, else the cast's first (FactionCatalog.SeatFor).
+                var faction = FactionCatalog.SeatFor(region.Biome, FactionCatalog.DefaultCast);
 
                 region.Ownership = LocationOwnership.Enemy;
-                region.Faction = ashkin ? FactionId.Ashkin : FactionId.Grimjaw;
-                region.OwnerDisplayName = ashkin ? "The Ashkin" : "Grimjaw Clan";
+                region.Faction = faction;
+                region.OwnerDisplayName = FactionCatalog.TitleOf(faction);
                 region.Entrenchment = random.Next(1, 4);
                 region.Resolve = 100;
             }

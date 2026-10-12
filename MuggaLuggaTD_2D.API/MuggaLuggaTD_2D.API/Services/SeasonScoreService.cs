@@ -226,7 +226,7 @@ public class SeasonScoreService
         var factionScores = await _context.FactionSeasonScores.AsNoTracking()
             .Where(f => f.GameInstanceId == gameInstanceId && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in FactionCatalog.InPlay(null, regions))
         {
             var score = factionScores.FirstOrDefault(f => f.Faction == faction);
             double total = score == null
@@ -633,7 +633,7 @@ public class SeasonScoreService
             .Where(f => f.GameInstanceId == instance.Id && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
 
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in FactionCatalog.InPlay(null, regions))
         {
             if (rows.Any(r => r.Faction == faction)) continue;
 
