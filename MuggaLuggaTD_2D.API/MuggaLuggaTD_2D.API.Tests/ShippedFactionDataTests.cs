@@ -40,7 +40,7 @@ public class ShippedFactionDataTests
         var content = new GameContentProvider(new ContentRoot { ContentRootPath = ApiProject() },
             NullLogger<GameContentProvider>.Instance);
 
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in FactionCatalog.DefaultCast)
         {
             var temperament = Assert.Single(content.Factions, f => f.Id == faction);
             Assert.False(string.IsNullOrWhiteSpace(temperament.Name));

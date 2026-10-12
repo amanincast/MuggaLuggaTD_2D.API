@@ -94,6 +94,10 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 
 ## NPC factions (`docs/design/npc-factions.md`, Unity repo)
 
+**The catalogue** (Factions 2 step 1, 1.60.0): shared `FactionCatalog` replaces the hard-coded pair. Loops use
+`FactionCatalog.InPlay(cast, regions)` (the world's cast from the blob's optional `"Factions"`, default Grimjaw +
+Ashkin, then any other faction holding land); `FactionService` keeps the cast its last `RegionsAsync` read.
+
 `FactionService` + `FactionController` (`GET api/gameinstance/{id}/factions`), one `FactionState` row per
 faction per realm, and `FactionRaid` rows for what they do.
 

@@ -82,7 +82,7 @@ public class FactionBalanceSimulation
         var start = new DateTime(2026, 10, 6, 0, 0, 0, DateTimeKind.Utc);
         int PlayerLand(List<WorldRegionData> rs) => rs.Count(r => r.Ownership == LocationOwnership.Player);
         Dictionary<FactionId, int> Held(List<WorldRegionData> rs) =>
-            FactionStrengthRules.All.ToDictionary(f => f, f => FactionStrengthRules.RegionsHeld(f, rs));
+            FactionCatalog.DefaultCast.ToDictionary(f => f, f => FactionStrengthRules.RegionsHeld(f, rs));
 
         var deeds = new Dictionary<string, int>();
         void Count(string deed) => deeds[deed] = deeds.TryGetValue(deed, out var n) ? n + 1 : 1;
@@ -119,7 +119,7 @@ public class FactionBalanceSimulation
         // bands (SeasonEndRules.ChestBands) are measured against these.
         string Rates(List<WorldRegionData> rs) =>
             string.Join(", ", Players.Select(p => $"{p} {SeasonScoreRules.RateForHoldings(p, rs):F0}")
-                .Concat(FactionStrengthRules.All.Select(f => $"{f} {SeasonEndRules.RateForFaction(f, rs):F0}")));
+                .Concat(FactionCatalog.DefaultCast.Select(f => $"{f} {SeasonEndRules.RateForFaction(f, rs):F0}")));
         _output.WriteLine($"points an hour: start {Rates(regions)}; end {Rates(end)}");
         _output.WriteLine("between factions: " + string.Join(", ", db.WarLog.AsNoTracking()
             .Where(e => e.SubjectUserId != null && e.SubjectUserId.StartsWith(FactionService.WarLogPrefix)).AsEnumerable()
@@ -142,7 +142,7 @@ public class FactionBalanceSimulation
         Assert.Equal(0, week.CapitalsLost);
 
         // Both factions still stand.
-        foreach (var faction in FactionStrengthRules.All)
+        foreach (var faction in FactionCatalog.DefaultCast)
             Assert.True(week.FactionEnd[faction] > 0, $"{faction} was wiped out");
 
         // Absent players lose border land slowly, not wholesale: the muster, the gate and the dice

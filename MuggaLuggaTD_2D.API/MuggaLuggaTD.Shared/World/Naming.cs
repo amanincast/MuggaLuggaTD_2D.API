@@ -491,8 +491,7 @@ namespace MuggaLuggaTD.Shared.World
         public static string ForWarband(FactionId faction, BiomeType biome, ulong seed)
         {
             var random = DeterministicRandom.ForSubject(seed, 0x62616E64);
-            if (faction == FactionId.Grimjaw) return $"Grimjaw {Pick(BandWords, ref random)}";
-            if (faction == FactionId.Ashkin) return $"Ashkin {Pick(BandWords, ref random)}";
+            if (FactionCatalog.Has(faction)) return $"{FactionCatalog.NameOf(faction)} {Pick(BandWords, ref random)}";
             if (random.Next(2) == 0)
                 return $"The {Compound(Pick(Roots(biome), ref random), Pick(BandEndings, ref random)) ?? PlaceWord(biome, ref random)}";
             return $"{PlaceWord(biome, ref random)} {Pick(BandWords, ref random)}";
