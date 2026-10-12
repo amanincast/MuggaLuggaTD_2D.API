@@ -94,6 +94,11 @@ is not the dice but the **cooldown** — one raid per attacker per region per 4h
 
 ## NPC factions (`docs/design/npc-factions.md`, Unity repo)
 
+**The Riftborn** (Invasions phase 6, 1.61.0): `FactionService.Riftborn.cs`. A Great Rift's eruption seizes wild land,
+besieges held land (march = hold × (0.5 + Breach left/max)) or surges (+25% cap, `FactionState.Surges`) past 6 land
+eruptions a season (`Rift.Eruption`). They expand into any tier, are not scored, and a bordering faction chips an open
+Great Rift (never to 0) on its turn.
+
 **The catalogue** (Factions 2 step 1, 1.60.0): shared `FactionCatalog` replaces the hard-coded pair. Loops use
 `FactionCatalog.InPlay(cast, regions)` (the world's cast from the blob's optional `"Factions"`, default Grimjaw +
 Ashkin, then any other faction holding land); `FactionService` keeps the cast its last `RegionsAsync` read.
