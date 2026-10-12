@@ -253,6 +253,8 @@ namespace MuggaLuggaTD.Shared
         //   Lesser Rift while the hold stands, its lord otherwise. New letter kinds.
         // 1.60.0 - Factions 2, step 1: FactionCatalog replaces the hard-coded Grimjaw/Ashkin pair (no behaviour change,
         //   but generation now names the Grimjaw "The Grimjaw", as every other writer did, not "Grimjaw Clan").
-        public const string Version = "1.60.0";
+        // 1.61.0 - Invasions phase 6: the Riftborn faction (FactionId.Riftborn, catalogue row), eruptions seize, besiege or
+        //   surge (RiftRules.EruptionFor), the factions chip a Great Rift, no Great Rift in a season's last day.
+        public const string Version = "1.61.0";
     }
 }

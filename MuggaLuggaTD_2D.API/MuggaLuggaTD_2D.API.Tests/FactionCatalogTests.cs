@@ -12,10 +12,11 @@ namespace MuggaLuggaTD_2D.API.Tests;
 public class FactionCatalogTests
 {
     [Fact]
-    public void TheCatalogue_KnowsThePair_AndNothingElse()
+    public void TheCatalogue_KnowsThePair_AndTheRiftborn()
     {
         Assert.True(FactionCatalog.Has(FactionId.Grimjaw));
         Assert.True(FactionCatalog.Has(FactionId.Ashkin));
+        Assert.True(FactionCatalog.Has(FactionId.Riftborn));
         Assert.False(FactionCatalog.Has(FactionId.None));
         Assert.False(FactionCatalog.Has(FactionId.Player));
         Assert.Equal(new[] { FactionId.Grimjaw, FactionId.Ashkin }, FactionCatalog.DefaultCast);

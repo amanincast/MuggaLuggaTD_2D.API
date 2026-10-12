@@ -226,7 +226,8 @@ public class SeasonScoreService
         var factionScores = await _context.FactionSeasonScores.AsNoTracking()
             .Where(f => f.GameInstanceId == gameInstanceId && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
-        foreach (var faction in FactionCatalog.InPlay(null, regions))
+        // The Riftborn hold land but are not scored (Invasions R8).
+        foreach (var faction in FactionCatalog.InPlay(null, regions).Where(FactionCatalog.IsScored))
         {
             var score = factionScores.FirstOrDefault(f => f.Faction == faction);
             double total = score == null
@@ -633,7 +634,7 @@ public class SeasonScoreService
             .Where(f => f.GameInstanceId == instance.Id && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
 
-        foreach (var faction in FactionCatalog.InPlay(null, regions))
+        foreach (var faction in FactionCatalog.InPlay(null, regions).Where(FactionCatalog.IsScored))
         {
             if (rows.Any(r => r.Faction == faction)) continue;
 

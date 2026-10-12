@@ -33,4 +33,10 @@ public class FactionState
 
     /// <summary>When it last marched or built (phase 2 onwards).</summary>
     public DateTime? LastActedAtUtc { get; set; }
+
+    /// <summary>
+    /// Surges this season: Great Rifts that erupted once eruptions had handed the Riftborn all the land they give
+    /// (Invasions R8). Each raises the cap by <c>FactionStrengthRules.SurgeBonus</c>. Only the Riftborn have any.
+    /// </summary>
+    public int Surges { get; set; }
 }

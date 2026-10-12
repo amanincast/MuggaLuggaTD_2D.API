@@ -41,17 +41,22 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static double FortifyCost(double strength) => Math.Max(0, strength) * FortifyShare;
 
         /// <summary>
-        /// Whether a faction may claim this region: nobody holds it, it is hard country, and it does
-        /// not touch a capital.
+        /// Whether a faction may claim this region: nobody holds it, it is at least
+        /// <paramref name="minimumTier"/> (hard country, unless the faction says otherwise:
+        /// <see cref="FactionInfo.ExpandMinimumTier"/>), and it does not touch a capital.
         /// </summary>
-        public static bool IsExpandable(WorldRegionData region, IReadOnlyCollection<WorldRegionData> regions)
+        public static bool IsExpandable(WorldRegionData region, IReadOnlyCollection<WorldRegionData> regions,
+            int minimumTier = ExpandMinimumTier)
         {
             if (region == null) return false;
             if (region.Ownership != LocationOwnership.Neutral || !string.IsNullOrEmpty(region.OwnerUserId)) return false;
             if (FactionStrengthRules.IsFaction(region.Faction) || region.IsCapital) return false;
-            if (region.Tier < ExpandMinimumTier) return false;
+            if (region.Tier < minimumTier) return false;
             return !BordersCapital(region, regions);
         }
+
+        /// <summary>The least tier <paramref name="faction"/> expands into: 3 for the seated factions, 1 for the Riftborn.</summary>
+        public static int MinimumTierFor(FactionId faction) => FactionCatalog.Of(faction)?.ExpandMinimumTier ?? ExpandMinimumTier;
 
         /// <summary>
         /// A bordering region the faction may expand into, chosen by a roll in [0, 1). Null when its
@@ -60,8 +65,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static WorldRegionData PickExpansion(FactionId faction, IReadOnlyCollection<WorldRegionData> regions, double roll)
         {
             var open = new List<WorldRegionData>();
+            int minimumTier = MinimumTierFor(faction);
             foreach (var region in FactionDecisionRules.Bordering(faction, regions))
-                if (IsExpandable(region, regions)) open.Add(region);
+                if (IsExpandable(region, regions, minimumTier)) open.Add(region);
             if (open.Count == 0) return null;
 
             int at = (int)(Math.Max(0, Math.Min(0.999999, roll)) * open.Count);

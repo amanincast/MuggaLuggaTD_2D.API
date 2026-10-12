@@ -32,9 +32,20 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>Whether a world's generation may seat it. Factions that arrive by an event (the Riftborn) are not.</summary>
         public bool Seatable { get; }
 
+        /// <summary>Whether it stands in the season's standings. The Riftborn do not (Invasions R8).</summary>
+        public bool Scored { get; }
+
+        /// <summary>
+        /// The least tier of wild land it expands into (<see cref="Gameplay.FactionGrowthRules"/>): hard country for the
+        /// seated factions, any land at all for the Riftborn, who spread like a plague (R8).
+        /// </summary>
+        public int ExpandMinimumTier { get; }
+
         public FactionInfo(FactionId id, string name, string title, string lore, IReadOnlyList<BiomeType> homeBiomes,
-            float red, float green, float blue, int flag, bool seatable)
+            float red, float green, float blue, int flag, bool seatable, bool scored = true, int expandMinimumTier = 3)
         {
+            Scored = scored;
+            ExpandMinimumTier = expandMinimumTier;
             Id = id;
             Name = name;
             Title = title;
@@ -70,8 +81,16 @@ namespace MuggaLuggaTD.Shared.World
             "They dug into the mountain and the mountain let them stay.",
             new[] { BiomeType.Volcanic, BiomeType.Highland }, 0.62f, 0.26f, 0.24f, 3, seatable: true);
 
+        /// <summary>
+        /// Strangers from another realm (Invasions phase 6). A Great Rift's eruption seats them, so they are in play only
+        /// once they hold land. Violet, flying the tear (flag 4); not scored; they spread into wild land of any tier.
+        /// </summary>
+        public static readonly FactionInfo Riftborn = new FactionInfo(FactionId.Riftborn, "Riftborn", "The Riftborn",
+            "They came through the tear, and more keep coming.",
+            new BiomeType[0], 0.66f, 0.36f, 0.96f, 4, seatable: false, scored: false, expandMinimumTier: 1);
+
         /// <summary>Every faction, in the order the Powers panel lists them.</summary>
-        public static readonly IReadOnlyList<FactionInfo> All = new[] { Grimjaw, Ashkin };
+        public static readonly IReadOnlyList<FactionInfo> All = new[] { Grimjaw, Ashkin, Riftborn };
 
         /// <summary>The cast of a world that recorded none: the two factions every world had before the cast existed.</summary>
         public static readonly IReadOnlyList<FactionId> DefaultCast = new[] { FactionId.Grimjaw, FactionId.Ashkin };
@@ -92,6 +111,9 @@ namespace MuggaLuggaTD.Shared.World
 
         /// <summary>The faction's bare name ("Grimjaw"), or its enum name for an unknown one.</summary>
         public static string NameOf(FactionId faction) => Of(faction)?.Name ?? faction.ToString();
+
+        /// <summary>Whether the faction stands in the season's standings (<see cref="FactionInfo.Scored"/>).</summary>
+        public static bool IsScored(FactionId faction) => Of(faction)?.Scored ?? false;
 
         /// <summary>A recorded cast, cleaned (known factions, once each); <see cref="DefaultCast"/> when none was recorded.</summary>
         public static IReadOnlyList<FactionId> CastOrDefault(IEnumerable<FactionId> recorded)
