@@ -255,6 +255,8 @@ namespace MuggaLuggaTD.Shared
         //   but generation now names the Grimjaw "The Grimjaw", as every other writer did, not "Grimjaw Clan").
         // 1.61.0 - Invasions phase 6: the Riftborn faction (FactionId.Riftborn, catalogue row), eruptions seize, besiege or
         //   surge (RiftRules.EruptionFor), the factions chip a Great Rift, no Great Rift in a season's last day.
-        public const string Version = "1.61.0";
+        // 1.62.0 - Invasions phase 7: rifts roll all eight mutators (Grasping, Starless, Echoing, Fractured added), the
+        //   Rift Heart's Rift Lord (RiftRules.HasRiftLord, LordMutator, Naming.ForRiftLord).
+        public const string Version = "1.62.0";
     }
 }

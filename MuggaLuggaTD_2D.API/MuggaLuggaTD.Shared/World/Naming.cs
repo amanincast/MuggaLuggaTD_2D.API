@@ -497,6 +497,19 @@ namespace MuggaLuggaTD.Shared.World
             return $"{PlaceWord(biome, ref random)} {Pick(BandWords, ref random)}";
         }
 
+        private static readonly string[] LordTitles =
+            { "Hollow King", "Pale Duke", "Starless Queen", "Last Warden", "Torn Prince", "Grey Abbess", "Unlit Margrave", "Weeping Knight" };
+
+        private static readonly string[] LordRealms =
+            { "Elsewhere", "the Other Shore", "the Far Side", "the Unlit Realm", "Nowhen", "the Drowned Stars" };
+
+        /// <summary>A Rift Lord's name, fixed by its rift (Invasions §4.1): "The Hollow King of Elsewhere".</summary>
+        public static string ForRiftLord(string riftId)
+        {
+            var random = DeterministicRandom.ForSubject(Hash((riftId ?? "").ToLowerInvariant()), 0x6C6F7264);
+            return $"The {Pick(LordTitles, ref random)} of {Pick(LordRealms, ref random)}";
+        }
+
         /// <summary>A veteran worker's by-name, in their trade's voice ("the Steady Axe", "Stonejaw").</summary>
         private static readonly Dictionary<ResourceTrade, string[]> TradeByNames = new Dictionary<ResourceTrade, string[]>
         {

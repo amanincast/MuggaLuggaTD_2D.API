@@ -20,7 +20,9 @@ public record SeasonStandingEntry(
     double PointsPerHour,
     int RegionsHeld,
     /// <summary>Seasons this player has won, anywhere: the crown beside their name. Factions have none.</summary>
-    int Crowns = 0
+    int Crowns = 0,
+    /// <summary>Great Rifts sealed this season with this player among the top three: the Rift Warden mark (Invasions row 6).</summary>
+    int Wardens = 0
 );
 
 /// <summary>The table, plus the clock it is being played against.</summary>

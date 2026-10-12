@@ -255,7 +255,11 @@ faction per realm, and `FactionRaid` rows for what they do.
   posting, a Sell's price from taking); paid out when the holder seals it (`SettleContractAsync` in
   `RecordWinAsync`), handed back on every other ending (withdrawn, lord closed it, new lord, season end
   `ExpireContractsAsync`). Holds lapse in `AdvanceAsync` unless the holder's rift fight is under way.
-- **Not yet:** the Riftborn faction (phase 6); an erupted region is only marked. Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
+- **Polish** (phase 7, 1.62.0): all eight mutators roll (`RiftRules.Shuffled`); the Heart (`HeartIndex` 2) always has a
+  Rift Lord (`HasRiftLord`, `Naming.ForRiftLord`, `LordScale`, `LordMutator`; the fight itself is the client's).
+  `GET rifts` carries `Scars` (regions of this season's sealed Great Rifts), and `SeasonStandingEntry.Wardens` counts a
+  player's top-3 places on them (`RiftService.WardensAsync`, filled by `SeasonScoreService.StandingsAsync`).
+- Debug routes (Development): `rifts/debug/open|timeout|seal|breach`.
 
 ## The Forge (`ForgeRules`, `ForgeService`, shared 1.54.0, phase 2 1.56.0; spec: Forge)
 

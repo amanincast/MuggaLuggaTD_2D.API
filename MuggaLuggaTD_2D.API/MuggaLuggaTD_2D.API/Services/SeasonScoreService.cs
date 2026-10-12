@@ -201,6 +201,7 @@ public class SeasonScoreService
         var members = MembersOf(instance, regions);
         var names = await DisplayNamesAsync(members);
         var crowns = await CrownsAsync(members);
+        var wardens = await RiftService.WardensAsync(_context, gameInstanceId, instance.SeasonNumber);
 
         var rows = new List<StandingRow>();
 
@@ -261,7 +262,8 @@ public class SeasonScoreService
                 Math.Round(row.Raiding, 1),
                 Math.Round(row.Rate, 1),
                 row.RegionsHeld,
-                crowns.TryGetValue(row.UserId, out var won) ? won : 0));
+                crowns.TryGetValue(row.UserId, out var won) ? won : 0,
+                wardens.TryGetValue(row.UserId, out var warden) ? warden : 0));
         }
 
         return new SeasonStandingsResponse(
