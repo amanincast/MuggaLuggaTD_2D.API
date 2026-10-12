@@ -561,6 +561,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<double>("Strength")
                         .HasColumnType("double precision");
 
+                    b.Property<int>("Surges")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GameInstanceId", "Faction")
@@ -1834,6 +1837,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
                     b.Property<DateTime>("ClosesAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Eruption")
+                        .HasColumnType("integer");
 
                     b.Property<int>("EventNumber")
                         .HasColumnType("integer");

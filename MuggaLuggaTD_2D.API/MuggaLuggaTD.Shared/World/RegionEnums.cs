@@ -54,6 +54,9 @@ namespace MuggaLuggaTD.Shared.World
         None = 0,
         Player = 1,
         Ashkin = 2,
-        Grimjaw = 3
+        Grimjaw = 3,
+
+        /// <summary>Strangers from another realm, seated by a Great Rift's eruption (Invasions phase 6), never by generation.</summary>
+        Riftborn = 4
     }
 }

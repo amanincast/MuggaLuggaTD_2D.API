@@ -49,6 +49,9 @@ public class Rift : IRevisioned
     [MaxLength(450)]
     public string? SealedByUserId { get; set; }
 
+    /// <summary>What a Great Rift's eruption did (Invasions phase 6); None until it erupts.</summary>
+    public RiftEruption Eruption { get; set; }
+
     [ConcurrencyCheck]
     public long Revision { get; set; }
 }

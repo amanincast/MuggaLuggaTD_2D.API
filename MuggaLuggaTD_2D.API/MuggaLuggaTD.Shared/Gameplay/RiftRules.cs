@@ -63,6 +63,22 @@ namespace MuggaLuggaTD.Shared.Gameplay
         Fractured = 7,
     }
 
+    /// <summary>What a Great Rift's eruption did (Invasions R8). Appended only: stored and sent as integers.</summary>
+    public enum RiftEruption
+    {
+        /// <summary>Not erupted, or it found nothing to do.</summary>
+        None = 0,
+
+        /// <summary>Wild land: it became the Riftborn's at once.</summary>
+        Seized = 1,
+
+        /// <summary>Held land: the Riftborn laid siege to it, with an army sized by the Breach left.</summary>
+        Besieged = 2,
+
+        /// <summary>Past the cap on land eruptions give, or nothing to take: the Riftborn grew stronger instead.</summary>
+        Surged = 3,
+    }
+
     /// <summary>
     /// A Rift contract's two kinds (R7). <b>Sell:</b> the taker pays the lord for the right to close the rift.
     /// <b>Hire:</b> the lord pays the taker to close it. Either way the closer gets the chest.
@@ -205,9 +221,23 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return due > earliest ? due : earliest;
         }
 
+        /// <summary>
+        /// No Great Rift opens in a season's last day (R8): its eruption, a siege or new Riftborn land, needs time to
+        /// matter before the season ends.
+        /// </summary>
+        public static readonly TimeSpan QuietGreatAtSeasonEnd = TimeSpan.FromHours(24);
+
         /// <summary>Whether a rift opening at <paramref name="opensAt"/> falls inside the season's open part.</summary>
         public static bool InSeason(DateTime opensAt, DateTime seasonStart, DateTime seasonEnd) =>
             opensAt >= seasonStart + QuietAtSeasonStart && opensAt <= seasonEnd - QuietAtSeasonEnd;
+
+        /// <summary>
+        /// Whether a rift of <paramref name="kind"/> opening at <paramref name="opensAt"/> falls inside the season's open
+        /// part: a Great Rift's ends a day before the season does, a Lesser Rift's six hours.
+        /// </summary>
+        public static bool InSeason(RiftKind kind, DateTime opensAt, DateTime seasonStart, DateTime seasonEnd) =>
+            InSeason(opensAt, seasonStart, seasonEnd) &&
+            (kind != RiftKind.Great || opensAt <= seasonEnd - QuietGreatAtSeasonEnd);
 
         // -----------------------------------------------------------------
         // Where (§3.3, R4)
@@ -229,8 +259,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var capitals = regions.Where(r => r.IsCapital).Select(r => r.Hex).ToList();
             var held = regions.Where(IsPlayerHeld).Select(r => r.Hex).ToList();
 
+            // Not on land the Riftborn already hold (§3.3): a rift there would only feed them.
             bool Allowed(WorldRegionData r) =>
-                !r.IsCapital && !capitals.Any(c => HexCoord.Distance(c, r.Hex) <= 1);
+                !r.IsCapital && !capitals.Any(c => HexCoord.Distance(c, r.Hex) <= 1) &&
+                !FactionStrengthRules.Holds(FactionId.Riftborn, r);
 
             var allowed = regions.Where(Allowed).ToList();
             var inRings = allowed.Where(r =>
@@ -544,6 +576,94 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// has (R4: "the tint, a mutator").
         /// </summary>
         public static List<RiftMutator> AmbushMutators(string riftId) => Mutators(riftId, RiftKind.Lesser, 0);
+
+        // -----------------------------------------------------------------
+        // The eruption and the Riftborn (R8, R6 phase 6)
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Eruptions hand the Riftborn land (wild land seized, or held land besieged) this many times a season (Q4, tune).
+        /// Past it they surge instead. Their own spreading has no cap (R8, option b).
+        /// </summary>
+        public const int EruptionLandCap = 6;
+
+        /// <summary>
+        /// What erupting does to a region: wild land is seized, held land besieged, until eruptions have handed the
+        /// Riftborn <see cref="EruptionLandCap"/> regions this season; past that, or on land of their own, they surge.
+        /// <paramref name="besiegeable"/> is false for land a siege cannot be laid on now (already under one, or truce).
+        /// </summary>
+        public static RiftEruption EruptionFor(WorldRegionData region, int landErupted, bool besiegeable)
+        {
+            if (region == null) return RiftEruption.None;
+            if (landErupted >= EruptionLandCap || FactionStrengthRules.Holds(FactionId.Riftborn, region)) return RiftEruption.Surged;
+
+            bool player = region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId);
+            bool faction = FactionStrengthRules.IsFaction(region.Faction) && string.IsNullOrEmpty(region.OwnerUserId);
+            if (!player && !faction) return region.IsCapital ? RiftEruption.Surged : RiftEruption.Seized;
+            return besiegeable && !region.IsCapital ? RiftEruption.Besieged : RiftEruption.Surged;
+        }
+
+        /// <summary>Whether an eruption's outcome counts toward <see cref="EruptionLandCap"/>.</summary>
+        public static bool HandsLand(RiftEruption eruption) => eruption == RiftEruption.Seized || eruption == RiftEruption.Besieged;
+
+        /// <summary>
+        /// How large the eruption's siege is against a normal faction siege (R8): × (0.5 + Breach left ÷ Breach max), so a
+        /// nearly sealed rift brings half an army and an untouched one half again as much.
+        /// </summary>
+        public static double EruptionSiegeFactor(int breachLeft, int breachMax) =>
+            0.5 + (breachMax <= 0 ? 0 : Math.Max(0, Math.Min(1.0, breachLeft / (double)breachMax)));
+
+        /// <summary>
+        /// The eruption siege's march. A normal faction siege marches what the region holds against it (the hold, the
+        /// bar any siege must answer), so the march is that hold × <see cref="EruptionSiegeFactor"/>: an untouched rift
+        /// clears the gate with room to spare, a nearly sealed one falls below it and is turned away at the walls.
+        /// </summary>
+        public static double EruptionMarch(long hold, int breachLeft, int breachMax) =>
+            Math.Max(1, hold) * EruptionSiegeFactor(breachLeft, breachMax);
+
+        /// <summary>
+        /// A Riftborn region's fights (R8): the Riftborn people of another biome, rolled from the region rather than a
+        /// rift, so the same land always pours the same strangers through.
+        /// </summary>
+        public static string LandKey(string regionId) => "land:" + regionId;
+
+        /// <summary>Whose people a Riftborn region's fights are (<see cref="DonorBiome"/> of the land).</summary>
+        public static BiomeType LandDonorBiome(string regionId, BiomeType regionBiome) => DonorBiome(LandKey(regionId), regionBiome);
+
+        /// <summary>A Riftborn region's one mutator.</summary>
+        public static List<RiftMutator> LandMutators(string regionId) => Mutators(LandKey(regionId), RiftKind.Lesser, 0);
+
+        // -----------------------------------------------------------------
+        // The factions chip the rift (row 7, §3.2)
+        // -----------------------------------------------------------------
+
+        /// <summary>On each of its turns, a faction bordering an open Great Rift strikes at it with this chance…</summary>
+        public const double FactionChipChance = 1.0 / 6.0;
+
+        /// <summary>…taking this share of the Breach's whole off it…</summary>
+        public const double FactionChipShare = 0.02;
+
+        /// <summary>…and losing this share of its strength.</summary>
+        public const double FactionChipCost = 0.05;
+
+        /// <summary>What one strike takes off the Breach.</summary>
+        public static int FactionChip(int breachMax) => Math.Max(1, (int)Math.Round(breachMax * FactionChipShare));
+
+        /// <summary>The Breach after a strike. A faction never seals a rift: the last point is a player's to take.</summary>
+        public static int Chipped(int breach, int chip) => Math.Max(1, breach - Math.Max(0, chip));
+
+        /// <summary>
+        /// Whether <paramref name="faction"/> strikes at a rift in <paramref name="riftRegion"/>: it holds land on or beside
+        /// it, and is not the Riftborn, who are what comes out of it.
+        /// </summary>
+        public static bool Chips(FactionId faction, WorldRegionData riftRegion, IReadOnlyCollection<WorldRegionData> regions)
+        {
+            if (riftRegion == null || faction == FactionId.Riftborn || !FactionStrengthRules.IsFaction(faction)) return false;
+            if (FactionStrengthRules.Holds(faction, riftRegion)) return true;
+            foreach (var r in regions)
+                if (FactionStrengthRules.Holds(faction, r) && HexCoord.Distance(r.Hex, riftRegion.Hex) == 1) return true;
+            return false;
+        }
 
         // -----------------------------------------------------------------
 

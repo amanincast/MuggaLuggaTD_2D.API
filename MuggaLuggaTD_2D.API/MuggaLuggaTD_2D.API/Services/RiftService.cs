@@ -18,7 +18,7 @@ public record RiftView(
     DateTime OmenAt, DateTime OpensAt, DateTime ClosesAt, DateTime? InvadedAt,
     int BreachMax, int Breach, DateTime? SealedAt, string? SealedByName,
     int MyBreach, ItemRarityTypes? MyChest, bool MyChestOpened, List<RiftContributor> Top,
-    RiftContractView? Contract = null);
+    RiftContractView? Contract = null, RiftEruption Eruption = RiftEruption.None);
 
 /// <summary>The rifts a realm's map shows: every live one, and the recently ended ones.</summary>
 public record RiftsResponse(List<RiftView> Live, List<RiftView> Recent);
@@ -37,8 +37,8 @@ public enum RiftChestError { None, NoSuchRift, NoChest, AlreadyOpened, NothingTo
 /// (<see cref="RecordWinAsync"/>), and the win that empties it seals it and pays.
 ///
 /// <para>Advanced once a minute by the <see cref="SiegeScheduler"/>, and by every read of a realm's
-/// rifts first, so a restart never skips one. Phase 1 only marks an erupted or invaded region; the
-/// Riftborn faction and the invasion's ambushes come in later phases.</para>
+/// rifts first, so a restart never skips one. An erupting Great Rift hands its region to the Riftborn faction
+/// (<see cref="FactionService.EruptAsync"/>, phase 6): wild land seized, held land besieged, or past the cap a surge.</para>
 /// </summary>
 public partial class RiftService
 {
@@ -56,6 +56,7 @@ public partial class RiftService
     private readonly LetterService? _letters;
     private readonly SeasonScoreService? _scores;
     private readonly GoldService? _gold;
+    private readonly FactionService? _factions;
 
     private static readonly Random Dice = new();
 
@@ -63,8 +64,10 @@ public partial class RiftService
 
     public RiftService(ApplicationDbContext context, IGameContentProvider content, ItemLedgerService items,
         ISessionLog sessionLog, ILogger<RiftService> logger, IHubContext<GameHub> hub, RealmPresence presence,
-        WarLogService? warLog = null, LetterService? letters = null, SeasonScoreService? scores = null, GoldService? gold = null)
+        WarLogService? warLog = null, LetterService? letters = null, SeasonScoreService? scores = null, GoldService? gold = null,
+        FactionService? factions = null)
     {
+        _factions = factions;
         _context = context;
         _content = content;
         _items = items;
@@ -220,8 +223,32 @@ public partial class RiftService
             return false;
         }
 
+        if (rift.Stage == RiftStage.Erupted) await EruptAsync(rift);
         await AnnounceStageAsync(rift, was);
         return true;
+    }
+
+    /// <summary>
+    /// What an erupted Great Rift does to its region (R8): wild land becomes the Riftborn's, held land gets a Riftborn
+    /// siege sized by the Breach left, and past the season's cap on land from eruptions the Riftborn surge instead.
+    /// Only the request that moved the rift to Erupted gets here, so it happens once.
+    /// </summary>
+    private async Task EruptAsync(Rift rift)
+    {
+        if (_factions == null) return;
+        try
+        {
+            int landErupted = await _context.Rifts.AsNoTracking().CountAsync(r =>
+                r.GameInstanceId == rift.GameInstanceId && r.SeasonNumber == rift.SeasonNumber && r.Id != rift.Id &&
+                (r.Eruption == RiftEruption.Seized || r.Eruption == RiftEruption.Besieged));
+            rift.Eruption = await _factions.EruptAsync(rift.GameInstanceId, rift.RegionId, rift.Breach, rift.BreachMax,
+                landErupted, rift.ClosesAt);
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "The eruption of rift {Rift} could not seat the Riftborn.", rift.Id);
+        }
     }
 
     /// <summary>The war log, letters and broadcast for a rift that has just moved from <paramref name="was"/>.</summary>
@@ -240,7 +267,8 @@ public partial class RiftService
             if (rift.Kind == RiftKind.Great && rift.Stage == RiftStage.Open && was == RiftStage.Omen)
                 await _warLog.RecordAsync(rift.GameInstanceId, WarLogKind.RiftOpened, null, null, rift.RegionId, "Great", at);
             if (rift.Stage == RiftStage.Erupted)
-                await _warLog.RecordAsync(rift.GameInstanceId, WarLogKind.RiftErupted, null, null, rift.RegionId, "Great", at);
+                await _warLog.RecordAsync(rift.GameInstanceId, WarLogKind.RiftErupted, null, null, rift.RegionId,
+                    rift.Eruption == RiftEruption.None ? "Great" : rift.Eruption.ToString(), at);
             if (rift.Stage == RiftStage.Invaded)
                 await _warLog.RecordAsync(rift.GameInstanceId, WarLogKind.RegionInvaded, null, rift.TargetUserId, rift.RegionId, "Lesser", at);
         }
@@ -248,6 +276,16 @@ public partial class RiftService
         if (_letters != null && rift.Stage == RiftStage.Invaded && rift.TargetUserId != null)
             await _letters.SendAsync(rift.GameInstanceId, rift.TargetUserId, LetterKind.RegionInvaded, at,
                 $"rift:{rift.Id}:invaded", rift.RegionId, rift.Id.ToString());
+
+        // Those told it was coming hear what it did (a besieged lord also has the siege's own letter).
+        if (_letters != null && rift.Stage == RiftStage.Erupted && rift.Eruption != RiftEruption.None)
+        {
+            var world = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == rift.GameInstanceId);
+            if (world != null)
+                foreach (var neighbour in NeighboursOf(rift.RegionId, WorldRegionBlob.ReadAllRegions(JsonNode.Parse(world.GameData))))
+                    await _letters.SendAsync(rift.GameInstanceId, neighbour, LetterKind.RiftErupted, at,
+                        $"rift:{rift.Id}:erupted", rift.RegionId, rift.Id.ToString(), detail: rift.Eruption.ToString());
+        }
 
         _sessionLog.Log("RIFT", $"realm={rift.GameInstanceId} rift={rift.Id} kind={rift.Kind} region={rift.RegionId} {was}->{rift.Stage}");
         await BroadcastAsync(rift);
@@ -275,7 +313,7 @@ public partial class RiftService
         if (now < due - RiftRules.OmenLeadOf(kind)) return null;
 
         var opens = RiftRules.OpensAt(kind, due, now);
-        if (!RiftRules.InSeason(opens, instance.SeasonStartedAt, instance.SeasonEndsAt)) return null;
+        if (!RiftRules.InSeason(kind, opens, instance.SeasonStartedAt, instance.SeasonEndsAt)) return null;
 
         WorldRegionData? region;
         if (kind == RiftKind.Great)
@@ -546,7 +584,7 @@ public partial class RiftService
             return new RiftView(r.Id, r.Kind, r.Stage, r.RegionId, r.TargetUserId, NameOf(r.TargetUserId),
                 Utc(r.OmenAt), Utc(r.OpensAt), Utc(r.ClosesAt), Utc(r.InvadedAt),
                 r.BreachMax, r.Breach, Utc(r.SealedAt), NameOf(r.SealedByUserId),
-                me?.Breach ?? 0, me?.ChestRarity, me?.ChestOpenedAt != null, top, ContractOf(r));
+                me?.Breach ?? 0, me?.ChestRarity, me?.ChestOpenedAt != null, top, ContractOf(r), r.Eruption);
         }
 
         RiftContractView? ContractOf(Rift r)

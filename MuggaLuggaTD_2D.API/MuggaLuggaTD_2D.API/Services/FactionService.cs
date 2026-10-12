@@ -95,7 +95,7 @@ public partial class FactionService
         var rows = await SettleAsync(gameInstanceId, regions, now);
         var row = rows.First(r => r.Faction == faction);
         double before = row.Strength;
-        row.Strength = FactionStrengthRules.BankRansom(row.Strength, gold, FactionStrengthRules.Cap(faction, regions));
+        row.Strength = FactionStrengthRules.BankRansom(row.Strength, gold, CapOf(row, regions));
         await _context.SaveChangesAsync();
 
         _sessionLog.Log("FACTION-RANSOM",
@@ -147,7 +147,7 @@ public partial class FactionService
 
         foreach (var row in rows.Where(r => all || r.Faction == only))
         {
-            double cap = FactionStrengthRules.Cap(row.Faction, regions);
+            double cap = CapOf(row, regions);
 
             if (request.Readiness.HasValue)
                 row.Strength = Math.Clamp(request.Readiness.Value, 0, 1) * cap;
@@ -247,10 +247,13 @@ public partial class FactionService
         var mustering = await MusteringAsync(gameInstanceId);
         var besieged = await BesiegedRegionsAsync(gameInstanceId);
 
+        // A faction beside an open Great Rift strikes at it now and then (row 7), win or lose its own turn.
+        await ChipTheRiftAsync(gameInstanceId, rows, regions, utcNow, done);
+
         foreach (var row in rows.OrderBy(_ => _random.Next()))
         {
             var temperament = TemperamentOf(row.Faction);
-            double cap = FactionStrengthRules.Cap(row.Faction, regions);
+            double cap = CapOf(row, regions);
             if (cap <= 0) continue;
 
             bool forced = force == row.Faction;
@@ -532,6 +535,10 @@ public partial class FactionService
         _content?.Factions?.FirstOrDefault(f => f.Id == faction)
         ?? new FactionTemperament { Id = faction, Name = FactionCatalog.TitleOf(faction) };
 
+    /// <summary>A faction's cap: what its land supports, raised by any surges (the Riftborn's, Invasions R8).</summary>
+    private static double CapOf(FactionState row, IReadOnlyCollection<WorldRegionData> regions) =>
+        FactionStrengthRules.Cap(row.Faction, regions, row.Surges);
+
     /// <summary>The world's cast, as the last <see cref="RegionsAsync"/> read it; the old pair until then.</summary>
     private IReadOnlyList<FactionId>? _cast;
 
@@ -545,8 +552,8 @@ public partial class FactionService
 
         foreach (var faction in InPlay(regions))
         {
-            double cap = FactionStrengthRules.Cap(faction, regions);
             var row = rows.FirstOrDefault(r => r.Faction == faction);
+            double cap = row == null ? FactionStrengthRules.Cap(faction, regions) : CapOf(row, regions);
             if (row == null)
             {
                 row = new FactionState
@@ -588,7 +595,7 @@ public partial class FactionService
         foreach (var faction in InPlay(regions))
         {
             var row = rows.First(r => r.Faction == faction);
-            double cap = FactionStrengthRules.Cap(faction, regions);
+            double cap = CapOf(row, regions);
             bool bloodied = FactionStrengthRules.IsBloodied(row.BloodiedUntilUtc, now);
             list.Add(new FactionStrengthResponse(
                 faction.ToString(),

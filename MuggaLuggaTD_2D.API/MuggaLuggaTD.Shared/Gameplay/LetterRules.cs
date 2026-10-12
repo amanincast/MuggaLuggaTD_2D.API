@@ -45,6 +45,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>To whoever got held gold back, or lost a hold that ran out. Detail "{kind}:{gold back}:{why}".</summary>
         RiftContractEnded,
+
+        /// <summary>
+        /// A Great Rift on or beside your land erupted (Invasions phase 6). Subject: the rift. Detail: what it did, a
+        /// <see cref="RiftEruption"/> name ("Seized", "Besieged", "Surged").
+        /// </summary>
+        RiftErupted,
     }
 
     /// <summary>The Letters book's filter chips.</summary>

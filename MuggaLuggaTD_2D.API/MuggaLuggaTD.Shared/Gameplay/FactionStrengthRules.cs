@@ -79,6 +79,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return Math.Round(cap);
         }
 
+        /// <summary>
+        /// What each surge adds to a faction's cap: a Great Rift erupting once the Riftborn have had all the land
+        /// eruptions give (Invasions R8, "+25% strength instead"). It lasts the season, and the strength comes at once.
+        /// </summary>
+        public const double SurgeBonus = 0.25;
+
+        /// <summary>The cap with <paramref name="surges"/> surges on top of what the land supports.</summary>
+        public static double Cap(FactionId faction, IEnumerable<WorldRegionData> regions, int surges) =>
+            Math.Round(Cap(faction, regions) * (1.0 + SurgeBonus * Math.Max(0, surges)));
+
         /// <summary>How many regions <paramref name="faction"/> holds.</summary>
         public static int RegionsHeld(FactionId faction, IEnumerable<WorldRegionData> regions)
         {

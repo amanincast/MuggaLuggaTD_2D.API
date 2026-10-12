@@ -40,7 +40,7 @@ public class ShippedFactionDataTests
         var content = new GameContentProvider(new ContentRoot { ContentRootPath = ApiProject() },
             NullLogger<GameContentProvider>.Instance);
 
-        foreach (var faction in FactionCatalog.DefaultCast)
+        foreach (var faction in FactionCatalog.All.Select(f => f.Id))
         {
             var temperament = Assert.Single(content.Factions, f => f.Id == faction);
             Assert.False(string.IsNullOrWhiteSpace(temperament.Name));
@@ -54,5 +54,11 @@ public class ShippedFactionDataTests
         var ashkin = content.Factions.Single(f => f.Id == FactionId.Ashkin);
         Assert.True(grimjaw.Raid > ashkin.Raid);
         Assert.True(ashkin.Fortify > grimjaw.Fortify);
+
+        // The Riftborn spread like a plague (Invasions R8): expanding is their strongest lean, and they act most often.
+        var riftborn = content.Factions.Single(f => f.Id == FactionId.Riftborn);
+        Assert.True(riftborn.Expand > riftborn.Raid && riftborn.Expand > riftborn.Siege);
+        Assert.True(riftborn.Aggression > grimjaw.Aggression);
+        Assert.Equal(0, riftborn.Fortify);
     }
 }

@@ -26,6 +26,19 @@
       "Siege": 0.3,
       "Expand": 0.1,
       "Fortify": 0.25
+    },
+    {
+      // Seated by a Great Rift's eruption, never by generation (Invasions phase 6). They spread like a plague (Mike,
+      // 2026-10-11): into wild land of any tier, leaning hard toward it. Expanding costs strength, so fighting them
+      // back slows the spread. They never fortify: they did not come to stay safe.
+      "Id": "Riftborn",
+      "Name": "The Riftborn",
+      "Lean": "spreads like a plague",
+      "Aggression": 2.0,
+      "Raid": 0.3,
+      "Siege": 0.2,
+      "Expand": 0.5,
+      "Fortify": 0
     }
   ]
 }
