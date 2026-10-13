@@ -261,6 +261,10 @@ namespace MuggaLuggaTD.Shared
         //   beaten there counts twice for a quest), PlagueOfRats (caves and ruins +25% enemies, their clears pay +25%) and
         //   Pilgrimage (both of its wandering givers out); a fair's Gather quests pay +50% gold. Travel times, quest
         //   boards and clear pay change.
-        public const string Version = "1.63.0";
+        // 1.64.0 - Factions 2, step 2. Four new factions (Drowned Court, Bone Synod, Thornwood Pact, Horned Kin); a new
+        //   world draws a cast of three (FactionCatalog.DrawCast, always a raider) and seats them (each holds 3+ regions);
+        //   fights and Slay quests in a faction's land draw its peoples (QuestRules.PeoplesOf with a faction). The Ashkin fly
+        //   the swallowtail. Existing worlds keep the Grimjaw and Ashkin until their next season reset.
+        public const string Version = "1.64.0";
     }
 }

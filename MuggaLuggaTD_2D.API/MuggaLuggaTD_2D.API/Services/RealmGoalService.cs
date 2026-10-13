@@ -67,7 +67,7 @@ public class RealmGoalService
 
         var regions = WorldRegionBlob.ReadAllRegions(JsonNode.Parse(world.GameData));
         var peoples = regions
-            .SelectMany(r => QuestRules.PeoplesOf(r.Biome, _content.EnemyPeoples))
+            .SelectMany(r => QuestRules.PeoplesOf(r.Biome, _content.EnemyPeoples, FactionCatalog.PeopleHolderOf(r)))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 

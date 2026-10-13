@@ -244,17 +244,22 @@ public class QuestService
         }
     }
 
-    /// <summary>The kills a claim reports, held to the fight's biome and plan (<see cref="QuestRules.ClampKills"/>).</summary>
-    public IReadOnlyDictionary<string, int> ClampKills(IDictionary<string, int>? reported, BiomeType biome, int tier, LocationType? site)
+    /// <summary>
+    /// The kills a claim reports, held to the fight's peoples and plan (<see cref="QuestRules.ClampKills"/>): the biome's,
+    /// or in a faction's land its own (<paramref name="faction"/>, Factions 2 §3.3).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> ClampKills(IDictionary<string, int>? reported, BiomeType biome, int tier, LocationType? site,
+        FactionId faction = FactionId.None)
     {
         if (reported == null || reported.Count == 0) return new Dictionary<string, int>();
-        var peoples = QuestRules.PeoplesOf(biome, _content.EnemyPeoples);
+        var peoples = QuestRules.PeoplesOf(biome, _content.EnemyPeoples, faction);
         return QuestRules.ClampKills(reported, peoples, RunRewardCalculator.PlannedEnemies(Math.Max(1, tier), _content.RunTuning, site));
     }
 
     /// <summary>A fight auto mode fought: its kills estimated from the plan at auto mode's share.</summary>
-    public IReadOnlyDictionary<string, int> EstimatedKills(BiomeType biome, int tier, LocationType? site, double share) =>
-        QuestRules.EstimatedKills(QuestRules.PeoplesOf(biome, _content.EnemyPeoples),
+    public IReadOnlyDictionary<string, int> EstimatedKills(BiomeType biome, int tier, LocationType? site, double share,
+        FactionId faction = FactionId.None) =>
+        QuestRules.EstimatedKills(QuestRules.PeoplesOf(biome, _content.EnemyPeoples, faction),
             RunRewardCalculator.PlannedEnemies(Math.Max(1, tier), _content.RunTuning, site), share);
 
     /// <summary>Debug, Development only: a fresh set now, as if every quest on the board had been handed in.</summary>

@@ -57,6 +57,12 @@ namespace MuggaLuggaTD.Shared.World
         Grimjaw = 3,
 
         /// <summary>Strangers from another realm, seated by a Great Rift's eruption (Invasions phase 6), never by generation.</summary>
-        Riftborn = 4
+        Riftborn = 4,
+
+        // Factions 2, step 2: drawn into a world's cast of three at generation (FactionCatalog.DrawCast).
+        DrownedCourt = 5,
+        BoneSynod = 6,
+        Thornwood = 7,
+        HornedKin = 8
     }
 }

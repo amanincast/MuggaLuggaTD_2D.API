@@ -887,7 +887,8 @@ public class AutoFightService
                 ClearedSiteId = counts && site != null && site.IsFightable ? site.SiteId : null,
                 AmbushWon = counts && report.Ambush,
                 Kills = new Dictionary<string, int>(_quests.EstimatedKills(region.Biome,
-                    site?.Tier ?? AmbushRules.SkirmishTier, site?.Type, AutoFightRules.RewardShare))
+                    site?.Tier ?? AmbushRules.SkirmishTier, site?.Type, AutoFightRules.RewardShare,
+                    FactionCatalog.PeopleHolderOf(region)))
             });
         }
     }

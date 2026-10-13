@@ -226,7 +226,8 @@ public class WorldProvisioningService
         // rather than the same one it just finished, which would make a reset a memory wipe.
         int seed = SeedFor(gameInstanceId, instance?.SeasonNumber ?? 1);
         var regions = WorldMapGenerator.Generate(seed, seats);
-        return WorldRegionBlob.BuildWorld(seed, regions);
+        // The cast the generator seated (Factions 2): three drawn from the seed, recorded so every reader agrees.
+        return WorldRegionBlob.BuildWorld(seed, regions, WorldMapGenerator.CastFor(seed, regions));
     }
 
     /// <summary>

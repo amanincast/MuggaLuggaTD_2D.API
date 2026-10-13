@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MuggaLuggaTD.Shared.World
 {
@@ -53,10 +54,21 @@ namespace MuggaLuggaTD.Shared.World
 
             SeatPlayers(regions, players, ref random);
             SoftenAroundCapitals(regions);
-            SeatFactions(regions, ref random);
+            SeatFactions(regions, ref random, CastFor(worldSeed, regions), worldSeed);
 
             return regions;
         }
+
+        /// <summary>
+        /// The world's cast of three (Factions 2 §3.1), drawn from its seed and its hard country. The same for the regions
+        /// <see cref="Generate"/> returns as for the ones it seated, since seating changes no biome or tier; the server
+        /// records it in the world (<c>"Factions"</c>).
+        /// </summary>
+        public static IReadOnlyList<FactionId> CastFor(int worldSeed, IReadOnlyList<WorldRegionData> regions)
+            => FactionCatalog.DrawCast(worldSeed, regions);
+
+        /// <summary>Every faction of the cast holds at least this much land when the world begins (spec §3.2).</summary>
+        public const int MinimumFactionRegions = 3;
 
         /// <summary>A player to seat in the world.</summary>
         public class PlayerSeat
@@ -226,30 +238,86 @@ namespace MuggaLuggaTD.Shared.World
         }
 
         /// <summary>
-        /// Hands the outer ring's harder regions to the NPC factions. Static flavour owners for now:
-        /// they hold ground and defend it, but nothing makes them act. World events that let them
-        /// threaten and take player territory come later.
+        /// Hands the outer ring's harder regions to the world's cast (Factions 2 §3.2). Roughly half the eligible ground
+        /// (neutral, tier 3 and up, not on a seat's doorstep) gets a banner, rolled from the world's stream exactly as
+        /// before the cast existed, so the same regions are bannered with the same entrenchment. Who holds each:
+        /// <list type="number">
+        /// <item>a cast faction whose home the biome is (nearest to its own land when several);</item>
+        /// <item>otherwise the cast faction whose land is nearest, so blocs form;</item>
+        /// <item>then every faction is brought up to <see cref="MinimumFactionRegions"/> from the nearest unbannered
+        /// eligible land (its home biomes first), rolled from the cast's own stream so nothing else moves.</item>
+        /// </list>
         /// </summary>
-        private static void SeatFactions(List<WorldRegionData> regions, ref DeterministicRandom random)
+        private static void SeatFactions(List<WorldRegionData> regions, ref DeterministicRandom random,
+            IReadOnlyList<FactionId> cast, int worldSeed)
         {
+            cast = FactionCatalog.CastOrDefault(cast);
+            var eligible = new List<WorldRegionData>();
+            var bannered = new List<WorldRegionData>();
             foreach (var region in regions)
             {
                 if (region.Ownership != LocationOwnership.Neutral) continue;
                 if (region.Tier < 3) continue;
                 if (BordersCapital(region, regions)) continue; // no banner on a seat's doorstep
+                eligible.Add(region);
 
                 // Roughly half the dangerous ground has a banner over it; the rest is wild.
                 if (!random.Chance(5000)) continue;
-
-                // To the cast faction whose home the biome is, else the cast's first (FactionCatalog.SeatFor).
-                var faction = FactionCatalog.SeatFor(region.Biome, FactionCatalog.DefaultCast);
-
-                region.Ownership = LocationOwnership.Enemy;
-                region.Faction = faction;
-                region.OwnerDisplayName = FactionCatalog.TitleOf(faction);
                 region.Entrenchment = random.Next(1, 4);
-                region.Resolve = 100;
+                bannered.Add(region);
             }
+
+            var held = cast.ToDictionary(f => f, _ => new List<HexCoord>());
+            int Nearest(FactionId f, HexCoord hex) => held[f].Count == 0 ? int.MaxValue : NearestDistance(hex, held[f]);
+            FactionId Pick(IEnumerable<FactionId> candidates, HexCoord hex) =>
+                candidates.OrderBy(f => Nearest(f, hex)).ThenBy(f => IndexIn(cast, f)).First();
+
+            // Home biomes first, in spiral order, so each faction's first land is in its own country.
+            foreach (var region in bannered)
+            {
+                var homes = cast.Where(f => FactionCatalog.Of(f)?.HomeBiomes.Contains(region.Biome) == true).ToList();
+                if (homes.Count == 0) continue;
+                Seat(region, Pick(homes, region.Hex), held);
+            }
+            foreach (var region in bannered.Where(r => r.Faction == FactionId.None))
+            {
+                var anyone = cast.Where(f => held[f].Count > 0).ToList();
+                Seat(region, anyone.Count > 0 ? Pick(anyone, region.Hex) : cast[0], held);
+            }
+
+            // Every faction of the cast holds some land from the start.
+            var extra = DeterministicRandom.ForSubject((ulong)(uint)worldSeed, Naming.Hash("faction-seats"));
+            foreach (var faction in cast)
+            {
+                var info = FactionCatalog.Of(faction);
+                while (held[faction].Count < MinimumFactionRegions)
+                {
+                    var next = eligible
+                        .Where(r => r.Faction == FactionId.None)
+                        .OrderBy(r => held[faction].Count == 0 ? (info?.HomeBiomes.Contains(r.Biome) == true ? 0 : 1) : 0)
+                        .ThenBy(r => Nearest(faction, r.Hex))
+                        .ThenBy(r => r.RegionId, StringComparer.Ordinal)
+                        .FirstOrDefault();
+                    if (next == null) break;
+                    next.Entrenchment = extra.Next(1, 4);
+                    Seat(next, faction, held);
+                }
+            }
+        }
+
+        private static void Seat(WorldRegionData region, FactionId faction, Dictionary<FactionId, List<HexCoord>> held)
+        {
+            region.Ownership = LocationOwnership.Enemy;
+            region.Faction = faction;
+            region.OwnerDisplayName = FactionCatalog.TitleOf(faction);
+            region.Resolve = 100;
+            held[faction].Add(region.Hex);
+        }
+
+        private static int IndexIn(IReadOnlyList<FactionId> cast, FactionId faction)
+        {
+            for (int i = 0; i < cast.Count; i++) if (cast[i] == faction) return i;
+            return int.MaxValue;
         }
     }
 }
