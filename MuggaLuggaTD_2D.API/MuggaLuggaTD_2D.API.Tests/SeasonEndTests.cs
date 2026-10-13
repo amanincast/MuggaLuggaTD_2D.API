@@ -80,7 +80,9 @@ public class SeasonEndTests : IDisposable
 
         double rate = SeasonEndRules.RateForFaction(FactionId.Grimjaw, new[] { mine, theirs, player });
 
-        Assert.Equal(SeasonScoreRules.RateFor(mine), rate, 3);
+        // A quarter of what a lord would earn for it (Factions 2 decision 5).
+        Assert.Equal(SeasonScoreRules.RateFor(mine) * SeasonEndRules.FactionScoreShare, rate, 3);
+        Assert.Equal(0.25, SeasonEndRules.FactionScoreShare);
         Assert.Equal(FactionId.Grimjaw, SeasonEndRules.FactionOf(SeasonEndRules.FactionScoreId(FactionId.Grimjaw)));
         Assert.Equal(FactionId.None, SeasonEndRules.FactionOf(TestIds.Player));
     }
@@ -99,7 +101,7 @@ public class SeasonEndTests : IDisposable
         await Seasons.SettleAllAsync(realm, at: SeasonStart.AddHours(10));
 
         var score = await _db.FactionSeasonScores.AsNoTracking().SingleAsync(f => f.Faction == FactionId.Grimjaw);
-        Assert.Equal(SeasonScoreRules.RateFor(grimjaw) * 10, score.SettledPoints, 3);
+        Assert.Equal(SeasonScoreRules.RateFor(grimjaw) * SeasonEndRules.FactionScoreShare * 10, score.SettledPoints, 3);
 
         var standings = await Seasons.StandingsAsync(realm);
         var row = standings.Standings.Single(s => s.UserId == "faction:Grimjaw");
@@ -107,6 +109,26 @@ public class SeasonEndTests : IDisposable
         Assert.Equal(1, row.RegionsHeld);
         Assert.Equal(0, row.ClearingPoints);
         Assert.Contains(standings.Standings, s => s.UserId == "faction:Ashkin");
+    }
+
+    [Fact]
+    public async Task TheStandings_ListTheWorldsCast_EvenBroken_AndNoOtherFaction()
+    {
+        // A world of three: the Drowned Court hold land, the Bone Synod have lost theirs, the Horned Kin hold one region.
+        var realm = await SeedAsync(new[] { FactionId.DrownedCourt, FactionId.BoneSynod, FactionId.HornedKin },
+            TestWorld.OwnedBy(TestIds.Player, "p"), Held(FactionId.DrownedCourt, "d"), Held(FactionId.HornedKin, "h"));
+
+        await Seasons.SettleAllAsync(realm, at: SeasonStart);
+        var standings = await Seasons.StandingsAsync(realm);
+
+        // Neither of the old pair: they are not in this world.
+        Assert.DoesNotContain(standings.Standings, s => s.UserId == "faction:Grimjaw" || s.UserId == "faction:Ashkin");
+        Assert.Contains(standings.Standings, s => s.UserId == "faction:DrownedCourt" && s.RegionsHeld == 1);
+
+        // Broken: still in the race, holding nothing and earning nothing.
+        var broken = standings.Standings.Single(s => s.UserId == "faction:BoneSynod");
+        Assert.Equal(0, broken.RegionsHeld);
+        Assert.Equal(0, broken.PointsPerHour);
     }
 
     [Fact]
@@ -148,7 +170,8 @@ public class SeasonEndTests : IDisposable
         // The crown follows the player into the next season's table.
         var next = await Seasons.StandingsAsync(realm);
         Assert.Equal(1, next.Standings.Single(s => s.UserId == TestIds.Player).Crowns);
-        Assert.Equal(0, next.Standings.Single(s => s.UserId == "faction:Grimjaw").Crowns);
+        // The reset drew the new world its own cast, which need not hold the Grimjaw; no faction wears a crown.
+        Assert.All(next.Standings.Where(s => s.UserId.StartsWith("faction:")), s => Assert.Equal(0, s.Crowns));
     }
 
     [Fact]
@@ -295,6 +318,18 @@ public class SeasonEndTests : IDisposable
         var region = TestWorld.Region(id, q, r, tier: 3);
         region.Entrenchment = 0;
         return region;
+    }
+
+    /// <summary>As <see cref="SeedAsync(WorldRegionData[])"/>, recording <paramref name="cast"/> as the world's factions.</summary>
+    private async Task<Guid> SeedAsync(FactionId[] cast, params WorldRegionData[] regions)
+    {
+        var realm = await SeedAsync(regions);
+        var row = await _db.WorldViewGameData.FirstAsync(w => w.GameInstanceId == realm);
+        var world = System.Text.Json.Nodes.JsonNode.Parse(row.GameData)!;
+        world["Factions"] = new System.Text.Json.Nodes.JsonArray(cast.Select(f => (System.Text.Json.Nodes.JsonNode)(int)f).ToArray());
+        row.GameData = world.ToJsonString();
+        await _db.SaveChangesAsync();
+        return realm;
     }
 
     private async Task<Guid> SeedAsync(params WorldRegionData[] regions)

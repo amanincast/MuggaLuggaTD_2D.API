@@ -269,6 +269,8 @@ namespace MuggaLuggaTD.Shared
         //   raid lands, the Ashkin's fortify restores 25 resolve, the Drowned Court's won siege floods a neighbour (-20),
         //   the Bone Synod's lost land raids its new holder once, the Thornwood expand into tier 2, the Horned Kin
         //   stampede past the raid cooldown once a day.
-        public const string Version = "1.65.0";
+        // 1.66.0 - Factions 2, step 4. A faction scores a quarter of the players' rate for its land
+        //   (SeasonEndRules.FactionScoreShare), and the standings list only the world's cast.
+        public const string Version = "1.66.0";
     }
 }
