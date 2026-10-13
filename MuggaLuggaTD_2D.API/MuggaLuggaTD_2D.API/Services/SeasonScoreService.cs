@@ -118,7 +118,7 @@ public class SeasonScoreService
 
         // The factions score their land beside the players, settled to the same instant, so a region
         // changing hands between them moves both scores at once (season-end.md §2).
-        foreach (var faction in await FactionScoresForAsync(instance, regions, until))
+        foreach (var faction in await FactionScoresForAsync(instance, WorldRegionBlob.ReadCast(world), regions, until))
         {
             SettleFaction(faction, until);
             faction.PointsPerHour = SeasonEndRules.RateForFaction(faction.Faction, regions);
@@ -227,8 +227,9 @@ public class SeasonScoreService
         var factionScores = await _context.FactionSeasonScores.AsNoTracking()
             .Where(f => f.GameInstanceId == gameInstanceId && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
-        // The Riftborn hold land but are not scored (Invasions R8).
-        foreach (var faction in FactionCatalog.InPlay(null, regions).Where(FactionCatalog.IsScored))
+        // The world's cast, and any other faction holding land; the Riftborn hold land but are not scored (Invasions R8).
+        // A faction of the cast that has lost every region stays, at 0/hr: the client reads it as BROKEN.
+        foreach (var faction in FactionCatalog.InPlay(WorldRegionBlob.ReadCast(world), regions).Where(FactionCatalog.IsScored))
         {
             var score = factionScores.FirstOrDefault(f => f.Faction == faction);
             double total = score == null
@@ -630,13 +631,13 @@ public class SeasonScoreService
     /// land was not being counted before.
     /// </summary>
     private async Task<List<FactionSeasonScore>> FactionScoresForAsync(
-        GameInstance instance, IReadOnlyCollection<WorldRegionData> regions, DateTime until)
+        GameInstance instance, IReadOnlyList<FactionId> cast, IReadOnlyCollection<WorldRegionData> regions, DateTime until)
     {
         var rows = await _context.FactionSeasonScores
             .Where(f => f.GameInstanceId == instance.Id && f.SeasonNumber == instance.SeasonNumber)
             .ToListAsync();
 
-        foreach (var faction in FactionCatalog.InPlay(null, regions).Where(FactionCatalog.IsScored))
+        foreach (var faction in FactionCatalog.InPlay(cast, regions).Where(FactionCatalog.IsScored))
         {
             if (rows.Any(r => r.Faction == faction)) continue;
 

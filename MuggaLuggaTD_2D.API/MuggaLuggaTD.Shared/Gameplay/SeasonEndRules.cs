@@ -61,7 +61,17 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return chest;
         }
 
-        /// <summary>What a faction's land earns it an hour: the players' rates over the regions it holds.</summary>
+        /// <summary>
+        /// A faction scores this share of what a player would for the same land (Factions 2 spec decision 5). Three
+        /// factions hold much of a world between them, and at the players' full rate they outscored the best player many
+        /// times over; at a quarter they race the players rather than lap them.
+        /// </summary>
+        public const double FactionScoreShare = 0.25;
+
+        /// <summary>
+        /// What a faction's land earns it an hour: <see cref="FactionScoreShare"/> of the players' rates over the regions
+        /// it holds.
+        /// </summary>
         public static double RateForFaction(FactionId faction, IEnumerable<WorldRegionData> regions)
         {
             if (faction == FactionId.None || regions == null) return 0;
@@ -72,7 +82,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 if (FactionStrengthRules.Holds(faction, region))
                     total += SeasonScoreRules.RateFor(region);
             }
-            return total;
+            return total * FactionScoreShare;
         }
 
         /// <summary>A faction's id on the scoreboard.</summary>
