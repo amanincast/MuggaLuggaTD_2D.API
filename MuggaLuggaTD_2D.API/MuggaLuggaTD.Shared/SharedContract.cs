@@ -265,6 +265,10 @@ namespace MuggaLuggaTD.Shared
         //   world draws a cast of three (FactionCatalog.DrawCast, always a raider) and seats them (each holds 3+ regions);
         //   fights and Slay quests in a faction's land draw its peoples (QuestRules.PeoplesOf with a faction). The Ashkin fly
         //   the swallowtail. Existing worlds keep the Grimjaw and Ashkin until their next season reset.
-        public const string Version = "1.64.0";
+        // 1.65.0 - Factions 2, step 3. Signature acts (FactionSignatureRules): the Grimjaw's warband rides on after a
+        //   raid lands, the Ashkin's fortify restores 25 resolve, the Drowned Court's won siege floods a neighbour (-20),
+        //   the Bone Synod's lost land raids its new holder once, the Thornwood expand into tier 2, the Horned Kin
+        //   stampede past the raid cooldown once a day.
+        public const string Version = "1.65.0";
     }
 }

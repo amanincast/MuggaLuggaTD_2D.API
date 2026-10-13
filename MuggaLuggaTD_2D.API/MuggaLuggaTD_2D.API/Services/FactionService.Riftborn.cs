@@ -72,7 +72,7 @@ public partial class FactionService
         {
             case RiftEruption.Seized:
             {
-                WorldRegionBlob.ClaimForFaction(node, FactionId.Riftborn, name);
+                WorldRegionBlob.ClaimForFaction(node, FactionId.Riftborn, name, at);
                 region.Ownership = LocationOwnership.Enemy;
                 region.OwnerUserId = string.Empty;
                 region.OwnerDisplayName = name;

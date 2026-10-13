@@ -345,6 +345,7 @@ public static class WorldRegionBlob
     /// </summary>
     public static void CaptureRegion(JsonNode regionNode, string userId, string? displayName, DateTime? claimedAt = null)
     {
+        MarkRisen(regionNode, claimedAt ?? DateTime.UtcNow);
         regionNode["Ownership"] = (int)LocationOwnership.Player;
         regionNode["OwnerUserId"] = userId;
         regionNode["OwnerDisplayName"] = displayName ?? string.Empty;
@@ -403,6 +404,7 @@ public static class WorldRegionBlob
     /// </summary>
     public static int CaptureWreckedForFaction(JsonNode regionNode, FactionId faction, string displayName, DateTime claimedAt)
     {
+        MarkRisen(regionNode, claimedAt);
         int captured = TakePrisoners(regionNode, claimedAt);
 
         regionNode["Ownership"] = (int)LocationOwnership.Enemy;
@@ -422,13 +424,42 @@ public static class WorldRegionBlob
     /// Hands wild land to the faction that expanded into it (npc-factions.md phase 4). Nobody held it,
     /// so there is no truce, no wreck and nobody to capture: it simply flies the faction's banner now.
     /// </summary>
-    public static void ClaimForFaction(JsonNode regionNode, FactionId faction, string displayName)
+    public static void ClaimForFaction(JsonNode regionNode, FactionId faction, string displayName, DateTime? at = null)
     {
+        MarkRisen(regionNode, at ?? DateTime.UtcNow);
         regionNode["Ownership"] = (int)LocationOwnership.Enemy;
         regionNode["OwnerUserId"] = string.Empty;
         regionNode["OwnerDisplayName"] = displayName;
         regionNode["Faction"] = (int)faction;
     }
+
+    /// <summary>
+    /// Called before a region changes hands: if its holder leaves dead behind (the Bone Synod's
+    /// <see cref="FactionSignature.TheDeadRise"/>), stamps when it was lost, so they rise against the new holder on the
+    /// faction's next turn. Every way land changes hands passes through here, so no path forgets it.
+    /// </summary>
+    private static void MarkRisen(JsonNode regionNode, DateTime lostAt)
+    {
+        var holder = (FactionId)(regionNode["Faction"]?.GetValue<int>() ?? 0);
+        if (FactionSignatureRules.RisesOnLoss(holder)) regionNode["RisenAtUtcTicks"] = lostAt.Ticks;
+    }
+
+    /// <summary>Regions whose lost dead wait to rise (<see cref="MarkRisen"/>): id, node and when they were lost.</summary>
+    public static List<(string RegionId, JsonNode Node, DateTime LostAt)> Risen(JsonNode? world)
+    {
+        var found = new List<(string, JsonNode, DateTime)>();
+        if (world?["Regions"] is not JsonArray regions) return found;
+        foreach (var node in regions)
+        {
+            long ticks = node?["RisenAtUtcTicks"]?.GetValue<long>() ?? 0;
+            if (node == null || ticks <= 0) continue;
+            found.Add((node["RegionId"]?.GetValue<string>() ?? string.Empty, node, new DateTime(ticks, DateTimeKind.Utc)));
+        }
+        return found;
+    }
+
+    /// <summary>The dead have risen, or will not: the mark goes.</summary>
+    public static void ClearRisen(JsonNode regionNode) => (regionNode as JsonObject)?.Remove("RisenAtUtcTicks");
 
     /// <summary>Raises a region's walls to <paramref name="entrenchment"/> at once (a faction's fortify).</summary>
     public static void SetEntrenchment(JsonNode regionNode, int entrenchment) =>
