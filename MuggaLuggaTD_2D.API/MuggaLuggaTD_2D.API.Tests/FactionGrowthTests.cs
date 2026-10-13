@@ -193,7 +193,7 @@ public class FactionGrowthTests : IDisposable
 
         var worn = await RegionAsync(realm, "worn");
         Assert.Equal(2, worn.Entrenchment);
-        Assert.Equal(55, worn.Resolve);
+        Assert.Equal(40 + FactionSignatureRules.DeepRootsResolveBonus, worn.Resolve); // the Ashkin's deep roots
         Assert.Equal(strength * (1 - FactionGrowthRules.FortifyShare), (await StateAsync(realm, FactionId.Ashkin)).Strength, 0);
 
         var line = Assert.Single(_db.WarLog.Where(e => e.Kind == nameof(WarLogKind.Fortified)));

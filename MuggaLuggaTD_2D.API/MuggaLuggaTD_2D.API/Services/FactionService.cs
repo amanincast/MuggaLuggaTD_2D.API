@@ -180,8 +180,11 @@ public partial class FactionService
         {
             var action = Enum.TryParse<FactionAction>(request.Action, ignoreCase: true, out var asked) && asked != FactionAction.None
                 ? asked : FactionAction.Raid;
+            bool signature = string.Equals(request.Action, "Signature", StringComparison.OrdinalIgnoreCase);
             foreach (var faction in InPlay(regions).Where(f => all || f == only))
-                report.AddRange(await ActAsync(gameInstanceId, now, force: faction, forceAction: action));
+                report.AddRange(signature
+                    ? await FireSignatureAsync(gameInstanceId, faction, now)
+                    : await ActAsync(gameInstanceId, now, force: faction, forceAction: action));
             regions = await RegionsAsync(gameInstanceId) ?? regions;
             rows = await SettleAsync(gameInstanceId, regions, now);
             await _context.SaveChangesAsync();
@@ -235,7 +238,8 @@ public partial class FactionService
         if (regions.Count == 0) return done;
 
         var rows = await SettleAsync(gameInstanceId, regions, utcNow);
-        var since = utcNow - RaidResolver.Cooldown;
+        // Far enough back to tell whether the Horned Kin have stampeded today, as well as what is on cooldown.
+        var since = utcNow - RaidResolver.Cooldown - FactionSignatureRules.StampedeEvery;
         var recent = await _context.FactionRaids
             .Where(r => r.GameInstanceId == gameInstanceId && r.RaidedAt > since)
             .ToListAsync();
@@ -249,6 +253,9 @@ public partial class FactionService
 
         // A faction beside an open Great Rift strikes at it now and then (row 7), win or lose its own turn.
         await ChipTheRiftAsync(gameInstanceId, rows, regions, utcNow, done);
+
+        // The Bone Synod's dead rise against whoever took their land (their signature), before anyone's turn.
+        worldChanged |= RaiseTheDead(gameInstanceId, rows, regions, world, recent, lines, done, utcNow);
 
         foreach (var row in rows.OrderBy(_ => _random.Next()))
         {
@@ -344,20 +351,26 @@ public partial class FactionService
 
             if (action != FactionAction.Raid) continue;
 
-            var raid = Raid(gameInstanceId, row, temperament, regions, rows, recent, world, utcNow);
-            if (raid == null)
+            var struck = Raid(gameInstanceId, row, temperament, regions, rows, recent, world, utcNow);
+            if (struck == null)
             {
                 if (forced) done.Add($"{temperament.Name} found nobody on its border it could beat.");
                 continue;
             }
 
-            recent.Add(raid);
-            _context.FactionRaids.Add(raid);
-            worldChanged |= raid.ResolveDamage > 0;
-            string detail = raid.AttackerWon ? $"resolve {raid.ResolveAfter + raid.ResolveDamage} → {raid.ResolveAfter}" : string.Empty;
-            lines.Add((raid.AttackerWon ? WarLogKind.RaidLanded : WarLogKind.RaidRepelled, raid, detail));
-            done.Add($"{temperament.Name} raided {raid.RegionId} ({(raid.AttackerWon ? "landed" : "repelled")}, " +
-                     $"march {raid.March:F0} vs hold {raid.Hold:N0}{(raid.AttackerWon ? ", " + detail : "")}).");
+            var (raid, stampede) = struck.Value;
+            worldChanged |= Record(raid, temperament, stampede ? "a stampede" : null, recent, lines, done);
+
+            // The Grimjaw's warband rides on from a raid that landed, at half its march (their signature).
+            if (raid.AttackerWon && FactionSignatureRules.Has(row.Faction, FactionSignature.Warband))
+            {
+                var onward = Raid(gameInstanceId, row, temperament, regions, rows, recent, world, utcNow,
+                    march: FactionSignatureRules.WarbandMarch(raid.March), exclude: raid.RegionId);
+                if (onward != null)
+                    worldChanged |= Record(onward.Value.Raid, temperament, "the warband rode on", recent, lines, done);
+                else if (forced)
+                    done.Add($"{temperament.Name}'s warband found nobody else on its border it could beat.");
+            }
         }
 
         if (worldChanged)
@@ -422,57 +435,126 @@ public partial class FactionService
     /// node and the cost to the faction; the caller records it. Null when nothing on the border
     /// clears the raid bar, or every such region is on cooldown.
     /// </summary>
-    private FactionRaid? Raid(
+    /// <param name="march">What it marches with; its usual raid march when null (the Grimjaw's warband rides on with less).</param>
+    /// <param name="exclude">A region it may not pick (the one the warband rode on from).</param>
+    /// <returns>The raid, and whether it was a Horned Kin stampede (a region on cooldown, once a day).</returns>
+    private (FactionRaid Raid, bool Stampede)? Raid(
         Guid gameInstanceId, FactionState row, FactionTemperament temperament,
-        List<WorldRegionData> regions, List<FactionState> rows, List<FactionRaid> recent, JsonNode? world, DateTime now)
+        List<WorldRegionData> regions, List<FactionState> rows, List<FactionRaid> recent, JsonNode? world, DateTime now,
+        double? march = null, string? exclude = null)
     {
-        double march = FactionDecisionRules.RaidMarch(row.Strength);
+        double marching = march ?? FactionDecisionRules.RaidMarch(row.Strength);
+        bool mayStampede = FactionSignatureRules.Has(row.Faction, FactionSignature.Stampede) &&
+                           FactionSignatureRules.MayStampede(OwnRaids(recent, row.Faction), now, RaidResolver.Cooldown);
         var candidates = new List<FactionRaidTarget>();
 
         foreach (var region in FactionDecisionRules.Bordering(row.Faction, regions))
         {
-            if (!FactionDecisionRules.IsRaidable(row.Faction, region, now)) continue;
-            if (recent.Any(r => r.Faction == row.Faction && r.RegionId == region.RegionId && r.RaidedAt + RaidResolver.Cooldown > now))
-                continue;
+            if (region.RegionId == exclude || !FactionDecisionRules.IsRaidable(row.Faction, region, now)) continue;
+            if (!mayStampede && Cooling(recent, row.Faction, region.RegionId, now)) continue;
 
-            long hold = RegionHoldCalculator.AssessRegion(region, regions, march).Hold;
-            var defender = string.IsNullOrEmpty(region.OwnerUserId) ? rows.FirstOrDefault(r => r.Faction == region.Faction) : null;
-            hold = FactionDecisionRules.DefendingHold(hold, defender != null && FactionStrengthRules.IsBloodied(defender.BloodiedUntilUtc, now));
-            candidates.Add(new FactionRaidTarget { Region = region, Hold = hold, March = march });
+            candidates.Add(new FactionRaidTarget { Region = region, Hold = DefendingHold(region, regions, rows, marching, now), March = marching });
         }
 
         var pick = FactionDecisionRules.PickRaidTarget(candidates, _random.NextDouble());
         if (pick == null) return null;
 
         var target = pick.Value;
-        var result = RaidResolver.Resolve(march, target.Hold, target.Region.Resolve, _random.Next(1, 21));
+        bool stampede = Cooling(recent, row.Faction, target.Region.RegionId, now);
+        return (Strike(gameInstanceId, row, target.Region, target.Hold, marching, world, now, charged: true), stampede);
+    }
+
+    /// <summary>Whether the faction raided this region less than a cooldown ago.</summary>
+    private static bool Cooling(List<FactionRaid> recent, FactionId faction, string regionId, DateTime now) =>
+        recent.Any(r => r.Faction == faction && r.RegionId == regionId && r.RaidedAt + RaidResolver.Cooldown > now);
+
+    private static List<(string RegionId, DateTime At)> OwnRaids(List<FactionRaid> recent, FactionId faction) =>
+        recent.Where(r => r.Faction == faction).Select(r => (r.RegionId, r.RaidedAt)).ToList();
+
+    /// <summary>
+    /// One raid on <paramref name="region"/>: rolls it, applies resolve to the world node and the region, and, when
+    /// <paramref name="charged"/>, its cost (and a loss's Bloodied) to the faction. The caller records it.
+    /// </summary>
+    private FactionRaid Strike(Guid gameInstanceId, FactionState row, WorldRegionData region, long hold, double march,
+        JsonNode? world, DateTime now, bool charged)
+    {
+        var result = RaidResolver.Resolve(march, hold, region.Resolve, _random.Next(1, 21));
 
         if (result.ResolveDamage > 0)
         {
-            var node = WorldRegionBlob.FindRegion(world, target.Region.RegionId);
+            var node = WorldRegionBlob.FindRegion(world, region.RegionId);
             if (node != null) WorldRegionBlob.SetResolve(node, result.ResolveAfter);
-            target.Region.Resolve = result.ResolveAfter;
+            region.Resolve = result.ResolveAfter;
         }
 
-        row.Strength = Math.Max(0, row.Strength - FactionDecisionRules.RaidCost(march, result.AttackerWins));
-        row.LastActedAtUtc = now;
-        if (!result.AttackerWins)
-            row.BloodiedUntilUtc = now + FactionStrengthRules.BloodiedFor;
+        if (charged)
+        {
+            row.Strength = Math.Max(0, row.Strength - FactionDecisionRules.RaidCost(march, result.AttackerWins));
+            row.LastActedAtUtc = now;
+            if (!result.AttackerWins)
+                row.BloodiedUntilUtc = now + FactionStrengthRules.BloodiedFor;
+        }
 
         return new FactionRaid
         {
             GameInstanceId = gameInstanceId,
             Faction = row.Faction,
-            RegionId = target.Region.RegionId,
-            DefenderUserId = string.IsNullOrEmpty(target.Region.OwnerUserId) ? null : target.Region.OwnerUserId,
-            DefenderFaction = string.IsNullOrEmpty(target.Region.OwnerUserId) ? target.Region.Faction : FactionId.None,
+            RegionId = region.RegionId,
+            DefenderUserId = string.IsNullOrEmpty(region.OwnerUserId) ? null : region.OwnerUserId,
+            DefenderFaction = string.IsNullOrEmpty(region.OwnerUserId) ? region.Faction : FactionId.None,
             RaidedAt = now,
             AttackerWon = result.AttackerWins,
             March = Math.Round(march),
-            Hold = target.Hold,
+            Hold = hold,
             ResolveDamage = result.ResolveDamage,
             ResolveAfter = result.ResolveAfter
         };
+    }
+
+    /// <summary>
+    /// Records a raid for this turn: saved, on the cooldown list, in the war log (with <paramref name="how"/>, a
+    /// signature's name, ahead of the resolve) and in the report. Returns whether the world changed.
+    /// </summary>
+    private bool Record(FactionRaid raid, FactionTemperament temperament, string? how, List<FactionRaid> recent,
+        List<(WarLogKind Kind, FactionRaid Raid, string Detail)> lines, List<string> done)
+    {
+        recent.Add(raid);
+        _context.FactionRaids.Add(raid);
+        string resolve = raid.AttackerWon ? $"resolve {raid.ResolveAfter + raid.ResolveDamage} → {raid.ResolveAfter}" : string.Empty;
+        string detail = string.Join("; ", new[] { how, resolve }.Where(s => !string.IsNullOrEmpty(s)));
+        lines.Add((raid.AttackerWon ? WarLogKind.RaidLanded : WarLogKind.RaidRepelled, raid, detail));
+        done.Add($"{temperament.Name} raided {raid.RegionId} ({(raid.AttackerWon ? "landed" : "repelled")}, " +
+                 $"march {raid.March:F0} vs hold {raid.Hold:N0}{(string.IsNullOrEmpty(detail) ? "" : ", " + detail)}).");
+        return raid.ResolveDamage > 0;
+    }
+
+    /// <summary>
+    /// The Bone Synod's signature (<see cref="FactionSignature.TheDeadRise"/>): each region they lost in the last day
+    /// raids its new holder once, with the march a raid of theirs would have, truce or cooldown or none. It costs them
+    /// nothing and a loss does not leave them Bloodied: the dead were spent already. Marks too old, on land they have
+    /// taken back, or of a faction no longer in play are cleared. Returns whether the world changed.
+    /// </summary>
+    private bool RaiseTheDead(Guid gameInstanceId, List<FactionState> rows, List<WorldRegionData> regions, JsonNode? world,
+        List<FactionRaid> recent, List<(WarLogKind Kind, FactionRaid Raid, string Detail)> lines, List<string> done, DateTime now)
+    {
+        var risen = WorldRegionBlob.Risen(world);
+        if (risen.Count == 0) return false;
+
+        var dead = rows.FirstOrDefault(r => FactionSignatureRules.Has(r.Faction, FactionSignature.TheDeadRise));
+        foreach (var (regionId, node, lostAt) in risen)
+        {
+            WorldRegionBlob.ClearRisen(node);
+            var region = regions.FirstOrDefault(r => r.RegionId == regionId);
+            if (dead == null || region == null || !FactionSignatureRules.MayRise(lostAt, now) ||
+                !FactionSignatureRules.MayRaidBack(dead.Faction, region))
+                continue;
+
+            double march = FactionDecisionRules.RaidMarch(dead.Strength);
+            long hold = DefendingHold(region, regions, rows, march, now);
+            var raid = Strike(gameInstanceId, dead, region, hold, march, world, now, charged: false);
+            Record(raid, TemperamentOf(dead.Faction), "the dead rose", recent, lines, done);
+        }
+        return true;
     }
 
     /// <summary>
@@ -487,7 +569,7 @@ public partial class FactionService
         var node = pick == null ? null : WorldRegionBlob.FindRegion(world, pick.RegionId);
         if (pick == null || node == null) return null;
 
-        WorldRegionBlob.ClaimForFaction(node, row.Faction, temperament.Name);
+        WorldRegionBlob.ClaimForFaction(node, row.Faction, temperament.Name, now);
         pick.Ownership = LocationOwnership.Enemy;
         pick.OwnerUserId = string.Empty;
         pick.OwnerDisplayName = temperament.Name;
@@ -511,7 +593,7 @@ public partial class FactionService
         if (pick == null || node == null) return null;
 
         int resolveBefore = pick.Resolve;
-        var (entrenchment, resolve) = FactionGrowthRules.Fortified(pick);
+        var (entrenchment, resolve) = FactionGrowthRules.Fortified(pick, FactionSignatureRules.FortifyResolveBonus(row.Faction));
         WorldRegionBlob.SetEntrenchment(node, entrenchment);
         pick.Entrenchment = entrenchment;
         pick.Resolve = WorldRegionBlob.SetResolve(node, resolve);

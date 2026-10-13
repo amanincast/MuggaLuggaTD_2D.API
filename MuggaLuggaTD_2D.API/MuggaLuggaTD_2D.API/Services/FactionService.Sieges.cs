@@ -162,6 +162,7 @@ public partial class FactionService
 
         bool worldChanged = false;
         var settled = new List<(FactionSiege Siege, string? Detail, int ResolveBefore)>();
+        var floods = new List<(FactionId Faction, WorldRegionData Region, int Before, int After, DateTime At)>();
 
         foreach (var siege in due)
         {
@@ -199,6 +200,20 @@ public partial class FactionService
                 settled.Add((siege, siege.Captured > 0 ? $"{siege.Captured} champion{(siege.Captured == 1 ? "" : "s")} taken prisoner" : null, region.Resolve));
                 done.Add($"{TemperamentOf(siege.Faction).Name} took {siege.RegionId} (march {siege.March:N0} vs hold {hold:N0}, " +
                          $"d20 {result.D20Roll}, {siege.Captured} captured).");
+
+                // The Drowned Court's tide follows them in and floods a neighbour (their signature).
+                if (FactionSignatureRules.Has(siege.Faction, FactionSignature.TheTide))
+                {
+                    var flooded = FactionSignatureRules.PickTide(siege.Faction, region, regions, at, _random.NextDouble());
+                    var floodNode = flooded == null ? null : WorldRegionBlob.FindRegion(world, flooded.RegionId);
+                    if (flooded != null && floodNode != null)
+                    {
+                        int before = flooded.Resolve;
+                        int after = WorldRegionBlob.SetResolve(floodNode, FactionSignatureRules.Flooded(before));
+                        floods.Add((siege.Faction, flooded, before, after, at));
+                        done.Add($"{TemperamentOf(siege.Faction).Name}'s tide flooded {flooded.RegionId} (resolve {before} → {after}).");
+                    }
+                }
             }
             else
             {
@@ -226,6 +241,20 @@ public partial class FactionService
         // A fallen region changes what its old and new holders earn (see ActAsync).
         if (worldChanged && _seasons != null) await _seasons.SettleAllAsync(gameInstanceId, world, utcNow);
         if (worldChanged) await BroadcastWorldAsync(worldRow);
+
+        foreach (var (faction, flooded, before, after, at) in floods)
+        {
+            // Told as a raid that landed, which is what it does to the land: "The Drowned Court raided your Reedmere (the tide; resolve 60 → 40)".
+            if (_warLog != null)
+            {
+                bool player = !string.IsNullOrEmpty(flooded.OwnerUserId);
+                await _warLog.RecordAsync(gameInstanceId, WarLogKind.RaidLanded, WarLogPrefix + faction,
+                    player ? flooded.OwnerUserId : WarLogPrefix + flooded.Faction, flooded.RegionId,
+                    $"the tide; resolve {before} → {after}", at, actorName: TemperamentOf(faction).Name,
+                    subjectName: player ? null : TemperamentOf(flooded.Faction).Name);
+            }
+            _sessionLog.Log("FACTION-TIDE", $"instance={gameInstanceId} faction={faction} region={flooded.RegionId} resolve={before}->{after}");
+        }
 
         foreach (var (siege, detail, _) in settled)
         {

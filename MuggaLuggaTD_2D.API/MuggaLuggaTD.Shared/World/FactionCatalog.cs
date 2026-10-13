@@ -50,10 +50,15 @@ namespace MuggaLuggaTD.Shared.World
         /// </summary>
         public int ExpandMinimumTier { get; }
 
+        /// <summary>The one thing it does that no other faction does (<see cref="Gameplay.FactionSignatureRules"/>, spec §2.2).</summary>
+        public Gameplay.FactionSignature Signature { get; }
+
         public FactionInfo(FactionId id, string name, string title, string lore, IReadOnlyList<BiomeType> homeBiomes,
             float red, float green, float blue, int flag, bool seatable, bool scored = true, int expandMinimumTier = 3,
-            IReadOnlyList<string> people = null, bool raider = false)
+            IReadOnlyList<string> people = null, bool raider = false,
+            Gameplay.FactionSignature signature = Gameplay.FactionSignature.None)
         {
+            Signature = signature;
             People = people ?? new string[0];
             Raider = raider;
             Scored = scored;
@@ -88,35 +93,36 @@ namespace MuggaLuggaTD.Shared.World
         public static readonly FactionInfo Grimjaw = new FactionInfo(FactionId.Grimjaw, "Grimjaw", "The Grimjaw",
             "Raiders who stopped asking whose land it was.",
             new[] { BiomeType.Grassland, BiomeType.Forest }, 0.35f, 0.29f, 0.48f, 3, seatable: true,
-            people: new[] { "Goblin", "Boarman" }, raider: true);
+            people: new[] { "Goblin", "Boarman" }, raider: true, signature: Gameplay.FactionSignature.Warband);
 
         /// <summary>The swallowtail (flag 0) from step 2; before it, the streamer every faction flew.</summary>
         public static readonly FactionInfo Ashkin = new FactionInfo(FactionId.Ashkin, "Ashkin", "The Ashkin",
             "They dug into the mountain and the mountain let them stay.",
             new[] { BiomeType.Volcanic, BiomeType.Highland }, 0.62f, 0.26f, 0.24f, 0, seatable: true,
-            people: new[] { "Demon", "Drake" }, raider: true);
+            people: new[] { "Demon", "Drake" }, raider: true, signature: Gameplay.FactionSignature.DeepRoots);
 
         // Factions 2, step 2 (spec §2.1). Colours keep clear of the player's gold, the rivals' hues and each other.
         public static readonly FactionInfo DrownedCourt = new FactionInfo(FactionId.DrownedCourt, "Drowned Court", "The Drowned Court",
             "A kingdom under the lake that wants the shore back.",
             new[] { BiomeType.Lakeland, BiomeType.Swamp }, 0.16f, 0.52f, 0.54f, 1, seatable: true,
-            people: new[] { "Lizard", "Rat" });
+            people: new[] { "Lizard", "Rat" }, signature: Gameplay.FactionSignature.TheTide);
 
         public static readonly FactionInfo BoneSynod = new FactionInfo(FactionId.BoneSynod, "Bone Synod", "The Bone Synod",
             "The desert's dead, and the priests who keep them standing.",
             // A cool bone, not a warm one: its land is the desert, and a warm white vanished into the sand.
             new[] { BiomeType.Desert }, 0.78f, 0.82f, 0.88f, 7, seatable: true,
-            people: new[] { "Skeleton", "Marked" });
+            people: new[] { "Skeleton", "Marked" }, signature: Gameplay.FactionSignature.TheDeadRise);
 
         public static readonly FactionInfo Thornwood = new FactionInfo(FactionId.Thornwood, "Thornwood", "The Thornwood Pact",
             "The forest signed nothing, but it keeps its borders all the same.",
             new[] { BiomeType.Forest }, 0.30f, 0.46f, 0.20f, 5, seatable: true,
-            people: new[] { "Troll", "Faun", "Wolf" });
+            people: new[] { "Troll", "Faun", "Wolf" }, signature: Gameplay.FactionSignature.Overgrowth,
+            expandMinimumTier: Gameplay.FactionSignatureRules.OvergrowthMinimumTier);
 
         public static readonly FactionInfo HornedKin = new FactionInfo(FactionId.HornedKin, "Horned Kin", "The Horned Kin",
             "Clans of the high passes who settle every argument with a charge.",
             new[] { BiomeType.Highland }, 0.70f, 0.47f, 0.16f, 6, seatable: true,
-            people: new[] { "Minotaur", "Cyclops" }, raider: true);
+            people: new[] { "Minotaur", "Cyclops" }, raider: true, signature: Gameplay.FactionSignature.Stampede);
 
         /// <summary>
         /// Strangers from another realm (Invasions phase 6). A Great Rift's eruption seats them, so they are in play only

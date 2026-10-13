@@ -106,10 +106,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return best;
         }
 
-        /// <summary>The region's entrenchment and resolve once fortified.</summary>
-        public static (int Entrenchment, int Resolve) Fortified(WorldRegionData region) => (
+        /// <summary>
+        /// The region's entrenchment and resolve once fortified, restoring <paramref name="resolveBonus"/> (the Ashkin's
+        /// deep roots restore more: <see cref="FactionSignatureRules.FortifyResolveBonus"/>).
+        /// </summary>
+        public static (int Entrenchment, int Resolve) Fortified(WorldRegionData region, int resolveBonus = FortifyResolveBonus) => (
             Math.Min(FortifyRules.MaxLevel, region.Entrenchment + 1),
-            Math.Min(RegionResolveRules.Maximum, region.Resolve + FortifyResolveBonus));
+            Math.Min(RegionResolveRules.Maximum, region.Resolve + resolveBonus));
 
         /// <summary>Whether a region the faction holds touches land it does not.</summary>
         private static bool IsFrontier(FactionId faction, WorldRegionData region, Dictionary<HexCoord, WorldRegionData> byHex)
