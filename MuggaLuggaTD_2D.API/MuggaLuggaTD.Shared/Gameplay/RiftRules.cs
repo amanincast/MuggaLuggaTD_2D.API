@@ -491,9 +491,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Grasping reaches only for a Riftborn this close; with none near, the hands wait.</summary>
         public const float GraspReach = 12f;
 
-        /// <summary>Starless: the light round the hero, in world units, and how dark the rest is (1 is black).</summary>
+        /// <summary>Starless: the light round the hero, in world units, and how dark the rest is (1 is black). The
+        /// shade is blended in linear colour, so it reads lighter than its number: 0.96 leaves the dark at about a sixth of the
+        /// light's brightness on screen (Mike chose it from a trial of 0.82-0.99, 2026-10-12).</summary>
         public const float StarlessLightRadius = 5.5f;
-        public const float StarlessDarkness = 0.82f;
+        public const float StarlessDarkness = 0.96f;
 
         /// <summary>Echoing: how long before the ghost rises, and the share of its health it comes back with.</summary>
         public const float EchoDelaySeconds = 1f;
