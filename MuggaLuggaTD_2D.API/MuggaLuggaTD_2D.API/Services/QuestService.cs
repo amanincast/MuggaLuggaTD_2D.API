@@ -313,8 +313,17 @@ public class QuestService
         return state;
     }
 
-    private List<QuestOffer> BoardOf(Guid gameInstanceId, string userId, QuestBoardState state, List<WorldRegionData> regions) =>
-        QuestRules.Board(gameInstanceId.ToString(), userId, state.Hour, state.Set, regions, _content.EnemyPeoples, _content.RunTuning);
+    /// <summary>
+    /// The board for its hour, with that hour's fairs and storms (a Pilgrimage's givers, a fair's Gather gold). The
+    /// board counts hours from the epoch (<see cref="QuestRules.HourOf"/>), the conditions by ticks, so the hour is
+    /// turned into an instant first.
+    /// </summary>
+    private List<QuestOffer> BoardOf(Guid gameInstanceId, string userId, QuestBoardState state, List<WorldRegionData> regions)
+    {
+        string realm = gameInstanceId.ToString();
+        var conditions = RegionConditionRules.For(realm, HarassmentRules.HourOf(DateTime.UnixEpoch.AddHours(state.Hour)), regions);
+        return QuestRules.Board(realm, userId, state.Hour, state.Set, regions, _content.EnemyPeoples, _content.RunTuning, conditions);
+    }
 
     /// <summary>The offers still standing: the board less what has been taken from it.</summary>
     private List<QuestOffer> OffersOf(Guid gameInstanceId, string userId, QuestBoardState state, List<WorldRegionData> regions)

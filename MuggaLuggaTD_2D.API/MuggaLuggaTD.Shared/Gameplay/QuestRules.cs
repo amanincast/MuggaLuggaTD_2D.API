@@ -78,6 +78,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         public bool AmbushWon { get; set; }
 
+        /// <summary>
+        /// How many times a won ambush counts toward an Ambush quest: 2 in a Storm
+        /// (<see cref="RegionConditionRules.AmbushQuestCount"/>), else 1. 0 is read as 1.
+        /// </summary>
+        public int AmbushCount { get; set; } = 1;
+
         /// <summary>Enemies slain by people, already clamped (<see cref="QuestRules.ClampKills"/>).</summary>
         public Dictionary<string, int> Kills { get; set; } = new Dictionary<string, int>();
     }
@@ -171,10 +177,19 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         /// <param name="regions">The whole world; only the villages the player can see give quests.</param>
         /// <param name="peoples">The peoples that live in each biome (CharacterData's enemies).</param>
+        /// <param name="conditions">
+        /// The hour's fairs and storms (<see cref="RegionConditionRules.For(string, long, IEnumerable{WorldRegionData})"/>),
+        /// or null for none: a Pilgrimage brings out both of its region's wandering givers, over and above
+        /// <see cref="NpcOffers"/>, and a Harvest Fair's Gather quests pay <see cref="RegionConditionRules.FairGatherGoldFactor"/>
+        /// the gold. The board and the conditions turn over on the same hour, so an offer is priced by the hour it stands in.
+        /// </param>
         public static List<QuestOffer> Board(string realmId, string userId, long hour, int set,
             IEnumerable<WorldRegionData> regions, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples,
-            RunTuning tuning)
+            RunTuning tuning, IReadOnlyDictionary<string, RegionCondition> conditions = null)
         {
+            RegionCondition ConditionOf(string regionId) =>
+                regionId != null && conditions != null && conditions.TryGetValue(regionId, out var c) ? c : RegionCondition.None;
+
             var all = (regions ?? Enumerable.Empty<WorldRegionData>()).Where(r => r != null).ToList();
             var lit = RegionSight.Lit(all, userId);
             ulong seed = Naming.Hash($"quests|{realmId}|{userId}|{hour}|{set}");
@@ -222,6 +237,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 if (walking.Count < NpcOffers && walking.All(c => c.Region.RegionId != w.Region.RegionId)) walking.Add(w);
             foreach (var w in byScore)
                 if (walking.Count < NpcOffers && !walking.Contains(w)) walking.Add(w);
+            // A Pilgrimage: every giver in the region walks, whatever the scores said.
+            foreach (var w in wanderers.Where(w => ConditionOf(w.Region.RegionId) == RegionCondition.Pilgrimage))
+                if (!walking.Contains(w)) walking.Add(w);
             foreach (var w in walking)
             {
                 var random = DeterministicRandom.ForSubject(seed, Naming.Hash(w.Id) + 1);
@@ -235,6 +253,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
             for (int i = 0; i < HallOffers && i < kinds.Count; i++)
                 offers.Add(HallOffer(ref hall, $"{hour}.{set}.{HallGiver}.{i}", kinds[i], hallLevel, tuning));
 
+            // A Harvest Fair: the region's Gather quests pay more gold (the Hall's are of no region).
+            foreach (var offer in offers.Where(o => o.Kind == QuestKind.Gather))
+            {
+                double factor = RegionConditionRules.GatherGoldFactor(ConditionOf(offer.RegionId));
+                if (factor != 1.0) offer.Gold = (long)Math.Round(offer.Gold * factor);
+            }
             return offers;
         }
 
@@ -472,7 +496,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                         gained = 1;
                     break;
                 case QuestKind.Ambush:
-                    if (deed.AmbushWon) gained = 1;
+                    if (deed.AmbushWon) gained = Math.Max(1, deed.AmbushCount);
                     break;
             }
             return Math.Min(quest.Count, progress + gained);

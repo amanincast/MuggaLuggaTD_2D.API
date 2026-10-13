@@ -331,11 +331,14 @@ public class PartyService
         // Across the world, region by region, each walked on its own roads (§6, phase 4).
         var byHex = regions.GroupBy(r => r.Hex).ToDictionary(g => g.Key, g => g.First());
         WorldRegionData? RegionAt(HexCoord hex) => byHex.TryGetValue(hex, out var r) ? r : null;
-        var route = TravelRules.PlanRoute(RegionAt, home, from.Cell, region, to.Cell);
+        // A storm on the way slows the walk through it, by the hour the company sets out (Active Content C).
+        var now = DateTime.UtcNow;
+        var weather = RegionConditionRules.TravelFactors(
+            RegionConditionRules.For(gameInstanceId.ToString(), HarassmentRules.HourOf(now), regions));
+        var route = TravelRules.PlanRoute(RegionAt, home, from.Cell, region, to.Cell, weather);
         if (route == null)
             return (new PartyOutcome(PartyError.NoRoute, "No road or open ground leads there from where the company stands."), null);
 
-        var now = DateTime.UtcNow;
         party.State = CompanyState.Travelling;
         party.FromSiteId = party.SiteId;
         party.RegionId = home.RegionId;   // where it is now; settled forward leg by leg as it walks
@@ -670,10 +673,14 @@ public class PartyService
         {
             var struck = WorldRegionBlob.ReadAllRegions(world)
                 .FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(ambush!.SiteId));
+            // Beaten in a storm, it counts twice for an Ambush quest (Active Content C, phase 2).
+            var weather = RegionConditionRules.At(gameInstanceId.ToString(), struck?.RegionId ?? "", party.HaltedAt ?? now,
+                WorldRegionBlob.ReadAllRegions(world));
             await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
             {
                 RegionId = struck?.RegionId,
                 AmbushWon = true,
+                AmbushCount = RegionConditionRules.AmbushQuestCount(weather),
                 Kills = struck == null ? new Dictionary<string, int>()
                     : new Dictionary<string, int>(_quests.ClampKills(request.Kills,
                         ambush!.Riftborn?.DonorBiome ?? struck.Biome, AmbushRules.SkirmishTier, null))

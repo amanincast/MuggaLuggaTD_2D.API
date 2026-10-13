@@ -347,6 +347,16 @@ public class WorldPveService
             Random.Shared,
             site: resolved.Site.Type);
 
+        // A Plague of Rats in the hour the run began: a cave or ruin held more, and pays more (Active Content C).
+        double rats = RegionConditionRules.ClearPayFactor(RegionConditionRules.At(gameInstanceId.ToString(),
+            resolved.Region.RegionId, run.StartedAt, WorldRegionBlob.ReadAllRegions(world)), resolved.Site.Type);
+        if (rats != 1.0)
+        {
+            rewards.Experience = (long)Math.Round(rewards.Experience * rats);
+            rewards.Gold = GoldRules.GoldForClear(rewards.Experience);
+            foreach (var grant in materials) grant.Quantity = (int)Math.Round(grant.Quantity * rats);
+        }
+
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
 
         // Every item rolled is recorded, so the save that carries it home is believed - and a save

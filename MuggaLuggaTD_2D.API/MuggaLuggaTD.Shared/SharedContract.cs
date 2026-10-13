@@ -257,6 +257,10 @@ namespace MuggaLuggaTD.Shared
         //   surge (RiftRules.EruptionFor), the factions chip a Great Rift, no Great Rift in a season's last day.
         // 1.62.0 - Invasions phase 7: rifts roll all eight mutators (Grasping, Starless, Echoing, Fractured added), the
         //   Rift Heart's Rift Lord (RiftRules.HasRiftLord, LordMutator, Naming.ForRiftLord).
-        public const string Version = "1.62.0";
+        // 1.63.0 - Fairs and storms, phase 2 (Active Content C). RegionCondition Storm (journeys through it x1.5, an ambush
+        //   beaten there counts twice for a quest), PlagueOfRats (caves and ruins +25% enemies, their clears pay +25%) and
+        //   Pilgrimage (both of its wandering givers out); a fair's Gather quests pay +50% gold. Travel times, quest
+        //   boards and clear pay change.
+        public const string Version = "1.63.0";
     }
 }
