@@ -51,6 +51,17 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// </summary>
         public static RoutePlan PlanRoute(Func<HexCoord, WorldRegionData> regionAt,
             WorldRegionData fromRegion, GridCell from, WorldRegionData toRegion, GridCell to)
+            => PlanRoute(regionAt, fromRegion, from, toRegion, to, null);
+
+        /// <summary>
+        /// As above, each region's walk stretched by <paramref name="walkFactor"/> (its region id to a factor, 1 for
+        /// none): a Storm's ×1.5 (<see cref="RegionConditionRules.TravelFactors"/>), judged by the hour the company
+        /// sets out. The walk is stretched after its one-to-five-minute bounds, so a storm slows even a short hop;
+        /// the crossings between regions are not stretched. Null <paramref name="walkFactor"/> is fair weather.
+        /// </summary>
+        public static RoutePlan PlanRoute(Func<HexCoord, WorldRegionData> regionAt,
+            WorldRegionData fromRegion, GridCell from, WorldRegionData toRegion, GridCell to,
+            Func<string, double> walkFactor)
         {
             if (regionAt == null || fromRegion == null || toRegion == null) return null;
 
@@ -85,6 +96,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     if (walk == null) return null;
                     cells = walk.Cells;
                     seconds = walk.CumulativeSeconds;
+                    double stretch = walkFactor?.Invoke(region.RegionId) ?? 1.0;
+                    if (stretch > 0 && Math.Abs(stretch - 1.0) > 1e-9)
+                    {
+                        seconds = (double[])seconds.Clone();
+                        for (int s = 0; s < seconds.Length; s++) seconds[s] *= stretch;
+                    }
                 }
 
                 var leg = new RouteLeg { RegionId = region.RegionId };

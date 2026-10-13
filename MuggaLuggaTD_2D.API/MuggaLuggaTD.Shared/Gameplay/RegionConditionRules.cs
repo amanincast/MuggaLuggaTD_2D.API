@@ -15,6 +15,15 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>Warbands are out: ambushes in the region come more often and pay more.</summary>
         HuntingSeason = 2,
+
+        /// <summary>Foul weather: travel through the region is slower, and an ambush beaten there counts twice for a quest.</summary>
+        Storm = 3,
+
+        /// <summary>The caves and ruins are crawling: more enemies in them, and their clears pay more.</summary>
+        PlagueOfRats = 4,
+
+        /// <summary>Pilgrims on the roads: both of the region's wandering quest-givers are out.</summary>
+        Pilgrimage = 5,
     }
 
     /// <summary>
@@ -49,11 +58,35 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>At most this many fairs in the realm in an hour (tune).</summary>
         public const int MostFairs = 2;
 
+        /// <summary>A fair region's villages' Gather quests pay this much gold, against an ordinary hour's (tune).</summary>
+        public const double FairGatherGoldFactor = 1.5;
+
+        /// <summary>A storm's journeys: the walk through the region takes this long, against fair weather's (tune).</summary>
+        public const double StormTravelFactor = 1.5;
+
+        /// <summary>An ambush beaten in a storm counts this many times toward an Ambush quest (tune).</summary>
+        public const int StormAmbushQuestCount = 2;
+
+        /// <summary>A plague's caves and ruins hold this many enemies, against an ordinary hour's (tune).</summary>
+        public const double RatsEnemyFactor = 1.25;
+
+        /// <summary>A cave or ruin cleared in a plague pays this much, against an ordinary hour's (tune).</summary>
+        public const double RatsPayFactor = 1.25;
+
+        /// <summary>
+        /// A held region's chance of a Storm, a Plague of Rats and a Pilgrimage in an hour, in ten thousand: each about
+        /// 1.5 hours a day, and at most one of each in the realm (tune).
+        /// </summary>
+        public const int StormChanceOutOfTenThousand = 625;
+        public const int RatsChanceOutOfTenThousand = 625;
+        public const int PilgrimageChanceOutOfTenThousand = 625;
+
         /// <summary>
         /// The hour's conditions, by region id; a region not in it has none. <paramref name="heldRegionIds"/>
         /// are the regions players hold, in any order. Each rolls its own chance of a fair, and the lowest
         /// rolls win when more than <see cref="MostFairs"/> come up. Then the same for one Hunting Season,
-        /// in a region with no fair.
+        /// in a region with no fair; then one Storm, one Plague of Rats and one Pilgrimage (phase 2), each in a
+        /// region with nothing yet. The later picks never move an earlier one, so adding them changed no fair or hunt.
         /// </summary>
         public static Dictionary<string, RegionCondition> For(string realmId, long hour, IEnumerable<string> heldRegionIds)
         {
@@ -79,6 +112,22 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 .OrderBy(r => r.Roll).ThenBy(r => r.Id, StringComparer.Ordinal)
                 .FirstOrDefault();
             if (hunt.Id != null) result[hunt.Id] = RegionCondition.HuntingSeason;
+
+            foreach (var (condition, what, chance) in new[]
+                     {
+                         (RegionCondition.Storm, "storm", StormChanceOutOfTenThousand),
+                         (RegionCondition.PlagueOfRats, "rats", RatsChanceOutOfTenThousand),
+                         (RegionCondition.Pilgrimage, "pilgrims", PilgrimageChanceOutOfTenThousand),
+                     })
+            {
+                var pick = held
+                    .Where(id => !result.ContainsKey(id))
+                    .Select(id => (Id: id, Roll: Roll(id, what)))
+                    .Where(r => r.Roll < (ulong)chance)
+                    .OrderBy(r => r.Roll).ThenBy(r => r.Id, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (pick.Id != null) result[pick.Id] = condition;
+            }
             return result;
         }
 
@@ -130,6 +179,39 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static double AmbushRewardFactor(RegionCondition condition)
             => condition == RegionCondition.HuntingSeason ? HuntRewardFactor : 1.0;
 
+        /// <summary>The factor on the walk through a region for a journey setting out that hour.</summary>
+        public static double TravelFactor(RegionCondition condition)
+            => condition == RegionCondition.Storm ? StormTravelFactor : 1.0;
+
+        /// <summary>
+        /// For <see cref="TravelRules.PlanRoute(Func{HexCoord, WorldRegionData}, WorldRegionData, GridCell, WorldRegionData, GridCell, Func{string, double})"/>:
+        /// each region's walk factor in an hour, or null when no region on the map has a storm.
+        /// </summary>
+        public static Func<string, double> TravelFactors(IReadOnlyDictionary<string, RegionCondition> conditions)
+        {
+            if (conditions == null || !conditions.Values.Any(c => c == RegionCondition.Storm)) return null;
+            return regionId => regionId != null && conditions.TryGetValue(regionId, out var c) ? TravelFactor(c) : 1.0;
+        }
+
+        /// <summary>How many times an ambush beaten in a region that hour counts toward an Ambush quest.</summary>
+        public static int AmbushQuestCount(RegionCondition condition)
+            => condition == RegionCondition.Storm ? StormAmbushQuestCount : 1;
+
+        /// <summary>Whether a site is one a Plague of Rats fills: the caves and ruins, fought room by room.</summary>
+        public static bool IsRatsSite(LocationType site) => site == LocationType.Dungeon || site == LocationType.Ruin;
+
+        /// <summary>The factor on the enemies in a site that hour.</summary>
+        public static double EnemyFactor(RegionCondition condition, LocationType site)
+            => condition == RegionCondition.PlagueOfRats && IsRatsSite(site) ? RatsEnemyFactor : 1.0;
+
+        /// <summary>The factor on what a site's clear pays (experience, gold, materials) for a run begun that hour.</summary>
+        public static double ClearPayFactor(RegionCondition condition, LocationType site)
+            => condition == RegionCondition.PlagueOfRats && IsRatsSite(site) ? RatsPayFactor : 1.0;
+
+        /// <summary>The factor on a Gather quest's gold, offered by a giver in a region that hour.</summary>
+        public static double GatherGoldFactor(RegionCondition condition)
+            => condition == RegionCondition.HarvestFair ? FairGatherGoldFactor : 1.0;
+
         /// <summary>When the hour holding <paramref name="at"/> ends, and with it the conditions.</summary>
         public static DateTime HourEnds(DateTime at) => HarassmentRules.HourEnds(at);
 
@@ -138,14 +220,23 @@ namespace MuggaLuggaTD.Shared.Gameplay
         {
             RegionCondition.HarvestFair => "Harvest Fair",
             RegionCondition.HuntingSeason => "Hunting Season",
+            RegionCondition.Storm => "Storm",
+            RegionCondition.PlagueOfRats => "Plague of Rats",
+            RegionCondition.Pilgrimage => "Pilgrimage",
             _ => "",
         };
 
         /// <summary>What it does, in a line: "workers bring in +50% goods".</summary>
         public static string EffectOf(RegionCondition condition) => condition switch
         {
-            RegionCondition.HarvestFair => $"workers bring in +{(FairGoodsFactor - 1) * 100:0}% goods",
+            RegionCondition.HarvestFair =>
+                $"workers bring in +{(FairGoodsFactor - 1) * 100:0}% goods, and Gather quests pay +{(FairGatherGoldFactor - 1) * 100:0}% gold",
             RegionCondition.HuntingSeason => $"ambushes {HuntChanceFactor:0.#}× as likely, and pay {HuntRewardFactor:0.#}×",
+            RegionCondition.Storm =>
+                $"journeys through it take {StormTravelFactor:0.#}× as long, and an ambush beaten here counts twice for a quest",
+            RegionCondition.PlagueOfRats =>
+                $"caves and ruins hold +{(RatsEnemyFactor - 1) * 100:0}% enemies, and their clears pay +{(RatsPayFactor - 1) * 100:0}%",
+            RegionCondition.Pilgrimage => "both of its wandering quest-givers are out",
             _ => "",
         };
     }

@@ -575,7 +575,7 @@ public class AutoFightService
         var candidates = new List<AutoFightCandidate>();
         foreach (var site in layout.Sites.Where(s => s.IsFightable))
         {
-            var plan = string.Equals(site.SiteId, party.SiteId, StringComparison.Ordinal) ? null : PlanTo(party, day, site);
+            var plan = string.Equals(site.SiteId, party.SiteId, StringComparison.Ordinal) ? null : PlanTo(party, day, site, t);
             if (plan == null && !string.Equals(site.SiteId, party.SiteId, StringComparison.Ordinal)) continue;
             plans[site.SiteId] = plan;
             candidates.Add(new AutoFightCandidate(site.SiteId, site.Type, site.Level, plan?.Duration ?? TimeSpan.Zero));
@@ -603,7 +603,7 @@ public class AutoFightService
 
     private bool Walk(PlayerParty party, Day day, SiteSpec to, DateTime t)
     {
-        var plan = PlanTo(party, day, to);
+        var plan = PlanTo(party, day, to, t);
         if (plan == null) return false;
         party.AutoTargetSiteId = to.SiteId;
         if (plan.Duration <= TimeSpan.Zero) { Arrive(party, t, to.SiteId); return true; }
@@ -731,9 +731,12 @@ public class AutoFightService
         {
             var full = RunRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.DroppableItems,
                 Dice, AutoFightRules.RarityStepsDown, site: site.Type);
+            // A Plague of Rats in the hour it was fought: a cave or ruin pays more (Active Content C, phase 2).
+            double rats = RegionConditionRules.ClearPayFactor(RegionConditionRules.At(day.Instance.ToString(),
+                SiteSpec.RegionIdOf(site.SiteId) ?? "", at, day.Regions.Values), site.Type);
             var materials = MaterialRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.Materials, Dice, site: site.Type)
-                .Select(m => (m.MaterialName, (int)AutoFightRules.Share(m.Quantity, Dice)));
-            Pay(report, day, AutoFightRules.Share(full.Experience, Dice),
+                .Select(m => (m.MaterialName, (int)AutoFightRules.Share((int)Math.Round(m.Quantity * rats), Dice)));
+            Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * rats), Dice),
                 full.Items.Where(_ => Dice.NextDouble() < AutoFightRules.RewardShare).ToList(), materials);
         }
         else Bloody(day, fighters, at);
@@ -847,13 +850,16 @@ public class AutoFightService
             : null;
     }
 
-    private static RoutePlan? PlanTo(PlayerParty party, Day day, SiteSpec to)
+    /// <summary>The road from where the company stands, slowed by any storm on it in the hour it sets out (<paramref name="at"/>).</summary>
+    private static RoutePlan? PlanTo(PlayerParty party, Day day, SiteSpec to, DateTime at)
     {
         if (string.IsNullOrEmpty(party.SiteId) || string.IsNullOrEmpty(party.RegionId)) return null;
         if (!day.Regions.TryGetValue(party.RegionId, out var home)) return null;
         var from = day.LayoutOf(home).FindSite(party.SiteId);
         if (from == null || !day.Regions.TryGetValue(SiteSpec.RegionIdOf(to.SiteId), out var region)) return null;
-        return TravelRules.PlanRoute(hex => day.ByHex.TryGetValue(hex, out var r) ? r : null!, home, from.Cell, region, to.Cell);
+        var weather = RegionConditionRules.TravelFactors(
+            RegionConditionRules.For(day.Instance.ToString(), HarassmentRules.HourOf(at), day.Regions.Values));
+        return TravelRules.PlanRoute(hex => day.ByHex.TryGetValue(hex, out var r) ? r : null!, home, from.Cell, region, to.Cell, weather);
     }
 
     private static List<string> ReadRecent(PlayerParty party)
