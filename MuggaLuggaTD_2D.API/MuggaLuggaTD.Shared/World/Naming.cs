@@ -491,11 +491,21 @@ namespace MuggaLuggaTD.Shared.World
         public static string ForWarband(FactionId faction, BiomeType biome, ulong seed)
         {
             var random = DeterministicRandom.ForSubject(seed, 0x62616E64);
-            if (FactionCatalog.Has(faction)) return $"{FactionCatalog.NameOf(faction)} {Pick(BandWords, ref random)}";
+            if (FactionCatalog.Has(faction))
+                return $"{FactionCatalog.NameOf(faction)} {Pick(FactionBandWords.TryGetValue(faction, out var own) ? own : BandWords, ref random)}";
             if (random.Next(2) == 0)
                 return $"The {Compound(Pick(Roots(biome), ref random), Pick(BandEndings, ref random)) ?? PlaceWord(biome, ref random)}";
             return $"{PlaceWord(biome, ref random)} {Pick(BandWords, ref random)}";
         }
+
+        /// <summary>A faction's own words for its warbands (Factions 2 §5). The Grimjaw and Ashkin keep <c>BandWords</c>, so no warband already in the field is renamed.</summary>
+        private static readonly Dictionary<FactionId, string[]> FactionBandWords = new Dictionary<FactionId, string[]>
+        {
+            [FactionId.DrownedCourt] = new[] { "Tide", "Courtiers", "Undertow", "Wash", "Retinue" },
+            [FactionId.BoneSynod] = new[] { "Procession", "Choir", "Ossuary", "Vigil", "Faithful" },
+            [FactionId.Thornwood] = new[] { "Wardens", "Brambles", "Thicket", "Briars", "Rootband" },
+            [FactionId.HornedKin] = new[] { "Charge", "Herd", "Stampede", "Hornband", "Rams" },
+        };
 
         private static readonly string[] LordTitles =
             { "Hollow King", "Pale Duke", "Starless Queen", "Last Warden", "Torn Prince", "Grey Abbess", "Unlit Margrave", "Weeping Knight" };

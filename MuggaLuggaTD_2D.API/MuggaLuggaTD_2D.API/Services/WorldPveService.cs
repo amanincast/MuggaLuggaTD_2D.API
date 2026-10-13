@@ -398,7 +398,8 @@ public class WorldPveService
                 RegionId = resolved.Region.RegionId,
                 ClearedSiteId = resolved.Site.IsFightable ? run.LocationId : null,
                 Kills = new Dictionary<string, int>(_quests.ClampKills(
-                    request.Kills, resolved.Region.Biome, resolved.Site.Tier, resolved.Site.Type))
+                    request.Kills, resolved.Region.Biome, resolved.Site.Tier, resolved.Site.Type,
+                    FactionCatalog.PeopleHolderOf(resolved.Region)))
             });
         }
 

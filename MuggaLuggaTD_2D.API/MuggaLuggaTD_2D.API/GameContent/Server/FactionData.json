@@ -39,6 +39,47 @@
       "Siege": 0.2,
       "Expand": 0.5,
       "Fortify": 0
+    },
+    // Factions 2, step 2 (spec §2.2). Drawn into a world's cast of three at generation; signature acts come with step 3.,
+    {
+      "Id": "DrownedCourt",
+      "Name": "The Drowned Court",
+      "Lean": "lays siege to the shore",
+      "Aggression": 0.9,
+      "Raid": 0.2,
+      "Siege": 0.45,
+      "Expand": 0.2,
+      "Fortify": 0.15
+    },
+    {
+      "Id": "BoneSynod",
+      "Name": "The Bone Synod",
+      "Lean": "holds what it takes",
+      "Aggression": 0.7,
+      "Raid": 0.2,
+      "Siege": 0.2,
+      "Expand": 0.25,
+      "Fortify": 0.35
+    },
+    {
+      "Id": "Thornwood",
+      "Name": "The Thornwood Pact",
+      "Lean": "grows its borders",
+      "Aggression": 0.75,
+      "Raid": 0.25,
+      "Siege": 0.05,
+      "Expand": 0.45,
+      "Fortify": 0.25
+    },
+    {
+      "Id": "HornedKin",
+      "Name": "The Horned Kin",
+      "Lean": "charges first",
+      "Aggression": 1.4,
+      "Raid": 0.45,
+      "Siege": 0.4,
+      "Expand": 0.1,
+      "Fortify": 0.05
     }
   ]
 }

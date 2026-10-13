@@ -273,7 +273,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             int level = AutoFightRules.MobLevel(layout.Sites);
             int tier = Math.Max(1, region.Tier);
             var fightable = layout.Sites.Where(s => s.IsFightable).ToList();
-            var folk = PeoplesOf(region.Biome, peoples);
+            var folk = PeoplesOf(region.Biome, peoples, FactionCatalog.PeopleHolderOf(region));
             var trades = layout.Sites.Where(s => s.Type == LocationType.ResourceNode)
                 .Select(s => ResourceNodeRules.GoodOf(ResourceNodeRules.TradeOf(s.SiteId, region.Biome)))
                 .Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
@@ -303,7 +303,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             int level = AutoFightRules.MobLevel(layout.Sites);
             int tier = Math.Max(1, region.Tier);
             var fightable = layout.Sites.Where(s => s.IsFightable).ToList();
-            var folk = PeoplesOf(region.Biome, peoples);
+            var folk = PeoplesOf(region.Biome, peoples, FactionCatalog.PeopleHolderOf(region));
             var trades = layout.Sites.Where(s => s.Type == LocationType.ResourceNode)
                 .Select(s => ResourceNodeRules.GoodOf(ResourceNodeRules.TradeOf(s.SiteId, region.Biome)))
                 .Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
@@ -431,8 +431,28 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// combat roster does (<c>BiomeRoster</c>), so a quest never asks for someone who cannot spawn there.
         /// </summary>
         public static IReadOnlyList<string> PeoplesOf(BiomeType biome, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples)
+            => PeoplesOf(biome, peoples, FactionId.None);
+
+        /// <summary>
+        /// As above, in a faction's land (Factions 2 §3.3): its own peoples, those of them content has anywhere, as the
+        /// client's roster draws them; the biome's when it has none (or <paramref name="faction"/> is None).
+        /// </summary>
+        public static IReadOnlyList<string> PeoplesOf(BiomeType biome, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples,
+            FactionId faction)
         {
             if (peoples == null) return Array.Empty<string>();
+            var own = FactionCatalog.PeopleOf(faction);
+            if (own.Count > 0)
+            {
+                var known = new HashSet<string>(peoples.Values.SelectMany(p => p), StringComparer.Ordinal);
+                var theirs = own.Where(known.Contains).ToList();
+                if (theirs.Count > 0) return theirs;
+            }
+            return BiomePeoples(biome, peoples);
+        }
+
+        private static IReadOnlyList<string> BiomePeoples(BiomeType biome, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples)
+        {
             if (peoples.TryGetValue(biome, out var own) && own.Count > 0) return own;
             return peoples.TryGetValue(BiomeType.Grassland, out var fallback) ? fallback : Array.Empty<string>();
         }

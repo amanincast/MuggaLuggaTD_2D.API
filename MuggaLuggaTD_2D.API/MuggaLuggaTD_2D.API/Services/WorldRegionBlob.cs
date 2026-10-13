@@ -472,17 +472,31 @@ public static class WorldRegionBlob
 
     /// <summary>Serialises a freshly generated world into the blob shape the client reads.</summary>
     public static JsonObject BuildWorld(int worldSeed, IReadOnlyList<WorldRegionData> regions)
+        => BuildWorld(worldSeed, regions, null);
+
+    /// <summary>
+    /// As above, recording the world's faction cast (Factions 2 §4) in the optional "Factions" array. Null records
+    /// none, which reads as the old pair (<see cref="ReadCast"/>).
+    /// </summary>
+    public static JsonObject BuildWorld(int worldSeed, IReadOnlyList<WorldRegionData> regions, IReadOnlyList<FactionId>? cast)
     {
         var array = new JsonArray();
         foreach (var region in regions)
             array.Add(WriteRegion(region));
 
-        return new JsonObject
+        var world = new JsonObject
         {
             ["FormatVersion"] = CurrentFormatVersion,
             ["WorldSeed"] = worldSeed,
             ["Regions"] = array
         };
+        if (cast != null && cast.Count > 0)
+        {
+            var factions = new JsonArray();
+            foreach (var faction in cast) factions.Add((int)faction);
+            world["Factions"] = factions;
+        }
+        return world;
     }
 
     private static JsonObject WriteRegion(WorldRegionData region)
