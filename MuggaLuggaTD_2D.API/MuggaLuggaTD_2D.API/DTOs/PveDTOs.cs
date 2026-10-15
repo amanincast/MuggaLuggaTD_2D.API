@@ -24,7 +24,38 @@ public record PveBeginRequest(
     Guid? PartyId = null
 );
 
-public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null);
+public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null, BountyEncounterDto? Bounty = null);
+
+/// <summary>
+/// The fight with a wanted champion (Active Content A), sent with the run so the client builds what the
+/// server will pay for: the champion, its people's roster for an escort, its level and tier, and its affixes.
+/// </summary>
+public record BountyEncounterDto(
+    long Slot,
+    string Name,
+    string Title,
+    string People,
+    MuggaLuggaTD.Shared.World.BiomeType Biome,
+    string RegionId,
+    int Level,
+    int Tier,
+    List<MuggaLuggaTD.Shared.Gameplay.RiftMutator> Mutators,
+    long Gold);
+
+/// <summary>
+/// What a win over a champion paid: the bounty (or, for a winner who went in before it was claimed, the
+/// consolation) and, for the first, the chest.
+/// </summary>
+public record BountyWinDto(
+    long Slot,
+    string Name,
+    string Title,
+    bool First,
+    long Gold,
+    Enums.ItemRarityTypes? ChestRarity,
+    List<StateManagement.Models.ItemSaveData> Chest,
+    string? ClaimedByName,
+    string RegionId);
 
 /// <summary>
 /// The fight at a rift site (Invasions spec §5.3), sent with the run so the client builds what the
@@ -116,7 +147,9 @@ public record PveClaimResponse(
     /// <summary>When a clear here will shape the realm again for this player; null for a capture.</summary>
     DateTime? WorldRewardsBackAt = null,
     /// <summary>A rift site's win (Invasions spec, phase 3); null for any other run.</summary>
-    RiftWinDto? Rift = null
+    RiftWinDto? Rift = null,
+    /// <summary>A wanted champion's win (Active Content A); null for any other run.</summary>
+    BountyWinDto? Bounty = null
 );
 
 /// <summary>

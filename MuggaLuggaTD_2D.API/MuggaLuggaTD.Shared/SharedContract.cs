@@ -271,6 +271,9 @@ namespace MuggaLuggaTD.Shared
         //   stampede past the raid cooldown once a day.
         // 1.66.0 - Factions 2, step 4. A faction scores a quarter of the players' rate for its land
         //   (SeasonEndRules.FactionScoreShare), and the standings list only the world's cast.
-        public const string Version = "1.66.0";
+        // 1.67.0 - Bounties, phase 1 (Active Content A). BountyRules: two wanted champions a day walk a seeded path for
+        //   36 hours; fights at bounty:{slot} (tier +1, at least 3, +2 levels, two mutators); the first win claims the
+        //   bounty (3x a clear's gold, a Rare+ chest, SeasonDeed.BountyClaimed 80 points).
+        public const string Version = "1.67.0";
     }
 }

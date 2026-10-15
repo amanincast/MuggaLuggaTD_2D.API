@@ -46,7 +46,7 @@ public record PveOutcome(PveError Error, string? Message = null)
 /// *within* the combat scene to produce a genuine-looking win; that is inherent to client-side
 /// real-time combat and is not addressed here.
 /// </summary>
-public class WorldPveService
+public partial class WorldPveService
 {
     /// <summary>
     /// A run claimed faster than this never happened — the combat scene cannot be completed in less.
@@ -78,6 +78,9 @@ public class WorldPveService
     /// <summary>Wears a rift's Breach down and seals it (Invasions spec, phase 3). Optional so tests can leave it out.</summary>
     private readonly RiftService? _rifts;
 
+    /// <summary>Wanted champions (Active Content A). Optional so tests can leave it out.</summary>
+    private readonly BountyService? _bounties;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -89,8 +92,10 @@ public class WorldPveService
         FirstStepsService? firstSteps = null,
         HiringService? hiring = null,
         QuestService? quests = null,
-        RiftService? rifts = null)
+        RiftService? rifts = null,
+        BountyService? bounties = null)
     {
+        _bounties = bounties;
         _rifts = rifts;
         _quests = quests;
         _hiring = hiring;
@@ -243,6 +248,12 @@ public class WorldPveService
         {
             var (riftOutcome, riftResponse) = await ClaimRiftAsync(gameInstanceId, userId, run, request);
             return (riftOutcome, riftResponse, null);
+        }
+
+        if (BountyRules.IsSiteId(run.LocationId))
+        {
+            var (bountyOutcome, bountyResponse) = await ClaimBountyAsync(gameInstanceId, userId, displayName, run, request);
+            return (bountyOutcome, bountyResponse, null);
         }
 
         var worldRow = await _context.WorldViewGameData

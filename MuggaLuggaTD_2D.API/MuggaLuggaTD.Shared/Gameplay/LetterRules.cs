@@ -51,6 +51,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <see cref="RiftEruption"/> name ("Seized", "Besieged", "Surged").
         /// </summary>
         RiftErupted,
+
+        /// <summary>
+        /// To each other player who went after a wanted champion (Active Content A): someone brought it down. Subject: its
+        /// slot. Actor: who claimed it. Detail: "{name}|{title}".
+        /// </summary>
+        BountyClaimed,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -93,6 +99,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.AutoReport:
                     return LetterCategory.Companies;
                 case LetterKind.QuestReady:
+                case LetterKind.BountyClaimed:
                     return LetterCategory.Quests;
                 case LetterKind.SeasonEnded:
                 case LetterKind.RealmGoalReached:

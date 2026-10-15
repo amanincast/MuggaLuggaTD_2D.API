@@ -370,6 +370,48 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("BloodiedCharacters");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Bounty", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClaimedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("ClaimedInRegionId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("GameInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PinnedRegionId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SeasonNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Slot")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameInstanceId", "SeasonNumber", "Slot")
+                        .IsUnique();
+
+                    b.ToTable("Bounties");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.FactionRaid", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2578,6 +2620,15 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Navigation("GameInstance");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Bounty", b =>
+                {
+                    b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", null)
+                        .WithMany()
+                        .HasForeignKey("GameInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.FactionRaid", b =>
