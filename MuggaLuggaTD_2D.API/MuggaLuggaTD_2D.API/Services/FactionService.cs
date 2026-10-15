@@ -239,7 +239,7 @@ public partial class FactionService
 
         var rows = await SettleAsync(gameInstanceId, regions, utcNow);
         // Far enough back to tell whether the Horned Kin have stampeded today, as well as what is on cooldown.
-        var since = utcNow - RaidResolver.Cooldown - FactionSignatureRules.StampedeEvery;
+        var since = utcNow - FactionDecisionRules.RaidCooldown - FactionSignatureRules.StampedeEvery;
         var recent = await _context.FactionRaids
             .Where(r => r.GameInstanceId == gameInstanceId && r.RaidedAt > since)
             .ToListAsync();
@@ -445,7 +445,7 @@ public partial class FactionService
     {
         double marching = march ?? FactionDecisionRules.RaidMarch(row.Strength);
         bool mayStampede = FactionSignatureRules.Has(row.Faction, FactionSignature.Stampede) &&
-                           FactionSignatureRules.MayStampede(OwnRaids(recent, row.Faction), now, RaidResolver.Cooldown);
+                           FactionSignatureRules.MayStampede(OwnRaids(recent, row.Faction), now, FactionDecisionRules.RaidCooldown);
         var candidates = new List<FactionRaidTarget>();
 
         foreach (var region in FactionDecisionRules.Bordering(row.Faction, regions))
@@ -466,7 +466,7 @@ public partial class FactionService
 
     /// <summary>Whether the faction raided this region less than a cooldown ago.</summary>
     private static bool Cooling(List<FactionRaid> recent, FactionId faction, string regionId, DateTime now) =>
-        recent.Any(r => r.Faction == faction && r.RegionId == regionId && r.RaidedAt + RaidResolver.Cooldown > now);
+        recent.Any(r => r.Faction == faction && r.RegionId == regionId && r.RaidedAt + FactionDecisionRules.RaidCooldown > now);
 
     private static List<(string RegionId, DateTime At)> OwnRaids(List<FactionRaid> recent, FactionId faction) =>
         recent.Where(r => r.Faction == faction).Select(r => (r.RegionId, r.RaidedAt)).ToList();

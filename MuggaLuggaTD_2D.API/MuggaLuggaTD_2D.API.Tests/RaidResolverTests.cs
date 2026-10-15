@@ -204,7 +204,7 @@ public class RaidResolverTests
         }
 
         Assert.True(raids >= 5, $"Only {raids} raids to grind a region down — too few.");
-        Assert.True(raids * RaidResolver.CooldownHours >= 20,
-            "Wearing a region down should span the better part of a day of real time.");
+        Assert.True(raids * RaidResolver.CooldownHours >= 5,
+            "Wearing a region down should span several hours of real time (the evening pace).");
     }
 }

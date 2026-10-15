@@ -14,7 +14,7 @@ public partial class WorldPveService
 
     /// <summary>
     /// Opens a run against a wanted champion (<c>bounty:{slot}</c>). It must be roaming and unclaimed; the
-    /// player may go after it once every two hours; and a company must be at rest in the region it stands
+    /// player may go after it once an hour; and a company must be at rest in the region it stands
     /// in now. Returns the encounter, so the client builds the fight the server will pay for.
     /// </summary>
     public async Task<(PveOutcome Outcome, Guid RunId, BountyEncounterDto? Encounter)> BeginBountyAsync(
@@ -37,7 +37,7 @@ public partial class WorldPveService
                 ? "No such champion has been seen yet."
                 : $"{champion.Name} has escaped."), Guid.Empty, null);
 
-        // One attempt every two hours: lose, and wait.
+        // One attempt an hour: lose, and wait.
         var last = await _bounties.LastAttemptAsync(gameInstanceId, userId, request.SiteId, now);
         if (last != null)
         {

@@ -35,8 +35,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>From empty to full, when not Bloodied.</summary>
         public static readonly TimeSpan RefillTime = TimeSpan.FromHours(24);
 
-        /// <summary>How long a lost attack leaves a faction Bloodied: the same window as captivity and muster.</summary>
-        public static readonly TimeSpan BloodiedFor = TimeSpan.FromHours(8);
+        /// <summary>How long a lost attack leaves a faction Bloodied: the same window as captivity (evening pace, 2026-10-15).</summary>
+        public static readonly TimeSpan BloodiedFor = TimeSpan.FromHours(2);
 
         /// <summary>A Bloodied faction refills at this share of its usual rate.</summary>
         public const double BloodiedRefill = 0.5;

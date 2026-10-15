@@ -248,7 +248,7 @@ public class WorldSiegeServiceTests : IDisposable
     [Fact]
     public async Task NoSiegeMayBeDeclaredOnTheSeasonsLastDay()
     {
-        var instanceId = await SeedAsync(seasonEndsIn: TimeSpan.FromHours(20));
+        var instanceId = await SeedAsync(seasonEndsIn: TimeSpan.FromHours(SiegeRules.SeasonCutoffHours - 1));
 
         var outcome = await Service.DeclareAsync(instanceId, TestIds.Player, Request());
 

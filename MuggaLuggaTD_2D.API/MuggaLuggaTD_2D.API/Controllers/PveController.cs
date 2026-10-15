@@ -148,7 +148,7 @@ public class PveController : ControllerBase
         // Clearing a site pays a lump - it is the bounce-back lever, available to a player with no
         // territory at all. Taking a keep pays nothing directly; it pays by earning from then on,
         // which is why a capture only re-rates.
-        // Once per player per site every eight hours (SiteRotationRules), like the other realm rewards.
+        // Once per player per site every two hours (SiteRotationRules), like the other realm rewards.
         if (string.Equals(response.ConquestOutcome, nameof(ConquestOutcome.RemoveLocation), StringComparison.Ordinal)
             && response.WorldRewards)
             await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.SiteCleared);

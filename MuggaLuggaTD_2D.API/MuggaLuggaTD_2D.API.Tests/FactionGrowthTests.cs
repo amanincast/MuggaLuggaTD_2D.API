@@ -282,7 +282,7 @@ public class FactionGrowthTests : IDisposable
         row.GameData = world.ToJsonString();
         await _db.SaveChangesAsync();
 
-        await Factions.SettleDueSiegesAsync(realm, Noon + SiegeRules.Muster);
+        await Factions.SettleDueSiegesAsync(realm, Noon + FactionSiegeRules.Muster);
 
         Assert.Equal(SiegeState.Cancelled, (await _db.FactionSieges.AsNoTracking().SingleAsync()).State);
         Assert.Equal(FactionId.Player, (await RegionAsync(realm, "a")).Faction);
