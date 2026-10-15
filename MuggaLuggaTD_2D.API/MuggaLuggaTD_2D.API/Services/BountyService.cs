@@ -38,12 +38,16 @@ public class BountyService
     private readonly IGameContentProvider _content;
     private readonly ILogger<BountyService> _logger;
     private readonly IHubContext<GameHub>? _hub;
+    private readonly WarLogService? _warLog;
+    private readonly LetterService? _letters;
 
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
     public BountyService(ApplicationDbContext context, IGameContentProvider content, ILogger<BountyService> logger,
-        IHubContext<GameHub>? hub = null)
+        IHubContext<GameHub>? hub = null, WarLogService? warLog = null, LetterService? letters = null)
     {
+        _warLog = warLog;
+        _letters = letters;
         _context = context;
         _content = content;
         _logger = logger;
@@ -210,11 +214,31 @@ public class BountyService
         return false;
     }
 
-    /// <summary>Tells the realm a champion fell.</summary>
-    public async Task BroadcastClaimedAsync(Guid gameInstanceId, BountyClaimedNotification claimed)
+    /// <summary>
+    /// Tells the realm a champion fell: the war log, a letter to every other player who went after it, and the hub
+    /// (the map's skull goes, and the board re-reads).
+    /// </summary>
+    public async Task AnnounceClaimedAsync(Guid gameInstanceId, string userId, BountyClaimedNotification claimed)
     {
-        if (_hub == null) return;
-        await _hub.Clients.Group(gameInstanceId.ToString()).SendAsync("BountyClaimed", claimed);
+        var now = Clock();
+        string detail = $"{claimed.Name}|{claimed.Title}";
+        if (_warLog != null)
+            await _warLog.RecordAsync(gameInstanceId, WarLogKind.BountyClaimed, userId, null, claimed.RegionId, detail, now,
+                actorName: claimed.ClaimedByName);
+
+        if (_letters != null)
+        {
+            string site = BountyRules.SiteId(claimed.Slot);
+            var hunters = await _context.PveRuns.AsNoTracking()
+                .Where(r => r.GameInstanceId == gameInstanceId && r.LocationId == site && r.UserId != userId)
+                .Select(r => r.UserId).Distinct().ToListAsync();
+            foreach (var hunter in hunters)
+                await _letters.SendAsync(gameInstanceId, hunter, LetterKind.BountyClaimed, now, $"bounty:{claimed.Slot}:claimed",
+                    claimed.RegionId, claimed.Slot.ToString(), claimed.ClaimedByName, detail);
+        }
+
+        if (_hub != null)
+            await _hub.Clients.Group(gameInstanceId.ToString()).SendAsync("BountyClaimed", claimed);
     }
 
     // -----------------------------------------------------------------

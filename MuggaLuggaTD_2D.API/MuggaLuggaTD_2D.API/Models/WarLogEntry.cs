@@ -62,7 +62,10 @@ public enum WarLogKind
     RiftErupted,
 
     /// <summary>A Lesser Rift was not sealed in time: the subject's region is invaded. Detail: the kind.</summary>
-    RegionInvaded
+    RegionInvaded,
+
+    /// <summary>A wanted champion was brought down (Active Content A); the actor claimed it. Detail: "{name}|{title}".</summary>
+    BountyClaimed
 }
 
 /// <summary>

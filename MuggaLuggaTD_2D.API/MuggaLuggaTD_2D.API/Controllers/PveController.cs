@@ -128,7 +128,7 @@ public class PveController : ControllerBase
             if (won.First)
             {
                 await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.BountyClaimed);
-                await _bounties.BroadcastClaimedAsync(gameInstanceId,
+                await _bounties.AnnounceClaimedAsync(gameInstanceId, userId,
                     new BountyClaimedNotification(won.Slot, won.Name, won.Title, won.ClaimedByName ?? "A herald", won.RegionId));
             }
             _sessionLog.Log("PVE-CLAIM",

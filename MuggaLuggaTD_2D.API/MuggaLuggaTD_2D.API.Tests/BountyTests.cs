@@ -208,6 +208,33 @@ public class BountyTests : IDisposable
     }
 
     [Fact]
+    public async Task AFall_IsInTheWarLog_AndLettersGoToTheOtherHunters()
+    {
+        await RealmAsync();
+        long slot = LiveSlot();
+        await Bounties.DebugPinAsync(_realm, "r2");
+        var (_, myRun, _) = await BeginAsync(TestIds.Player, slot);
+        await BeginAsync(TestIds.Rival, slot);
+        var won = (await ClaimAsync(TestIds.Player, myRun)).Bounty!;
+
+        var hub = new FakeHubContext();
+        var clock = new FakeClock(DateTime.UtcNow);
+        var letters = new LetterService(_db, hub, NullLogger<LetterService>.Instance, clock);
+        var warLog = new WarLogService(_db, hub, NullLogger<WarLogService>.Instance, clock, letters);
+        var announcing = new BountyService(_db, _content, NullLogger<BountyService>.Instance, hub, warLog, letters);
+        await announcing.AnnounceClaimedAsync(_realm, TestIds.Player,
+            new BountyClaimedNotification(won.Slot, won.Name, won.Title, "Mira", won.RegionId));
+
+        var line = await _db.WarLog.AsNoTracking().SingleAsync(e => e.Kind == nameof(WarLogKind.BountyClaimed));
+        Assert.Equal($"{won.Name}|{won.Title}", line.Detail);
+        Assert.Equal("r2", line.RegionId);
+
+        var letter = await _db.Letters.AsNoTracking().SingleAsync(l => l.Kind == nameof(LetterKind.BountyClaimed));
+        Assert.Equal(TestIds.Rival, letter.UserId);
+        Assert.Equal(LetterCategory.Quests, LetterRules.CategoryOf(LetterKind.BountyClaimed));
+    }
+
+    [Fact]
     public async Task OneAttempt_EveryTwoHours()
     {
         await RealmAsync();
