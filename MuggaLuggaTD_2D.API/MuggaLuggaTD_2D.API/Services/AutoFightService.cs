@@ -320,6 +320,9 @@ public class AutoFightService
         public readonly List<AutoFightReport> Reports = new();
         public readonly HashSet<string> Wounded = new(StringComparer.Ordinal);
 
+        /// <summary>When each recent realm goal was reached: a site won after one, that day, pays the boon.</summary>
+        public required List<DateTime> GoalsReached { get; init; }
+
         public long Gold;
         public readonly List<ItemSaveData> Items = new();
         public readonly Dictionary<string, int> Materials = new(StringComparer.Ordinal);
@@ -390,6 +393,7 @@ public class AutoFightService
             Goods = await _context.PlayerMaterials.AsNoTracking()
                 .Where(m => m.GameInstanceId == gameInstanceId && m.UserId == userId)
                 .ToDictionaryAsync(m => m.MaterialName, m => m.Quantity, StringComparer.Ordinal),
+            GoalsReached = await RealmGoalService.ReachedSinceAsync(_context, gameInstanceId, Clock() - AutoFightRules.MaximumReplay),
         };
 
         foreach (var party in parties) Replay(party, day);
@@ -737,7 +741,8 @@ public class AutoFightService
             var materials = MaterialRewardCalculator.Calculate(site.Level, site.Tier, _content.RunTuning, _content.Materials, Dice, site: site.Type)
                 .Select(m => (m.MaterialName, (int)AutoFightRules.Share((int)Math.Round(m.Quantity * rats), Dice)));
             Pay(report, day, AutoFightRules.Share((long)Math.Round(full.Experience * rats), Dice),
-                full.Items.Where(_ => Dice.NextDouble() < AutoFightRules.RewardShare).ToList(), materials);
+                full.Items.Where(_ => Dice.NextDouble() < AutoFightRules.RewardShare).ToList(), materials,
+                boon: day.GoalsReached.Any(r => RealmGoalRules.BoonOn(r, at)));
         }
         else Bloody(day, fighters, at);
 
@@ -796,11 +801,13 @@ public class AutoFightService
     }
 
     private static void Pay(AutoFightReport report, Day day, long experience, List<ItemSaveData> items,
-        IEnumerable<(string Name, int Quantity)> materials)
+        IEnumerable<(string Name, int Quantity)> materials, bool boon = false)
     {
         var won = materials.Where(m => m.Quantity > 0).ToList();
         report.Experience = experience;
         report.Gold = GoldRules.GoldForClear(experience);
+        // The realm's boon on a site won after the day's goal was reached (Active Content B, phase 3).
+        if (boon) report.Gold = RealmGoalRules.WithBoon(report.Gold);
         report.ItemsJson = JsonSerializer.Serialize(items);
         report.MaterialsJson = JsonSerializer.Serialize(won.Select(m => new MaterialGrant { MaterialName = m.Name, Quantity = m.Quantity }).ToList());
 

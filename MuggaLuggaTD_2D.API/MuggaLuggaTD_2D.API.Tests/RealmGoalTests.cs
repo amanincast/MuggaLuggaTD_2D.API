@@ -192,4 +192,64 @@ public class RealmGoalTests : IDisposable
 
         Assert.Equal(12, (await _db.RealmGoals.AsNoTracking().SingleAsync()).Count);
     }
+    // -----------------------------------------------------------------
+    // Phase 3: the boon and the season points
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void TheBoon_RunsFromTheMomentTheGoalIsReached_UntilTheDayTurns()
+    {
+        var reached = new DateTime(2026, 10, 10, 15, 0, 0, DateTimeKind.Utc);
+        Assert.False(RealmGoalRules.BoonOn(null, reached));
+        Assert.False(RealmGoalRules.BoonOn(reached, reached.AddMinutes(-1)));
+        Assert.True(RealmGoalRules.BoonOn(reached, reached));
+        Assert.True(RealmGoalRules.BoonOn(reached, new DateTime(2026, 10, 10, 23, 59, 0, DateTimeKind.Utc)));
+        Assert.False(RealmGoalRules.BoonOn(reached, new DateTime(2026, 10, 11, 0, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal(110, RealmGoalRules.WithBoon(100));
+    }
+
+    [Fact]
+    public void ASharesPoints_FollowItsChest()
+    {
+        Assert.Equal(0, RealmGoalRules.SeasonPointsFor(null));
+        Assert.Equal(RealmGoalRules.MagicSharePoints, RealmGoalRules.SeasonPointsFor(ItemRarityTypes.Magic));
+        Assert.Equal(RealmGoalRules.RareSharePoints, RealmGoalRules.SeasonPointsFor(ItemRarityTypes.Rare));
+        Assert.True(RealmGoalRules.RareSharePoints > RealmGoalRules.MagicSharePoints);
+    }
+
+    [Fact]
+    public async Task ReachingTheGoal_ScoresEachPaidShare_AsClearing()
+    {
+        await RealmWithGoalAsync(RealmGoalKind.Slay, 100);
+        var scores = new SeasonScoreService(_db, new GoldService(_db, _log, NullLogger<GoldService>.Instance),
+            new WorldProvisioningService(_db, NullLogger<WorldProvisioningService>.Instance), _hub, _log,
+            NullLogger<SeasonScoreService>.Instance);
+        var warLog = new WarLogService(_db, _hub, NullLogger<WarLogService>.Instance, new FakeClock(_now));
+        var goals = new RealmGoalService(_db, _content, Ledger, _log, NullLogger<RealmGoalService>.Instance, warLog, scores: scores)
+            { Clock = () => _now };
+
+        await goals.RecordAsync(_realm, TestIds.Rival, Slew(1));     // 1%: nothing
+        await goals.RecordAsync(_realm, TestIds.Owner, Slew(5));     // Magic
+        await goals.RecordAsync(_realm, TestIds.Player, Slew(94));   // Rare, and reaches it
+
+        var deeds = _log.Of("SEASON-DEED").ToList();
+        Assert.Equal(2, deeds.Count);
+        Assert.All(deeds, d => Assert.Contains("deed=RealmGoalReached", d));
+        var player = await _db.SeasonScores.AsNoTracking().SingleAsync(s => s.UserId == TestIds.Player);
+        Assert.Equal(RealmGoalRules.RareSharePoints, player.ClearingPoints, 3);
+        Assert.False(await _db.SeasonScores.AnyAsync(s => s.UserId == TestIds.Rival && s.ClearingPoints > 0));
+    }
+
+    [Fact]
+    public async Task TheBoon_IsOnOnlyOnceTheRealmHasReachedTodaysGoal()
+    {
+        var goal = await RealmWithGoalAsync(RealmGoalKind.Slay, 10);
+        Assert.False(await RealmGoalService.BoonOnAsync(_db, _realm, _now));
+
+        await Goals().RecordAsync(_realm, TestIds.Player, Slew(10));
+
+        Assert.True(await RealmGoalService.BoonOnAsync(_db, _realm, _now));
+        Assert.False(await RealmGoalService.BoonOnAsync(_db, _realm, _now.Date.AddDays(1)));
+        Assert.Single(await RealmGoalService.ReachedSinceAsync(_db, _realm, _now.AddDays(-2)));
+    }
 }

@@ -161,7 +161,9 @@ public class SeasonScoreService
         var score = await FindOrCreateAsync(instance, userId, DateTime.UtcNow);
 
         score.SettledPoints += points;
-        if (deed == SeasonDeed.SiteCleared || deed == SeasonDeed.RiftSealed) score.ClearingPoints += points;
+        if (deed == SeasonDeed.SiteCleared || deed == SeasonDeed.RiftSealed || deed == SeasonDeed.BountyClaimed
+            || deed == SeasonDeed.RealmGoalReached)
+            score.ClearingPoints += points;
         else score.RaidingPoints += points;
 
         await _context.SaveChangesAsync();

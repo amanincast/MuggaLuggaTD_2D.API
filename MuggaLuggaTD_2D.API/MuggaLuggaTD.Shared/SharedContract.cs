@@ -279,6 +279,10 @@ namespace MuggaLuggaTD.Shared
         //   2h (8); prisoners home in 2h (8); a faction Bloodied 2h (8); a bounty attempt every 1h (2). A faction's
         //   siege keeps its 8h muster, 24h redeclare and 24h cut-off (FactionSiegeRules), and its raid cooldown 4h
         //   (FactionDecisionRules.RaidCooldown).
-        public const string Version = "1.68.0";
+        // 1.69.0 - Realm goals, phase 3 (Active Content B). A reached goal turns on the realm's boon until the UTC
+        //   day ends: gold from site clears x1.10 (RealmGoalRules.BoonOn / WithBoon), by hand and in auto mode. Each
+        //   paid share scores SeasonDeed.RealmGoalReached: 50 points with a Magic chest, 100 with a Rare. Bounty
+        //   and realm-goal points count as clearing.
+        public const string Version = "1.69.0";
     }
 }

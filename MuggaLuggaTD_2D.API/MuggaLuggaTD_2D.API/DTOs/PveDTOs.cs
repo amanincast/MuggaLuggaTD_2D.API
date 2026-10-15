@@ -149,7 +149,9 @@ public record PveClaimResponse(
     /// <summary>A rift site's win (Invasions spec, phase 3); null for any other run.</summary>
     RiftWinDto? Rift = null,
     /// <summary>A wanted champion's win (Active Content A); null for any other run.</summary>
-    BountyWinDto? Bounty = null
+    BountyWinDto? Bounty = null,
+    /// <summary>Whether the realm's boon raised this clear's gold (today's goal was reached; Active Content B).</summary>
+    bool RealmBoon = false
 );
 
 /// <summary>

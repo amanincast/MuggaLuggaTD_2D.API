@@ -368,6 +368,10 @@ public partial class WorldPveService
             foreach (var grant in materials) grant.Quantity = (int)Math.Round(grant.Quantity * rats);
         }
 
+        // The realm's boon: today's goal reached, gold from clears is a tenth more until the day turns (Active Content B).
+        bool realmBoon = await RealmGoalService.BoonOnAsync(_context, gameInstanceId, DateTime.UtcNow);
+        if (realmBoon) rewards.Gold = RealmGoalRules.WithBoon(rewards.Gold);
+
         await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pve-claim run={run.Id}");
 
         // Every item rolled is recorded, so the save that carries it home is believed - and a save
@@ -421,7 +425,7 @@ public partial class WorldPveService
 
         var response = new PveClaimResponse(
             run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials,
-            rewards.Gold, goldBalance, worldRewards, lockedUntil, worldRewardsBackAt);
+            rewards.Gold, goldBalance, worldRewards, lockedUntil, worldRewardsBackAt, RealmBoon: realmBoon);
 
         return (new PveOutcome(PveError.None), response, world);
     }

@@ -387,6 +387,31 @@ public class WorldPveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task OnceTheRealmReachesTodaysGoal_AClearPaysTheBoon()
+    {
+        // Active Content B, phase 3: a tenth more gold from clears until the UTC day turns.
+        var region = TestWorld.OwnedBy(TestIds.Player);
+        var instanceId = await SeedWorldAsync(region);
+        var now = DateTime.UtcNow;
+        _db.RealmGoals.Add(new RealmGoal
+        {
+            GameInstanceId = instanceId, Day = RealmGoalRules.DayOf(now), Kind = RealmGoalKind.Clear, Target = 1, Count = 1,
+            ReachedAt = now.AddMinutes(-1)
+        });
+        await _db.SaveChangesAsync();
+        var runId = await OpenRunAsync(instanceId, TestIds.Player, TestWorld.DungeonIn(region));
+        await AgeRunAsync(runId, TimeSpan.FromMinutes(2));
+
+        var (outcome, response, _) = await Service.ClaimAsync(
+            instanceId, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+
+        Assert.True(outcome.Succeeded, outcome.Message);
+        Assert.True(response!.RealmBoon);
+        Assert.Equal(RealmGoalRules.WithBoon(GoldRules.GoldForClear(response.Experience)), response.Gold);
+        Assert.Equal(response.GoldBalance, await Gold.BalanceAsync(instanceId, TestIds.Player));
+    }
+
+    [Fact]
     public async Task AClaimForARunThatWasNeverOpenedIsRefused()
     {
         // This is the whole point of runs: a conquest with no attempt behind it cannot be applied.
