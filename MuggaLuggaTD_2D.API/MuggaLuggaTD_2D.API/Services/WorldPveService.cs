@@ -81,6 +81,9 @@ public partial class WorldPveService
     /// <summary>Wanted champions (Active Content A). Optional so tests can leave it out.</summary>
     private readonly BountyService? _bounties;
 
+    /// <summary>Treasure maps and their caches (Active Content D). Optional so tests can leave it out.</summary>
+    private readonly TreasureMapService? _maps;
+
     public WorldPveService(
         ApplicationDbContext context,
         IGameContentProvider content,
@@ -93,8 +96,10 @@ public partial class WorldPveService
         HiringService? hiring = null,
         QuestService? quests = null,
         RiftService? rifts = null,
-        BountyService? bounties = null)
+        BountyService? bounties = null,
+        TreasureMapService? maps = null)
     {
+        _maps = maps;
         _bounties = bounties;
         _rifts = rifts;
         _quests = quests;
@@ -254,6 +259,12 @@ public partial class WorldPveService
         {
             var (bountyOutcome, bountyResponse) = await ClaimBountyAsync(gameInstanceId, userId, displayName, run, request);
             return (bountyOutcome, bountyResponse, null);
+        }
+
+        if (TreasureMapRules.IsSiteId(run.LocationId))
+        {
+            var (cacheOutcome, cacheResponse) = await ClaimCacheAsync(gameInstanceId, userId, run, request);
+            return (cacheOutcome, cacheResponse, null);
         }
 
         var worldRow = await _context.WorldViewGameData
@@ -423,9 +434,14 @@ public partial class WorldPveService
             outcome, run.LocationId, userId, run.Id, elapsed.TotalSeconds, rewards.Experience, rewards.Items.Count,
             materials.Sum(m => m.Quantity));
 
+        // A dungeon's boss, now and then a portal, may have carried a treasure map (Active Content D).
+        TreasureMapView? foundMap = null;
+        if (_maps != null && resolved.Site.IsFightable)
+            foundMap = await _maps.TryFindAsync(gameInstanceId, userId, resolved.Site.Type, run.LocationId, Random.Shared.NextDouble(), world);
+
         var response = new PveClaimResponse(
             run.LocationId, outcome.ToString(), rewards.Experience, rewards.Items, resolveRestored, materials,
-            rewards.Gold, goldBalance, worldRewards, lockedUntil, worldRewardsBackAt, RealmBoon: realmBoon);
+            rewards.Gold, goldBalance, worldRewards, lockedUntil, worldRewardsBackAt, RealmBoon: realmBoon, FoundMap: foundMap);
 
         return (new PveOutcome(PveError.None), response, world);
     }

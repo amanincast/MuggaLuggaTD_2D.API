@@ -24,7 +24,29 @@ public record PveBeginRequest(
     Guid? PartyId = null
 );
 
-public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null, BountyEncounterDto? Bounty = null);
+public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null, BountyEncounterDto? Bounty = null,
+    CacheEncounterDto? Cache = null);
+
+/// <summary>
+/// A treasure map's cache (Active Content D), sent with the run: where it lies, the site it waits by, and the guardians'
+/// level and tier. The fight is a ruin's rooms in the region's own land.
+/// </summary>
+public record CacheEncounterDto(
+    Guid MapId,
+    string RegionId,
+    string LandmarkSiteId,
+    MuggaLuggaTD.Shared.World.BiomeType Biome,
+    int Level,
+    int Tier);
+
+/// <summary>What an opened cache paid: its gold, the chest, and, now and then, the next map.</summary>
+public record CacheWinDto(
+    Guid MapId,
+    string RegionId,
+    long Gold,
+    Enums.ItemRarityTypes ChestRarity,
+    List<StateManagement.Models.ItemSaveData> Chest,
+    MuggaLuggaTD_2D.API.Services.TreasureMapView? NextMap);
 
 /// <summary>
 /// The fight with a wanted champion (Active Content A), sent with the run so the client builds what the
@@ -151,7 +173,11 @@ public record PveClaimResponse(
     /// <summary>A wanted champion's win (Active Content A); null for any other run.</summary>
     BountyWinDto? Bounty = null,
     /// <summary>Whether the realm's boon raised this clear's gold (today's goal was reached; Active Content B).</summary>
-    bool RealmBoon = false
+    bool RealmBoon = false,
+    /// <summary>A treasure map's cache opened (Active Content D); null for any other run.</summary>
+    CacheWinDto? Cache = null,
+    /// <summary>A treasure map this clear found (Active Content D); null most of the time.</summary>
+    MuggaLuggaTD_2D.API.Services.TreasureMapView? FoundMap = null
 );
 
 /// <summary>

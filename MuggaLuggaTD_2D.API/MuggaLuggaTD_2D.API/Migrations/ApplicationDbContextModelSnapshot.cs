@@ -2414,6 +2414,58 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("TavernStates");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.TreasureMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChainedFromId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("FoundAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FoundAtSiteId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("GameInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LandmarkSiteId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RegionId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SeasonNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameInstanceId", "UserId", "SeasonNumber");
+
+                    b.ToTable("TreasureMaps");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.UserBlock", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3093,6 +3145,15 @@ namespace MuggaLuggaTD_2D.API.Migrations
                         .IsRequired();
 
                     b.Navigation("GameInstance");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.TreasureMap", b =>
+                {
+                    b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", null)
+                        .WithMany()
+                        .HasForeignKey("GameInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.UserBlock", b =>
