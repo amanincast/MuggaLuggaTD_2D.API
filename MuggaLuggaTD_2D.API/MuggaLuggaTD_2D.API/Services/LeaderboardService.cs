@@ -177,7 +177,7 @@ public class LeaderboardService
     /// </summary>
     public async Task<LeaderboardPage> LivingAsync(LeaderboardBoard board, string bracket, string me)
     {
-        if (board == LeaderboardBoard.Rate) throw new ArgumentException("Rate is not a living board.");
+        if (board == LeaderboardBoard.Rate || board == LeaderboardBoard.Trial) throw new ArgumentException($"{board} is not a living board.");
 
         var snapshot = await _context.LeaderboardSnapshots.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Board == board.ToString() && s.Bracket == bracket);
@@ -469,6 +469,31 @@ public class LeaderboardService
         }
         await _context.SaveChangesAsync();
         return written;
+    }
+
+    // -----------------------------------------------------------------
+    // The Weekly Trial (Active Content E)
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// A week of the Weekly Trial: each player's best try, across every realm. <c>Value</c> is the score, <c>Level</c>
+    /// the hero's index (the client names it from the week), <c>Detail</c> "{kills}:{waves}:{seconds}". Built live: one
+    /// row per player per week is small.
+    /// </summary>
+    public async Task<LeaderboardPage> TrialAsync(int week, string me)
+    {
+        var entries = await _context.TrialEntries.AsNoTracking()
+            .Where(e => e.Week == week && e.BestScore > 0)
+            .OrderByDescending(e => e.BestScore).ThenBy(e => e.BestAt)
+            .ToListAsync();
+        var rows = entries.Select(e => new LeaderboardRow
+        {
+            UserId = e.UserId,
+            Value = e.BestScore,
+            Level = e.BestHero,
+            Detail = $"{e.BestKills}:{e.BestWaves}:{e.BestSeconds}",
+        }).ToList();
+        return await PageAsync(rows, me, Clock(), alreadyOrdered: true);
     }
 
     // -----------------------------------------------------------------

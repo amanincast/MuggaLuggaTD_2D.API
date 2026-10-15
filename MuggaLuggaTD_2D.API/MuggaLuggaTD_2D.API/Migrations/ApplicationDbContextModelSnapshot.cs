@@ -2466,6 +2466,124 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("TreasureMaps");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.TrialAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("BegunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("GameInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Hero")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kills")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reported")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("Score")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Seconds")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Trimmed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("Waves")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Day");
+
+                    b.HasIndex("UserId", "Week");
+
+                    b.ToTable("TrialAttempts");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.TrialEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("BestAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("BestHero")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BestKills")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("BestScore")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("BestSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BestWaves")
+                        .HasColumnType("integer");
+
+                    b.Property<short?>("ChestRarity")
+                        .HasColumnType("smallint");
+
+                    b.Property<int?>("FinalRank")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FinalTotal")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaidInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("Week")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Week", "BestScore");
+
+                    b.HasIndex("Week", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("TrialEntries");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.UserBlock", b =>
                 {
                     b.Property<Guid>("Id")

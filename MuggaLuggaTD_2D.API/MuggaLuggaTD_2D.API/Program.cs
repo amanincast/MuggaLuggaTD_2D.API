@@ -115,6 +115,7 @@ builder.Services.AddScoped<BountyService>();
 builder.Services.AddScoped<TreasureMapService>();
 builder.Services.AddScoped<ForgeService>();
 builder.Services.AddScoped<LeaderboardService>();
+builder.Services.AddScoped<TrialService>();
 builder.Services.AddSingleton<RealmPresence>();
 
 // Hardening 8: per-player token buckets, with every refusal tallied for review (RateLimits).

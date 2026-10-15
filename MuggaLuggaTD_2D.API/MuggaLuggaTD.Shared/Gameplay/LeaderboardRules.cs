@@ -15,6 +15,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         Slayers,
         /// <summary>Regions held right now, by bracket, hourly.</summary>
         Conquerors,
+        /// <summary>The Weekly Trial (Active Content E): each player's best try in a week, live.</summary>
+        Trial,
     }
 
     /// <summary>How long a realm's seasons run, so a 7-day realm's heroes are not ranked against a 90-day one's.</summary>

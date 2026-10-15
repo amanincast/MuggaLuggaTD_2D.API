@@ -287,6 +287,10 @@ namespace MuggaLuggaTD.Shared
         //   0.5% (at most 3 held); it points to a cache in a seeded region near the holder's land, beside a seeded site.
         //   The cache is a ruin's rooms at the site's tier and a level above, fought at cache:{map id}; the win opens it:
         //   twice a clear's gold, a Rare (1 in 5 Legendary) chest, and at 10% another map.
-        public const string Version = "1.70.0";
+        // 1.71.0 - The Weekly Trial (Active Content E). TrialRules: a week (Monday 00:00 UTC) rolls its land, arena
+        //   seed, two rift twists and four level-15 heroes (one per class); endless open-field waves at trial:{week};
+        //   score = kills x seconds, held to what the server's clock allows (TrialRules.Check); 3 tries a UTC day;
+        //   chest by finish (top 1% Legendary, 10% Rare, 50% Magic, else Uncommon). LetterKind.TrialChest.
+        public const string Version = "1.71.0";
     }
 }

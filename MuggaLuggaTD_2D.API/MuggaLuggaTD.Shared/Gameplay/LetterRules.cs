@@ -57,6 +57,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// slot. Actor: who claimed it. Detail: "{name}|{title}".
         /// </summary>
         BountyClaimed,
+
+        /// <summary>
+        /// The Weekly Trial (Active Content E): a week you scored in is over, and its chest is paid into this realm.
+        /// Subject: the week. Detail: "{rarity}:{rank}:{total}:{score}".
+        /// </summary>
+        TrialChest,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -109,6 +115,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.RiftContractTaken:
                 case LetterKind.RiftContractPaid:
                 case LetterKind.RiftContractEnded:
+                case LetterKind.TrialChest:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

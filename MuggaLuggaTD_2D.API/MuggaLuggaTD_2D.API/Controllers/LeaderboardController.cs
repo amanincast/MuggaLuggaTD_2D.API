@@ -23,6 +23,11 @@ public class LeaderboardController : ControllerBase
 
     private string Me => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
 
+    /// <summary>A week of the Weekly Trial (Active Content E); this week when none is named.</summary>
+    [HttpGet("trial")]
+    public async Task<ActionResult<LeaderboardPage>> Trial([FromQuery] int? week = null) =>
+        Ok(await _boards.TrialAsync(week ?? TrialRules.WeekOf(DateTime.UtcNow), Me));
+
     /// <summary>Every running season's rate so far.</summary>
     [HttpGet("now")]
     public async Task<ActionResult<LeaderboardPage>> Now() => Ok(await _boards.NowAsync(Me));
@@ -39,7 +44,7 @@ public class LeaderboardController : ControllerBase
     [HttpGet("living/{board}/{bracket}")]
     public async Task<ActionResult<LeaderboardPage>> Living(string board, string bracket)
     {
-        if (!Enum.TryParse<LeaderboardBoard>(board, true, out var which) || which == LeaderboardBoard.Rate)
+        if (!Enum.TryParse<LeaderboardBoard>(board, true, out var which) || which == LeaderboardBoard.Rate || which == LeaderboardBoard.Trial)
             return NotFound(new { message = "No such board." });
         bool known = which == LeaderboardBoard.Slayers
             ? Enum.TryParse<SlayerWindow>(bracket, true, out _)

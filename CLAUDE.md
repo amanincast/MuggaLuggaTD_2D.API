@@ -317,6 +317,19 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Names:** `PlayerNames.Of(displayName, userName)` everywhere, the standings included.
 - **Debug** (Development): `POST leaderboards/debug/seed` writes 30 made-up results for users "chronicler1–10".
 
+## The Weekly Trial (`TrialRules`, `TrialService`, `TrialController`, shared 1.71.0; Unity `docs/systems/leaderboards.md`)
+
+- **Cross-realm:** `TrialEntry` (a player's best per week, and the chest paid) and `TrialAttempt` (each try) have no realm
+  key, so no season reset touches them. The week (Monday 00:00 UTC) is a number; its land, arena seed, twists and four
+  heroes are derived from it in the shared rules and never stored.
+- `GET trial?realm=` reads the week (tries left today, best, top 5, last week, the Trialist totals) and **pays** every
+  finished, unpaid week into that realm first (ledger + `LetterKind.TrialChest`). Only a realm the player is in counts.
+- `POST trial/begin {hero}` spends one of 3 tries a UTC day; `POST trial/finish {attemptId, kills, waves, seconds}` is
+  held to `TrialRules.Check` against the server's own clock (a trimmed try keeps `Reported` and is logged) and kept if
+  it beats the week's best. The board is `GET leaderboards/trial?week=` (live, `LeaderboardService.TrialAsync`).
+- **Debug** (Development): `trial/debug/reset-tries`, `trial/debug/end-week` (your best to last week with chronicler
+  rivals, unpaid), `trial/debug/forget`.
+
 ## Letters, the inbox (`LetterService`, `LettersController`; Unity repo `Specifications` "Inbox")
 
 Personal letters, one realm at a time: what happened to *this player*, each with an action. The war log
