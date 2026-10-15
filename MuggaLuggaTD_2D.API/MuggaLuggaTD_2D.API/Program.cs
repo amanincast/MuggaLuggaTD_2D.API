@@ -111,6 +111,7 @@ builder.Services.AddScoped<InviteCodeService>();
 builder.Services.AddScoped<RealmMembershipService>();
 builder.Services.AddScoped<RealmGoalService>();
 builder.Services.AddScoped<RiftService>();
+builder.Services.AddScoped<BountyService>();
 builder.Services.AddScoped<ForgeService>();
 builder.Services.AddScoped<LeaderboardService>();
 builder.Services.AddSingleton<RealmPresence>();

@@ -27,14 +27,17 @@ public class PveController : ControllerBase
     private readonly WorldPveService _pve;
     private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
+    private readonly BountyService _bounties;
 
     public PveController(
         ApplicationDbContext context,
         IHubContext<GameHub> hubContext,
         WorldPveService pve,
         SeasonScoreService seasons,
-        ISessionLog sessionLog)
+        ISessionLog sessionLog,
+        BountyService bounties)
     {
+        _bounties = bounties;
         _context = context;
         _hubContext = hubContext;
         _pve = pve;
@@ -56,10 +59,13 @@ public class PveController : ControllerBase
 
         // A rift's site (Invasions spec, phase 3) is not a place in the world blob: it has a path of its own.
         RiftEncounterDto? rift = null;
+        BountyEncounterDto? bounty = null;
         PveOutcome outcome;
         Guid runId;
         if (RiftRules.IsSiteId(request.SiteId))
             (outcome, runId, rift) = await _pve.BeginRiftAsync(gameInstanceId, userId, request);
+        else if (BountyRules.IsSiteId(request.SiteId))
+            (outcome, runId, bounty) = await _pve.BeginBountyAsync(gameInstanceId, userId, request);
         else
             (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
@@ -69,8 +75,9 @@ public class PveController : ControllerBase
         }
 
         _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}" +
-            (rift == null ? "" : $" rift tier={rift.Tier} donor={rift.DonorBiome} mutators={string.Join("+", rift.Mutators)}"));
-        return Ok(new PveBeginResponse(runId, rift));
+            (rift == null ? "" : $" rift tier={rift.Tier} donor={rift.DonorBiome} mutators={string.Join("+", rift.Mutators)}") +
+            (bounty == null ? "" : $" bounty={bounty.Name} region={bounty.RegionId} tier={bounty.Tier} mutators={string.Join("+", bounty.Mutators)}"));
+        return Ok(new PveBeginResponse(runId, rift, bounty));
     }
 
     /// <summary>
@@ -111,6 +118,21 @@ public class PveController : ControllerBase
             _sessionLog.Log("PVE-CLAIM",
                 $"user={userId} site={response.SiteId} rift={response.Rift.RiftId} breach=-{response.Rift.BreachTaken}" +
                 $"->{response.Rift.Breach} stage={response.Rift.Stage} xp={response.Experience} items={response.Items.Count}");
+            return Ok(response);
+        }
+
+        // A champion's fall changes no land either. The first win scores the deed and tells the realm.
+        if (response?.Bounty != null)
+        {
+            var won = response.Bounty;
+            if (won.First)
+            {
+                await _seasons.AwardAsync(gameInstanceId, userId, SeasonDeed.BountyClaimed);
+                await _bounties.BroadcastClaimedAsync(gameInstanceId,
+                    new BountyClaimedNotification(won.Slot, won.Name, won.Title, won.ClaimedByName ?? "A herald", won.RegionId));
+            }
+            _sessionLog.Log("PVE-CLAIM",
+                $"user={userId} site={response.SiteId} bounty={won.Name} first={won.First} gold={won.Gold} chest={won.ChestRarity}");
             return Ok(response);
         }
 

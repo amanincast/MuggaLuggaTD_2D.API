@@ -26,7 +26,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Helped seal a rift (Invasions row 6). Its points depend on the share, so they come from
         /// <see cref="RiftRules"/> rather than <see cref="SeasonScoreRules.PointsFor"/>; they count as clearing.
         /// </summary>
-        RiftSealed = 5
+        RiftSealed = 5,
+
+        /// <summary>Brought down a wanted champion first (Active Content A). Counts as clearing.</summary>
+        BountyClaimed = 6
     }
 
     /// <summary>
@@ -143,6 +146,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 // Roughly thirty hours of an ordinary region, and a repel is worth half.
                 case SeasonDeed.SiegeWon: return 300.0;
                 case SeasonDeed.SiegeRepelled: return 150.0;
+                case SeasonDeed.BountyClaimed: return BountyRules.SeasonPoints;
                 default: return 0;
             }
         }

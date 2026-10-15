@@ -55,6 +55,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RealmGoal> RealmGoals => Set<RealmGoal>();
     public DbSet<RealmGoalShare> RealmGoalShares => Set<RealmGoalShare>();
     public DbSet<Rift> Rifts => Set<Rift>();
+    public DbSet<Bounty> Bounties => Set<Bounty>();
     public DbSet<RateLimitRefusal> RateLimitRefusals => Set<RateLimitRefusal>();
     public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
     public DbSet<RiftContract> RiftContracts => Set<RiftContract>();
@@ -344,6 +345,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         // A rift's number is the subject of its rolls: the scheduler and a read racing to announce the same one
         // collide here, and the loser reads the winner's.
+        builder.Entity<Bounty>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Slot }).IsUnique();
+            entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
         builder.Entity<Rift>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Kind, e.EventNumber }).IsUnique();
