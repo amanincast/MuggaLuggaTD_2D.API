@@ -29,7 +29,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         RiftSealed = 5,
 
         /// <summary>Brought down a wanted champion first (Active Content A). Counts as clearing.</summary>
-        BountyClaimed = 6
+        BountyClaimed = 6,
+
+        /// <summary>
+        /// Helped the realm reach its goal of the day (Active Content B, phase 3). Its points follow the chest the
+        /// share earned (<see cref="RealmGoalRules.SeasonPointsFor"/>); they count as clearing.
+        /// </summary>
+        RealmGoalReached = 7
     }
 
     /// <summary>

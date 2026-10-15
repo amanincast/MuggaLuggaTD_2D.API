@@ -56,6 +56,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>What a reached goal adds to gold from clears for the rest of that day (tune).</summary>
         public const double BoonGoldFactor = 1.10;
 
+        /// <summary>Season points for a share that earned a Magic chest, and for one that earned a Rare (tune).</summary>
+        public const double MagicSharePoints = 50;
+        public const double RareSharePoints = 100;
+
+        /// <summary>The season points a reached goal pays a share, by the chest it earned; none without one.</summary>
+        public static double SeasonPointsFor(ItemRarityTypes? chest) =>
+            chest == null ? 0 : chest.Value >= ItemRarityTypes.Rare ? RareSharePoints : MagicSharePoints;
+
+        /// <summary>
+        /// Whether the realm's boon is on at <paramref name="at"/>: its goal for that UTC day was reached at
+        /// <paramref name="reachedAt"/>, at or before <paramref name="at"/>. It lasts until the day turns.
+        /// </summary>
+        public static bool BoonOn(DateTime? reachedAt, DateTime at) =>
+            reachedAt.HasValue && reachedAt.Value <= at && DayOf(reachedAt.Value) == DayOf(at);
+
+        /// <summary>Gold from a clear with the boon on: a tenth more, rounded.</summary>
+        public static long WithBoon(long gold) => (long)Math.Round(gold * BoonGoldFactor);
+
         /// <summary>The milestones announced in the war log, in quarters.</summary>
         public const int Quarters = 4;
 

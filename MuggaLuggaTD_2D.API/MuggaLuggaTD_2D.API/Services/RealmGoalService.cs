@@ -36,14 +36,17 @@ public class RealmGoalService
     private readonly ILogger<RealmGoalService> _logger;
     private readonly WarLogService? _warLog;
     private readonly LetterService? _letters;
+    private readonly SeasonScoreService? _scores;
 
     private static readonly Random Dice = new();
 
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
     public RealmGoalService(ApplicationDbContext context, IGameContentProvider content, ItemLedgerService items,
-        ISessionLog sessionLog, ILogger<RealmGoalService> logger, WarLogService? warLog = null, LetterService? letters = null)
+        ISessionLog sessionLog, ILogger<RealmGoalService> logger, WarLogService? warLog = null, LetterService? letters = null,
+        SeasonScoreService? scores = null)
     {
+        _scores = scores;
         _context = context;
         _content = content;
         _items = items;
@@ -149,7 +152,31 @@ public class RealmGoalService
         }
     }
 
-    /// <summary>Pays every share of at least 2% a chest, writes the war log and sends each a letter.</summary>
+    /// <summary>
+    /// Whether the realm's boon is on at <paramref name="at"/>: today's goal was reached before it (phase 3). Static
+    /// so the claim and the auto replay can ask without taking the service.
+    /// </summary>
+    public static async Task<bool> BoonOnAsync(ApplicationDbContext context, Guid gameInstanceId, DateTime at)
+    {
+        int day = RealmGoalRules.DayOf(at);
+        var reachedAt = await context.RealmGoals.AsNoTracking()
+            .Where(g => g.GameInstanceId == gameInstanceId && g.Day == day)
+            .Select(g => g.ReachedAt)
+            .FirstOrDefaultAsync();
+        return RealmGoalRules.BoonOn(reachedAt, at);
+    }
+
+    /// <summary>When each goal since <paramref name="since"/> was reached, for the auto replay, which spans days.</summary>
+    public static async Task<List<DateTime>> ReachedSinceAsync(ApplicationDbContext context, Guid gameInstanceId, DateTime since)
+    {
+        int from = RealmGoalRules.DayOf(since);
+        return await context.RealmGoals.AsNoTracking()
+            .Where(g => g.GameInstanceId == gameInstanceId && g.Day >= from && g.ReachedAt != null)
+            .Select(g => g.ReachedAt!.Value)
+            .ToListAsync();
+    }
+
+    /// <summary>Pays every share of at least 2% a chest and its season points, writes the war log and sends each a letter.</summary>
     private async Task PayAsync(Guid gameInstanceId, RealmGoal goal, string finisherId)
     {
         var shares = await _context.RealmGoalShares.Where(s => s.GoalId == goal.Id).ToListAsync();
@@ -166,6 +193,9 @@ public class RealmGoalService
             await _items.GrantAsync(gameInstanceId, share.UserId, pieces, $"realm-goal {goal.Day}");
             share.ChestRarity = chest;
             paid++;
+
+            if (_scores != null)
+                await _scores.AwardAsync(gameInstanceId, share.UserId, SeasonDeed.RealmGoalReached, RealmGoalRules.SeasonPointsFor(chest));
 
             if (_letters != null)
                 await _letters.SendAsync(gameInstanceId, share.UserId, LetterKind.RealmGoalReached, goal.ReachedAt ?? Clock(),
