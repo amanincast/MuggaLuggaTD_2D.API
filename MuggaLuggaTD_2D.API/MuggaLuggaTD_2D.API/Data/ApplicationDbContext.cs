@@ -57,6 +57,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Rift> Rifts => Set<Rift>();
     public DbSet<Bounty> Bounties => Set<Bounty>();
     public DbSet<TreasureMap> TreasureMaps => Set<TreasureMap>();
+    public DbSet<TrialEntry> TrialEntries => Set<TrialEntry>();
+    public DbSet<TrialAttempt> TrialAttempts => Set<TrialAttempt>();
     public DbSet<RateLimitRefusal> RateLimitRefusals => Set<RateLimitRefusal>();
     public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
     public DbSet<RiftContract> RiftContracts => Set<RiftContract>();
@@ -355,6 +357,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.SeasonNumber });
             entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        // The Weekly Trial is cross-realm: no realm key, so a season's reset never touches it.
+        builder.Entity<TrialEntry>(entity =>
+        {
+            entity.HasIndex(e => new { e.Week, e.UserId }).IsUnique();
+            entity.HasIndex(e => new { e.Week, e.BestScore });
+        });
+        builder.Entity<TrialAttempt>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Day });
+            entity.HasIndex(e => new { e.UserId, e.Week });
         });
         builder.Entity<Rift>(entity =>
         {
