@@ -20,9 +20,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// <para><b>What shapes the realm is rationed separately.</b> Restoring a region's resolve, bringing
     /// a recruit to the Tavern, resetting the Tavern's and the Hiring Hall's refresh price, and the
     /// season points for a clear come once per player per site every <see cref="WorldRewardWindow"/>
-    /// (8 hours). Without this a ten-minute loop would farm defence, recruits and the scoreboard.
-    /// Eight hours is the old respawn, so the defender/raider arithmetic it was tuned for still holds:
-    /// a defender can restore one site's worth of resolve per site per eight hours, as before.</para>
+    /// (2 hours). Without this a ten-minute loop would farm defence, recruits and the scoreboard.
+    /// It was eight hours, the old respawn; the evening pace (Mike, 2026-10-15) cut it to two, with raids
+    /// cut from four hours to one, so the defender/raider arithmetic keeps its balance.</para>
     ///
     /// <para><b>Not tapered.</b> Repeat clears of one site still pay in full. A taper over the reward
     /// window would punish exactly the rotation the lockout asks for (a player cycling five sites
@@ -35,7 +35,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static readonly TimeSpan Lockout = TimeSpan.FromMinutes(10);
 
         /// <summary>How often clearing one site may restore resolve, bring a recruit and score.</summary>
-        public static readonly TimeSpan WorldRewardWindow = TimeSpan.FromHours(8);
+        public static readonly TimeSpan WorldRewardWindow = TimeSpan.FromHours(2);
 
         /// <summary>
         /// When a player may fight a site again, or <see cref="DateTime.MinValue"/> when they have

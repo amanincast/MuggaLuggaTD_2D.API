@@ -136,13 +136,13 @@ public class FactionStrengthTests : IDisposable
         await Factions.DebugAsync(realm, new FactionDebugRequest("", Readiness: 0), Noon);
         await Factions.DebugAsync(realm, new FactionDebugRequest("Grimjaw", Bloody: true), Noon);
 
-        var later = await Factions.ReadAsync(realm, Noon.AddHours(6));
+        var later = await Factions.ReadAsync(realm, Noon.AddHours(1));
 
-        // Six hours of a day's refill is a quarter; Bloodied, an eighth.
-        Assert.Equal(500, Of(later!, FactionId.Ashkin).Strength);
-        Assert.Equal(250, Of(later!, FactionId.Grimjaw).Strength);
+        // An hour of a day's refill is a twenty-fourth; Bloodied, half that.
+        Assert.Equal(83, Of(later!, FactionId.Ashkin).Strength);
+        Assert.Equal(42, Of(later!, FactionId.Grimjaw).Strength);
         Assert.Equal(nameof(FactionReadiness.Bloodied), Of(later!, FactionId.Grimjaw).Word);
-        Assert.Equal(Noon.AddHours(8), Of(later!, FactionId.Grimjaw).BloodiedUntil);
+        Assert.Equal(Noon + FactionStrengthRules.BloodiedFor, Of(later!, FactionId.Grimjaw).BloodiedUntil);
     }
 
     [Fact]
@@ -153,9 +153,9 @@ public class FactionStrengthTests : IDisposable
 
         var simulated = await Factions.DebugAsync(realm, new FactionDebugRequest("Ashkin", SimulateHours: 12), Noon);
 
-        // 8 Bloodied hours at half rate and 4 at full: 8 hours' worth of 2000 a day.
+        // 2 Bloodied hours at half rate and 10 at full: 11 hours' worth of 2000 a day.
         var ashkin = Of(simulated!, FactionId.Ashkin);
-        Assert.Equal(667, ashkin.Strength);
+        Assert.Equal(917, ashkin.Strength);
         Assert.Null(ashkin.BloodiedUntil);
     }
 

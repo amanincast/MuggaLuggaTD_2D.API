@@ -45,10 +45,10 @@ public partial class FactionService
     private async Task<FactionSiege?> BesiegeAsync(
         GameInstance instance, FactionState row, List<FactionState> rows, List<WorldRegionData> regions, DateTime now)
     {
-        if (SiegeRules.SeasonIsClosing(now, instance.SeasonEndsAt)) return null;
+        if (FactionSiegeRules.SeasonIsClosing(now, instance.SeasonEndsAt)) return null;
 
         var besieged = await BesiegedRegionsAsync(instance.Id);
-        var cooldownSince = now - SiegeRules.RedeclareCooldown;
+        var cooldownSince = now - FactionSiegeRules.RedeclareCooldown;
         var cooling = await _context.FactionSieges
             .Where(s => s.GameInstanceId == instance.Id && s.Faction == row.Faction
                         && s.State == SiegeState.Repelled && s.ResolvedAt > cooldownSince)
@@ -81,7 +81,7 @@ public partial class FactionService
             March = Math.Round(march),
             State = SiegeState.Mustering,
             DeclaredAt = now,
-            MusterEndsAt = now + SiegeRules.Muster
+            MusterEndsAt = now + FactionSiegeRules.Muster
         };
     }
 

@@ -78,6 +78,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static readonly TimeSpan SweepInterval = TimeSpan.FromMinutes(15);
 
         /// <summary>
+        /// How long a faction waits before raiding the same region again. A player's is
+        /// <see cref="RaidResolver.Cooldown"/>; a faction's stays at the length its aggression was tuned for.
+        /// </summary>
+        public static readonly TimeSpan RaidCooldown = TimeSpan.FromHours(4);
+
+        /// <summary>
         /// The chance a full-strength faction of aggression 1 acts on one sweep: about once every
         /// six hours (the plan's "every 4-8h").
         /// </summary>

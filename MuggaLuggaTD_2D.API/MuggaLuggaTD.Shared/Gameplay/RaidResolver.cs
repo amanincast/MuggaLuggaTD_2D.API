@@ -52,8 +52,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Lowest resolve a raid can grind a region down to. Below this, raiding has done its work.</summary>
         public const int MinimumResolve = 0;
 
-        /// <summary>Hours an attacker must wait before raiding the same region again.</summary>
-        public const int CooldownHours = 4;
+        /// <summary>Hours a player must wait before raiding the same region again (evening pace, 2026-10-15).</summary>
+        public const int CooldownHours = 1;
 
         public static TimeSpan Cooldown => TimeSpan.FromHours(CooldownHours);
 

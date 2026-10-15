@@ -56,11 +56,15 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>
         /// The longest the defender's muster window runs. The defender may close it early by
         /// declaring ready, to pull the fight to a time they are awake for.
+        ///
+        /// <para>The evening pace (Mike, 2026-10-15): a realm holds a handful of players, often friends on a
+        /// weeknight, so a siege is declared, mustered and fought in one sitting. A faction's siege keeps the
+        /// long muster (<see cref="FactionSiegeRules.MusterHours"/>): nobody may be online to answer it.</para>
         /// </summary>
-        public const int MusterHours = 8;
+        public const int MusterHours = 1;
 
         /// <summary>How long the attacker has to show for the assault once muster closes.</summary>
-        public const int AssaultWindowHours = 12;
+        public const int AssaultWindowHours = 3;
 
         /// <summary>
         /// How long a region is untouchable after it changes hands (siege.md §7a).
@@ -68,7 +72,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <para>Exists to stop the same region ping-ponging between two players, and to give a new
         /// owner time to garrison and tend what they took. Applies to raids as well as sieges.</para>
         /// </summary>
-        public const int TruceHours = 24;
+        public const int TruceHours = 4;
 
         /// <summary>
         /// Declarations close once fewer than this many hours of the season remain.
@@ -78,13 +82,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// become a scramble to grab ground, and no siege is ever left half-fought when the realm
         /// resets.</para>
         /// </summary>
-        public const int SeasonCutoffHours = 24;
+        public const int SeasonCutoffHours = 6;
 
         /// <summary>
         /// How long after a siege ends without taking the region before the same attacker may
         /// declare on it again. Attacking must be able to cost something (siege.md §6).
         /// </summary>
-        public const int RedeclareCooldownHours = 24;
+        public const int RedeclareCooldownHours = 4;
 
         public static TimeSpan Muster => TimeSpan.FromHours(MusterHours);
         public static TimeSpan AssaultWindow => TimeSpan.FromHours(AssaultWindowHours);

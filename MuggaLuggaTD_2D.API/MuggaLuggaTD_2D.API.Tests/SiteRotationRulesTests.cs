@@ -30,12 +30,12 @@ public class SiteRotationRulesTests
     }
 
     [Fact]
-    public void TheRealmIsShapedOnceEveryEightHours()
+    public void TheRealmIsShapedOnceEveryTwoHours()
     {
-        Assert.Equal(TimeSpan.FromHours(8), SiteRotationRules.WorldRewardWindow);
-        Assert.False(SiteRotationRules.WorldRewardsDue(Now.AddHours(-7), Now));
-        Assert.True(SiteRotationRules.WorldRewardsDue(Now.AddHours(-8), Now));
-        Assert.Equal(Now.AddHours(1), SiteRotationRules.WorldRewardsBackAt(Now.AddHours(-7)));
+        Assert.Equal(TimeSpan.FromHours(2), SiteRotationRules.WorldRewardWindow);
+        Assert.False(SiteRotationRules.WorldRewardsDue(Now.AddHours(-1), Now));
+        Assert.True(SiteRotationRules.WorldRewardsDue(Now.AddHours(-2), Now));
+        Assert.Equal(Now.AddHours(1), SiteRotationRules.WorldRewardsBackAt(Now.AddHours(-1)));
     }
 
     [Fact]

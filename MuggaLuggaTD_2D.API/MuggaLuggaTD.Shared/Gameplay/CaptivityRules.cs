@@ -8,7 +8,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// What happens to characters who were defending a region their owner lost.
     ///
     /// <para><b>They are taken, and then they come home.</b> Taking them is what makes winning a siege
-    /// worth the eight hours it costs to muster one — a region that changes hands with its defenders
+    /// worth the muster it costs — a region that changes hands with its defenders
     /// walking away free is a region that was only ever worth its income. But holding them forever
     /// would make losing a region cost the army needed to take it back, and the roster cap falls with
     /// the land as well (<see cref="RosterCapRules"/>), so a single lost siege would compound into
@@ -20,9 +20,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// season, the second is the best story the system has, and the third is for the player who needs
     /// the army back for a counterattack and would rather pay than wait.</para>
     ///
-    /// <para>Eight hours deliberately matches <see cref="SiegeAssaultRules"/>' muster window and
-    /// <see cref="SiteRotationRules"/>' window for a site's realm rewards: the game already asks a player to come back in eight
-    /// hours for two other things, and a fourth number would be a fourth thing to learn.</para>
+    /// <para>Two hours, the same as <see cref="SiteRotationRules"/>' window for a site's realm rewards. It was eight,
+    /// matching the old muster; the evening pace (Mike, 2026-10-15) shortened all three together.</para>
     ///
     /// <para><b>Nothing ticks.</b> Captivity is a stamp plus a rule, read on the spot, exactly like a
     /// cleared site's recovery. A stamp of zero reads as <i>returned</i> rather than as <i>captured at
@@ -32,7 +31,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
     public static class CaptivityRules
     {
         /// <summary>How long a captured character is held before walking home on their own.</summary>
-        public const double PrisonerReturnHours = 8.0;
+        public const double PrisonerReturnHours = 2.0;
 
         /// <summary>
         /// Gold to ransom one prisoner back immediately.

@@ -274,6 +274,11 @@ namespace MuggaLuggaTD.Shared
         // 1.67.0 - Bounties, phase 1 (Active Content A). BountyRules: two wanted champions a day walk a seeded path for
         //   36 hours; fights at bounty:{slot} (tier +1, at least 3, +2 levels, two mutators); the first win claims the
         //   bounty (3x a clear's gold, a Rare+ chest, SeasonDeed.BountyClaimed 80 points).
-        public const string Version = "1.67.0";
+        // 1.68.0 - The evening pace (Mike, 2026-10-15): a player's siege musters 1h (was 8), assault window 3h (12),
+        //   truce and redeclare 4h (24), cut-off 6h (24); a player's raid cooldown 1h (4); a site's realm rewards every
+        //   2h (8); prisoners home in 2h (8); a faction Bloodied 2h (8); a bounty attempt every 1h (2). A faction's
+        //   siege keeps its 8h muster, 24h redeclare and 24h cut-off (FactionSiegeRules), and its raid cooldown 4h
+        //   (FactionDecisionRules.RaidCooldown).
+        public const string Version = "1.68.0";
     }
 }

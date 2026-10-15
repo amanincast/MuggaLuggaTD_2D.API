@@ -90,9 +90,9 @@ public class SiegeRulesTests
     public void TheLastDayIsClosedToDeclarations()
     {
         Assert.Equal(SiegeRefusal.SeasonClosing,
-            SiegeRules.CheckDeclare(Rival(40), TestIds.Player, 10_000, 1_000, Now, Now.AddHours(23)));
+            SiegeRules.CheckDeclare(Rival(40), TestIds.Player, 10_000, 1_000, Now, Now.AddHours(SiegeRules.SeasonCutoffHours - 1)));
         Assert.Equal(SiegeRefusal.None,
-            SiegeRules.CheckDeclare(Rival(40), TestIds.Player, 10_000, 1_000, Now, Now.AddHours(25)));
+            SiegeRules.CheckDeclare(Rival(40), TestIds.Player, 10_000, 1_000, Now, Now.AddHours(SiegeRules.SeasonCutoffHours + 1)));
     }
 
     [Fact]

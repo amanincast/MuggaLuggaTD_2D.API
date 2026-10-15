@@ -47,7 +47,7 @@ public partial class FactionService
 
         var besieged = await BesiegedRegionsAsync(gameInstanceId);
         bool besiegeable = !besieged.Contains(regionId) && !SiegeRules.IsUnderTruce(region, at) &&
-                           !SiegeRules.SeasonIsClosing(at, instance.SeasonEndsAt);
+                           !FactionSiegeRules.SeasonIsClosing(at, instance.SeasonEndsAt);
         var eruption = RiftRules.EruptionFor(region, landErupted, besiegeable);
         if (eruption == RiftEruption.None) return eruption;
 
@@ -97,7 +97,7 @@ public partial class FactionService
                     March = Math.Round(march),
                     State = SiegeState.Mustering,
                     DeclaredAt = at,
-                    MusterEndsAt = at + SiegeRules.Muster
+                    MusterEndsAt = at + FactionSiegeRules.Muster
                 };
                 _context.FactionSieges.Add(siege);
                 row.LastActedAtUtc = at;

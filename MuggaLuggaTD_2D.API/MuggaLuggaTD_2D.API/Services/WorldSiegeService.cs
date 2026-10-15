@@ -67,7 +67,7 @@ public record SiegeOutcome(
 /// Declaring sieges and moving them through their windows (<c>docs/design/siege.md</c> §4).
 ///
 /// <code>
-/// DECLARE ──▶ MUSTER (≤ 8h) ──▶ ASSAULT (≤ 12h, attacker must show) ──▶ outcome
+/// DECLARE ──▶ MUSTER (≤ 1h) ──▶ ASSAULT (≤ 3h, attacker must show) ──▶ outcome
 ///             defender reinforces   hold frozen
 ///             may declare ready
 /// </code>

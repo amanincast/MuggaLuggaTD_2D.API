@@ -23,7 +23,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// <para>It mirrors a player's siege: only on land whose resolve is worn to
     /// <see cref="SiegeRules.DeclareResolveThreshold"/> or below, only with a march (<see
     /// cref="FactionStrengthRules.SiegeShare"/> of its strength) that clears the gate, and with an
-    /// <see cref="SiegeRules.MusterHours"/> muster the defender sees coming. Nobody fights the assault,
+    /// <see cref="MusterHours"/> muster the defender sees coming. Nobody fights the assault,
     /// so the server <b>settles it at muster close</b>: the frozen march against the frozen hold.
     /// A hold the defender has raised past the gate turns it away outright; otherwise it goes to
     /// <see cref="PassivePvPResolver"/>, the dice every passive contest uses.</para>
@@ -34,6 +34,26 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// </summary>
     public static class FactionSiegeRules
     {
+        /// <summary>
+        /// A faction's (and the Riftborn's) muster. Longer than a player's (<see cref="SiegeRules.MusterHours"/>):
+        /// a player's siege is fought by two people who are both playing, a faction's falls on a player who may be
+        /// asleep, and the muster is their whole chance to break it (Mike, 2026-10-15, kept as before).
+        /// </summary>
+        public const int MusterHours = 8;
+
+        /// <summary>How long a faction waits before besieging a region that turned it away.</summary>
+        public const int RedeclareCooldownHours = 24;
+
+        /// <summary>A faction declares no siege this close to the season's end: more than its muster.</summary>
+        public const int SeasonCutoffHours = 24;
+
+        public static TimeSpan Muster => TimeSpan.FromHours(MusterHours);
+        public static TimeSpan RedeclareCooldown => TimeSpan.FromHours(RedeclareCooldownHours);
+
+        /// <summary>Whether too little of the season remains for a faction's siege to muster and settle.</summary>
+        public static bool SeasonIsClosing(DateTime utcNow, DateTime seasonEndsAt) =>
+            seasonEndsAt - utcNow < TimeSpan.FromHours(SeasonCutoffHours);
+
         /// <summary>A siege that takes the region brings most of its march home.</summary>
         public const double WonSiegeLoss = 0.10;
 

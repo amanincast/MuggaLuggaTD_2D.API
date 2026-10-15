@@ -24,7 +24,7 @@ public class FactionSiegeTests : IDisposable
     private readonly FakeSessionLog _log = new();
     private readonly FakeHubContext _hub = new();
     private static readonly DateTime Noon = new(2026, 10, 6, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly DateTime MusterClose = Noon + SiegeRules.Muster;
+    private static readonly DateTime MusterClose = Noon + FactionSiegeRules.Muster;
 
     public void Dispose() => _db.Dispose();
 

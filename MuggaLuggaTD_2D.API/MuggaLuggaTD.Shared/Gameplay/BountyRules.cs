@@ -55,8 +55,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>How long it stands in one region before it moves on to a neighbour.</summary>
         public static readonly TimeSpan StepEvery = TimeSpan.FromHours(6);
 
-        /// <summary>One attempt per champion per player in this long: lose, and wait.</summary>
-        public static readonly TimeSpan AttemptEvery = TimeSpan.FromHours(2);
+        /// <summary>One attempt per champion per player in this long: lose, and wait (evening pace, 2026-10-15).</summary>
+        public static readonly TimeSpan AttemptEvery = TimeSpan.FromHours(1);
 
         /// <summary>How many regions its path has: one per step of its lifetime.</summary>
         public static int PathLength => (int)Math.Ceiling(Lifetime.TotalHours / StepEvery.TotalHours);

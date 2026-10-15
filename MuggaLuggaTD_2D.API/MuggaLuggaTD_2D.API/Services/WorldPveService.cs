@@ -296,7 +296,7 @@ public partial class WorldPveService
         }
 
         // The rotation. A clear locks its clearer out for ten minutes, and shapes the realm (resolve,
-        // a recruit, refresh resets, season points) once per player per site every eight hours.
+        // a recruit, refresh resets, season points) once per player per site every two hours.
         // Experience, gold, gear and materials are paid on every clear.
         bool worldRewards = true;
         DateTime? lockedUntil = null, worldRewardsBackAt = null;
@@ -387,7 +387,7 @@ public partial class WorldPveService
         // cleared shows up in who walks in. Design doc 05 §4.
         if (TavernRules.BringsARecruit(resolved.Site.Type))
         {
-            // A recruit and the refresh resets are realm rewards: once per site every eight hours,
+            // A recruit and the refresh resets are realm rewards: once per site every two hours,
             // or a ten-minute loop would fill the Tavern and keep both refreshes at their base price.
             if (worldRewards)
             {

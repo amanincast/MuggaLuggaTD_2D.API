@@ -109,7 +109,7 @@ public class FactionSignatureTests : IDisposable
     [Fact]
     public void AStampede_IsARaidOnLandRaidedHoursBefore_OnceADay()
     {
-        var cooldown = RaidResolver.Cooldown;
+        var cooldown = FactionDecisionRules.RaidCooldown;
         var raids = new List<(string, DateTime)> { ("a", Noon), ("b", Noon.AddHours(1)) };
         Assert.True(FactionSignatureRules.MayStampede(raids, Noon.AddHours(2), cooldown));
 
@@ -225,7 +225,7 @@ public class FactionSignatureTests : IDisposable
         var declared = await Factions.ActAsync(realm, Noon, force: FactionId.DrownedCourt, forceAction: FactionAction.Siege);
         Assert.Contains(declared, l => l.Contains("laid siege to near"));
 
-        var done = await Factions.SettleDueSiegesAsync(realm, Noon + SiegeRules.Muster + TimeSpan.FromMinutes(1));
+        var done = await Factions.SettleDueSiegesAsync(realm, Noon + FactionSiegeRules.Muster + TimeSpan.FromMinutes(1));
         Assert.Contains(done, l => l.Contains("took near"));
         Assert.Contains(done, l => l.Contains("tide flooded shore"));
         Assert.Equal(40, (await RegionAsync(realm, "shore")).Resolve);
@@ -243,7 +243,7 @@ public class FactionSignatureTests : IDisposable
         var realm = await RealmAsync(Faction(FactionId.Grimjaw, "g", 0, 0), Player("near", 1, 0, resolve: 40),
             Player("shore", 2, 0, resolve: 60));
         await Factions.ActAsync(realm, Noon, force: FactionId.Grimjaw, forceAction: FactionAction.Siege);
-        await Factions.SettleDueSiegesAsync(realm, Noon + SiegeRules.Muster + TimeSpan.FromMinutes(1));
+        await Factions.SettleDueSiegesAsync(realm, Noon + FactionSiegeRules.Muster + TimeSpan.FromMinutes(1));
         Assert.Equal(60, (await RegionAsync(realm, "shore")).Resolve);
     }
 
