@@ -56,6 +56,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RealmGoalShare> RealmGoalShares => Set<RealmGoalShare>();
     public DbSet<Rift> Rifts => Set<Rift>();
     public DbSet<Bounty> Bounties => Set<Bounty>();
+    public DbSet<TreasureMap> TreasureMaps => Set<TreasureMap>();
     public DbSet<RateLimitRefusal> RateLimitRefusals => Set<RateLimitRefusal>();
     public DbSet<RiftContribution> RiftContributions => Set<RiftContribution>();
     public DbSet<RiftContract> RiftContracts => Set<RiftContract>();
@@ -348,6 +349,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Bounty>(entity =>
         {
             entity.HasIndex(e => new { e.GameInstanceId, e.SeasonNumber, e.Slot }).IsUnique();
+            entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<TreasureMap>(entity =>
+        {
+            entity.HasIndex(e => new { e.GameInstanceId, e.UserId, e.SeasonNumber });
             entity.HasOne<GameInstance>().WithMany().HasForeignKey(e => e.GameInstanceId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<Rift>(entity =>

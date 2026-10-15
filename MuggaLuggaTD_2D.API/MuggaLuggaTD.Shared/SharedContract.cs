@@ -283,6 +283,10 @@ namespace MuggaLuggaTD.Shared
         //   day ends: gold from site clears x1.10 (RealmGoalRules.BoonOn / WithBoon), by hand and in auto mode. Each
         //   paid share scores SeasonDeed.RealmGoalReached: 50 points with a Magic chest, 100 with a Rare. Bounty
         //   and realm-goal points count as clearing.
-        public const string Version = "1.69.0";
+        // 1.70.0 - Treasure maps (Active Content D). TreasureMapRules: a dungeon clear finds a map at 2%, a portal at
+        //   0.5% (at most 3 held); it points to a cache in a seeded region near the holder's land, beside a seeded site.
+        //   The cache is a ruin's rooms at the site's tier and a level above, fought at cache:{map id}; the win opens it:
+        //   twice a clear's gold, a Rare (1 in 5 Legendary) chest, and at 10% another map.
+        public const string Version = "1.70.0";
     }
 }

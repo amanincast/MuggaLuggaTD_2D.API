@@ -60,12 +60,15 @@ public class PveController : ControllerBase
         // A rift's site (Invasions spec, phase 3) is not a place in the world blob: it has a path of its own.
         RiftEncounterDto? rift = null;
         BountyEncounterDto? bounty = null;
+        CacheEncounterDto? cache = null;
         PveOutcome outcome;
         Guid runId;
         if (RiftRules.IsSiteId(request.SiteId))
             (outcome, runId, rift) = await _pve.BeginRiftAsync(gameInstanceId, userId, request);
         else if (BountyRules.IsSiteId(request.SiteId))
             (outcome, runId, bounty) = await _pve.BeginBountyAsync(gameInstanceId, userId, request);
+        else if (TreasureMapRules.IsSiteId(request.SiteId))
+            (outcome, runId, cache) = await _pve.BeginCacheAsync(gameInstanceId, userId, request);
         else
             (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
@@ -76,8 +79,9 @@ public class PveController : ControllerBase
 
         _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}" +
             (rift == null ? "" : $" rift tier={rift.Tier} donor={rift.DonorBiome} mutators={string.Join("+", rift.Mutators)}") +
-            (bounty == null ? "" : $" bounty={bounty.Name} region={bounty.RegionId} tier={bounty.Tier} mutators={string.Join("+", bounty.Mutators)}"));
-        return Ok(new PveBeginResponse(runId, rift, bounty));
+            (bounty == null ? "" : $" bounty={bounty.Name} region={bounty.RegionId} tier={bounty.Tier} mutators={string.Join("+", bounty.Mutators)}") +
+            (cache == null ? "" : $" cache={cache.MapId} region={cache.RegionId} tier={cache.Tier} level={cache.Level}"));
+        return Ok(new PveBeginResponse(runId, rift, bounty, cache));
     }
 
     /// <summary>
@@ -133,6 +137,15 @@ public class PveController : ControllerBase
             }
             _sessionLog.Log("PVE-CLAIM",
                 $"user={userId} site={response.SiteId} bounty={won.Name} first={won.First} gold={won.Gold} chest={won.ChestRarity}");
+            return Ok(response);
+        }
+
+        // An opened cache changes no land either.
+        if (response?.Cache != null)
+        {
+            var won = response.Cache;
+            _sessionLog.Log("PVE-CLAIM",
+                $"user={userId} site={response.SiteId} cache={won.MapId} gold={won.Gold} chest={won.ChestRarity} chain={won.NextMap != null}");
             return Ok(response);
         }
 
