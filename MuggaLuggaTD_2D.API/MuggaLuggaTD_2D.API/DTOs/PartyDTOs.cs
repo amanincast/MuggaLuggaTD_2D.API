@@ -19,8 +19,13 @@ public record PartyDto(
     /// <summary>What has it halted, while ambushed.</summary>
     AmbushDto? Ambush = null,
     /// <summary>Its auto mode, while it is in it (auto-fight.md).</summary>
-    AutoStateDto? Auto = null
+    AutoStateDto? Auto = null,
+    /// <summary>The caravan it is taking, while it escorts one (Active Content F).</summary>
+    CaravanDto? Caravan = null
 );
+
+/// <summary>A caravan in a company's care: the Escort quest it serves and how many of its wagons still stand.</summary>
+public record CaravanDto(Guid QuestId, int Wagons);
 
 /// <summary>
 /// A company on the road: where from and to, when it left and arrives, and the route the server timed -
@@ -51,7 +56,12 @@ public record AmbushDto(
     int Tier,
     int Waves,
     /// <summary>Struck in an invaded region (Invasions R4): the warband is Riftborn. Null otherwise.</summary>
-    RiftbornDto? Riftborn = null
+    RiftbornDto? Riftborn = null,
+    /// <summary>
+    /// The company escorts a caravan (Active Content F): the fight is the caravan fight, "Circle the wagons", with this
+    /// many wagons. Null for an ordinary ambush.
+    /// </summary>
+    int? CaravanWagons = null
 );
 
 /// <summary>A Riftborn warband: the rift it poured from, whose roster it is, and the mutator it brings.</summary>
@@ -73,7 +83,11 @@ public record AmbushClaimRequest(
     bool Won,
     [Required] string SharedContractVersion,
     // Enemies slain by people, for Slay quests (QuestRules.ClampKills).
-    Dictionary<string, int>? Kills = null
+    Dictionary<string, int>? Kills = null,
+    // A caravan fight: the wagons still standing at its end (a report, held to what it started with), and whether
+    // the defence was perfect (CaravanRules.IsPerfect). Ignored for an ordinary ambush.
+    int? WagonsStanding = null,
+    bool? Perfect = null
 );
 
 /// <summary>What fighting an ambush came to. A loss pays nothing and turns the company back.</summary>
@@ -88,6 +102,12 @@ public record AmbushClaimResponse(
 );
 
 public record AmbushOrderRequest(
+    [Required] string SharedContractVersion
+);
+
+/// <summary>Sets a company out from a village with an Escort quest's caravan (Active Content F).</summary>
+public record PartyEscortRequest(
+    [Required] Guid QuestId,
     [Required] string SharedContractVersion
 );
 

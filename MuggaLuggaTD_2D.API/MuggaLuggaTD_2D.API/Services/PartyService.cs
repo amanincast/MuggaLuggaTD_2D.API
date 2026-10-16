@@ -34,6 +34,9 @@ public enum PartyError
     NotAmbushed,
     RunNotFound,
     RunTooFast,
+    QuestNotFound,
+    NotAtTheVillage,
+    CaravanTaken,
 }
 
 public record PartyOutcome(PartyError Error, string? Message = null)
@@ -318,26 +321,103 @@ public class PartyService
         if (string.Equals(request.SiteId, party.SiteId, StringComparison.Ordinal))
             return (new PartyOutcome(PartyError.AlreadyThere, $"{party.Name} is already there."), null);
 
+        var now = DateTime.UtcNow;
+        var (refused, route, chance) = await DepartAsync(gameInstanceId, userId, world, parties, party, request.SiteId, now, 1.0);
+        if (refused != null) return (refused, null);
+
+        // The road is rolled now, once (§4): re-reading the journey cannot re-roll it, and the client
+        // is not told until it strikes.
+        party.AmbushAt = AmbushRules.Roll(chance, Dice);
+        party.SecondAmbushAt = null;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("PARTY-TRAVEL",
+            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} regions={route!.Legs.Count} secs={route.Duration.TotalSeconds:F0} " +
+            $"ambush-chance={chance:F2} ambush={(party.AmbushAt.HasValue ? party.AmbushAt.Value.ToString("F2") : "none")}");
+        if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.March);
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+    }
+
+    /// <summary>
+    /// Sets a company out from a village with an Escort quest's caravan (Active Content F, phase 2): to the quest's
+    /// destination, at the caravan's pace (<see cref="CaravanRules.Pace"/>), with an ambush on the road for certain
+    /// and, on a long route, maybe a second (<see cref="CaravanRules.RollAmbushes"/>). The company must stand at the
+    /// village that gave the quest; auto companies cannot take caravans (F8).
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> EscortAsync(
+        Guid gameInstanceId, string userId, Guid partyId, PartyEscortRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version) return (Mismatch, null);
+
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null);
+        if (party.AutoMode)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is in auto mode. Caravans are escorted by hand."), null);
+        if (party.State != CompanyState.Idle)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is already on the move."), null);
+
+        var quest = await _context.PlayerQuests.FirstOrDefaultAsync(q => q.Id == request.QuestId
+            && q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null && q.DoneAt == null);
+        var offer = quest?.Offer;
+        if (quest == null || offer == null || offer.Kind != QuestKind.Escort || string.IsNullOrEmpty(offer.DestinationSiteId))
+            return (new PartyOutcome(PartyError.QuestNotFound, "There is no such caravan to escort."), null);
+        if (parties.Any(p => p.CaravanQuestId == quest.Id))
+            return (new PartyOutcome(PartyError.CaravanTaken, "Another of your companies already has that caravan."), null);
+        if (!string.Equals(party.SiteId, offer.GiverId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.NotAtTheVillage, $"The caravan waits at its village. Bring {party.Name} there first."), null);
+
+        var now = DateTime.UtcNow;
+        var (refused, route, chance) = await DepartAsync(gameInstanceId, userId, world, parties, party, offer.DestinationSiteId, now, CaravanRules.Pace);
+        if (refused != null) return (refused, null);
+
+        var (first, second) = CaravanRules.RollAmbushes(route!.Legs.Count, chance, Dice);
+        party.AmbushAt = first;
+        party.SecondAmbushAt = second;
+        party.CaravanQuestId = quest.Id;
+        party.CaravanWagons = CaravanRules.Wagons;
+        party.CaravanPerfect = true;
+        await _context.SaveChangesAsync();
+
+        _sessionLog.Log("CARAVAN-ESCORT",
+            $"user={userId} party={party.Id} quest={quest.Id} {party.FromSiteId}->{party.ToSiteId} regions={route.Legs.Count} " +
+            $"secs={route.Duration.TotalSeconds:F0} ambush={first:F2} second={(second.HasValue ? second.Value.ToString("F2") : "none")} (route chance {chance:F2})");
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+    }
+
+    /// <summary>
+    /// Plans and stamps a journey for an idle company from where it stands to <paramref name="toSiteId"/>: the route
+    /// across the world (each region's walk stretched by its weather and by <paramref name="pace"/>), the clock, and the
+    /// route's chance of an ambush. Rolling the ambush is the caller's. Refused with a reason, or the route and chance.
+    /// </summary>
+    private async Task<(PartyOutcome? Refused, RoutePlan? Route, double Chance)> DepartAsync(Guid gameInstanceId, string userId,
+        JsonNode world, List<PlayerParty> parties, PlayerParty party, string toSiteId, DateTime now, double pace)
+    {
+        var regionId = SiteSpec.RegionIdOf(toSiteId);
         var regions = WorldRegionBlob.ReadAllRegions(world).ToList();
         var region = regions.FirstOrDefault(r => r.RegionId == regionId);
         var home = regions.FirstOrDefault(r => r.RegionId == party.RegionId);
-        if (region == null || home == null) return (new PartyOutcome(PartyError.SiteNotFound, "That region is not in this world."), null);
+        if (region == null || home == null) return (new PartyOutcome(PartyError.SiteNotFound, "That region is not in this world."), null, 0);
 
-        var to = RegionGenerator.Generate(region).FindSite(request.SiteId);
-        if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null);
+        var to = RegionGenerator.Generate(region).FindSite(toSiteId);
+        if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null, 0);
         var from = RegionGenerator.Generate(home).FindSite(party.SiteId);
-        if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
+        if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null, 0);
 
         // Across the world, region by region, each walked on its own roads (§6, phase 4).
         var byHex = regions.GroupBy(r => r.Hex).ToDictionary(g => g.Key, g => g.First());
         WorldRegionData? RegionAt(HexCoord hex) => byHex.TryGetValue(hex, out var r) ? r : null;
-        // A storm on the way slows the walk through it, by the hour the company sets out (Active Content C).
-        var now = DateTime.UtcNow;
+        // A storm on the way slows the walk through it, by the hour the company sets out (Active Content C); a
+        // caravan is slower everywhere (Active Content F).
         var weather = RegionConditionRules.TravelFactors(
             RegionConditionRules.For(gameInstanceId.ToString(), HarassmentRules.HourOf(now), regions));
-        var route = TravelRules.PlanRoute(RegionAt, home, from.Cell, region, to.Cell, weather);
+        Func<string, double> walk = pace == 1.0 ? weather : id => (weather?.Invoke(id) ?? 1.0) * pace;
+        var route = TravelRules.PlanRoute(RegionAt, home, from.Cell, region, to.Cell, walk);
         if (route == null)
-            return (new PartyOutcome(PartyError.NoRoute, "No road or open ground leads there from where the company stands."), null);
+            return (new PartyOutcome(PartyError.NoRoute, "No road or open ground leads there from where the company stands."), null, 0);
 
         party.State = CompanyState.Travelling;
         party.FromSiteId = party.SiteId;
@@ -349,9 +429,8 @@ public class PartyService
         party.RouteJson = JsonSerializer.Serialize(route.Legs);
         party.UpdatedAt = now;
 
-        // The road is rolled now, once (§4): re-reading the journey cannot re-roll it, and the client
-        // is not told until it strikes. Every region walked is a chance of its own, and one of the
-        // player's companies patrolling it makes it safer (auto-fight.md §6).
+        // Every region walked is a chance of its own, and one of the player's companies patrolling it makes it
+        // safer (auto-fight.md §6).
         var byId = regions.ToDictionary(r => r.RegionId);
         var patrolled = parties.Where(p => p.AutoMode && AutoFightRules.Guards(p.AutoOrder, p.AutoStatus) && p.AutoRegionId != null)
             .Select(p => p.AutoRegionId!).ToHashSet(StringComparer.Ordinal);
@@ -362,22 +441,15 @@ public class PartyService
         double chance = AmbushRules.ChanceForRoute(route.Legs.Select(leg =>
         {
             var land = byId[leg.RegionId];
-            var walk = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
+            var walked = TimeSpan.FromSeconds(leg.Seconds.Count > 0 ? leg.Seconds[^1] - leg.Seconds[0] : 0);
             double hunt = RegionConditionRules.AmbushChanceFactor(conditions.GetValueOrDefault(leg.RegionId))
                           * RiftRules.AmbushChanceFactor(invasions, leg.RegionId, now);
-            return (land.Tier, land.IsOwnedByPlayer(userId), walk, patrolled.Contains(leg.RegionId), hunt);
+            return (land.Tier, land.IsOwnedByPlayer(userId), walked, patrolled.Contains(leg.RegionId), hunt);
         }));
-        party.AmbushAt = AmbushRules.Roll(chance, Dice);
         party.HaltedAt = null;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
-        await _context.SaveChangesAsync();
-
-        _sessionLog.Log("PARTY-TRAVEL",
-            $"user={userId} party={party.Id} {party.FromSiteId}->{party.ToSiteId} regions={route.Legs.Count} secs={route.Duration.TotalSeconds:F0} " +
-            $"ambush-chance={chance:F2} ambush={(party.AmbushAt.HasValue ? party.AmbushAt.Value.ToString("F2") : "none")}");
-        if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.March);
-        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
+        return (null, route, chance);
     }
 
     /// <summary>
@@ -469,11 +541,15 @@ public class PartyService
         }
 
         var arrivedAt = party.ArrivesAt.Value;
+        // A caravan brought home after a flight is let go: its quest stays in the log, to set out again. One that
+        // reached its destination stays on the company until its quest is stamped (DeliverCaravansAsync).
+        if (party.State == CompanyState.Returning && party.CaravanQuestId != null) ClearCaravan(party);
         party.State = CompanyState.Idle;
         party.SiteId = party.ToSiteId;
         if (!string.IsNullOrEmpty(party.ToSiteId)) party.RegionId = SiteSpec.RegionIdOf(party.ToSiteId);
         events?.Add(new RoadEvent(party, LetterKind.CompanyArrived, arrivedAt, party.RegionId));
         party.AmbushAt = null;
+        party.SecondAmbushAt = null;
         party.HaltedAt = null;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
@@ -484,6 +560,73 @@ public class PartyService
         party.RouteJson = null;
         party.UpdatedAt = now;
         return true;
+    }
+
+    private static void ClearCaravan(PlayerParty party)
+    {
+        party.CaravanQuestId = null;
+        party.CaravanWagons = 0;
+        party.CaravanPerfect = false;
+    }
+
+    /// <summary>
+    /// Stamps the Escort quests whose caravans have arrived (Active Content F): a company at rest still holding a caravan
+    /// has delivered it, so its quest is done, with the wagons that got through as its progress and whether every fight
+    /// was perfect. Then the company lets the caravan go. Run after any settle; safe to run again.
+    /// </summary>
+    public static async Task<int> DeliverCaravansAsync(ApplicationDbContext context, IEnumerable<PlayerParty> parties, ISessionLog? log)
+    {
+        int delivered = 0, released = 0;
+        var now = DateTime.UtcNow;
+        foreach (var party in parties.Where(p => p.State == CompanyState.Idle && p.CaravanQuestId != null).ToList())
+        {
+            var quest = await context.PlayerQuests.FirstOrDefaultAsync(q => q.Id == party.CaravanQuestId
+                && q.GameInstanceId == party.GameInstanceId && q.UserId == party.UserId && q.HandedInAt == null);
+            if (quest != null && quest.DoneAt == null && party.CaravanWagons > 0)
+            {
+                quest.Progress = Math.Min(CaravanRules.Wagons, party.CaravanWagons);
+                quest.Perfect = party.CaravanPerfect && party.CaravanWagons >= CaravanRules.Wagons;
+                quest.DoneAt = now;
+                delivered++;
+                log?.Log("CARAVAN-DELIVERED", $"user={party.UserId} party={party.Id} quest={quest.Id} wagons={quest.Progress} perfect={quest.Perfect}");
+            }
+            ClearCaravan(party);
+            party.UpdatedAt = now;
+            released++;
+        }
+        if (released > 0) await context.SaveChangesAsync();
+        return delivered;
+    }
+
+    /// <summary>
+    /// Settles this player's caravan companies by the clock and stamps any that have delivered (the quest book asks
+    /// before it answers, so a caravan that arrived while nobody looked is done when the log is read).
+    /// </summary>
+    public static async Task SettleCaravansAsync(ApplicationDbContext context, Guid gameInstanceId, string userId, ISessionLog? log)
+    {
+        var carrying = await context.PlayerParties
+            .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.CaravanQuestId != null)
+            .ToListAsync();
+        if (carrying.Count == 0) return;
+        var now = DateTime.UtcNow;
+        bool changed = false;
+        foreach (var p in carrying) changed |= SettleArrival(p, now);
+        if (changed) await context.SaveChangesAsync();
+        await DeliverCaravansAsync(context, carrying, log);
+    }
+
+    /// <summary>A company lets go of a caravan whose quest was given up: it walks on as an ordinary company.</summary>
+    public static async Task DropCaravanAsync(ApplicationDbContext context, Guid gameInstanceId, string userId, Guid questId)
+    {
+        var parties = await context.PlayerParties
+            .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.CaravanQuestId == questId)
+            .ToListAsync();
+        foreach (var p in parties)
+        {
+            ClearCaravan(p);
+            p.SecondAmbushAt = null;
+        }
+        if (parties.Count > 0) await context.SaveChangesAsync();
     }
 
     /// <summary>
@@ -615,10 +758,15 @@ public class PartyService
 
         var now = DateTime.UtcNow;
         var elapsed = now - run.StartedAt;
-        if (request.Won && elapsed < WorldPveService.MinimumRunDuration)
+        bool caravan = party.CaravanQuestId != null && party.CaravanWagons > 0;
+        var fastest = caravan ? TimeSpan.FromSeconds(CaravanRules.MinimumFightSeconds) : WorldPveService.MinimumRunDuration;
+        if (request.Won && elapsed < fastest)
             return (new PartyOutcome(PartyError.RunTooFast, "That fight ended implausibly fast."), null);
 
         var ambush = AmbushOf(party, world, await RiftService.InvasionsAsync(_context, gameInstanceId));
+        // A caravan fight is won with at least one wagon standing, never more than it began with (a report, held).
+        int wagons = caravan ? Math.Max(0, Math.Min(party.CaravanWagons, request.WagonsStanding ?? 0)) : 0;
+        int tier = caravan ? CaravanRules.Tier : AmbushRules.SkirmishTier;
         run.ClaimedAt = now;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
@@ -626,13 +774,13 @@ public class PartyService
         long experience = 0, gold = 0, balance = 0;
         var items = new List<StateManagement.Models.ItemSaveData>();
         var materials = new List<MaterialGrant>();
-        bool won = request.Won && elapsed <= WorldPveService.RunExpiry && ambush != null;
+        bool won = request.Won && elapsed <= WorldPveService.RunExpiry && ambush != null && (!caravan || wagons > 0);
 
         if (won)
         {
             // Priced as the smallest run there is, at the land's level, and paid at a share: a road
             // skirmish is not a dungeon.
-            var full = RunRewardCalculator.Calculate(ambush!.Level, AmbushRules.SkirmishTier,
+            var full = RunRewardCalculator.Calculate(ambush!.Level, tier,
                 _content.RunTuning, _content.DroppableItems, Dice);
             // Struck in Hunting Season: it pays more (Active Content C), by the hour it struck.
             double hunt = RegionConditionRules.AmbushRewardFactor(RegionConditionRules.At(gameInstanceId.ToString(),
@@ -640,7 +788,7 @@ public class PartyService
             experience = (long)Math.Round(full.Experience * AmbushRules.RewardShare * hunt);
             gold = GoldRules.GoldForClear(experience);
             items = full.Items.Where(_ => Dice.NextDouble() < AmbushRules.RewardShare).ToList();
-            materials = MaterialRewardCalculator.Calculate(ambush.Level, AmbushRules.SkirmishTier,
+            materials = MaterialRewardCalculator.Calculate(ambush.Level, tier,
                     _content.RunTuning, _content.Materials, Dice)
                 .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = (int)Math.Round(AmbushRules.Share(m.Quantity, Dice) * hunt) })
                 .Where(m => m.Quantity > 0)
@@ -650,16 +798,31 @@ public class PartyService
             await _items.GrantAsync(gameInstanceId, userId, items, $"ambush run={run.Id}");
             balance = await _gold.GrantAsync(gameInstanceId, userId, gold, $"ambush run={run.Id}");
 
-            // On it goes, from where it stood. It will not be stopped twice on one road.
+            // On it goes, from where it stood. It will not be stopped twice on one road - unless it is a caravan's
+            // long road, whose second ambush comes later (Active Content F).
             var shift = now - (party.HaltedAt ?? now);
             party.DepartedAt += shift;
             party.ArrivesAt += shift;
-            party.AmbushAt = null;
+            party.AmbushAt = caravan ? party.SecondAmbushAt : null;
+            party.SecondAmbushAt = null;
             party.HaltedAt = null;
             party.State = CompanyState.Travelling;
+            if (caravan)
+            {
+                party.CaravanWagons = wagons;
+                party.CaravanPerfect = party.CaravanPerfect && request.Perfect == true && wagons >= CaravanRules.Wagons;
+            }
         }
         else
         {
+            // A lost caravan is gone, cargo and errand alike (F6: a loss pays nothing): its quest is struck from the log.
+            if (caravan)
+            {
+                var lost = await _context.PlayerQuests.FirstOrDefaultAsync(q => q.Id == party.CaravanQuestId && q.HandedInAt == null);
+                if (lost != null) _context.PlayerQuests.Remove(lost);
+                _sessionLog.Log("CARAVAN-LOST", $"user={userId} party={party.Id} quest={party.CaravanQuestId}");
+                ClearCaravan(party);
+            }
             // A lost ambush turns the company back, its fighters Bloodied (BloodiedRules).
             TurnBack(party, now);
             await AutoFightService.BloodyAsync(_context, gameInstanceId, userId, MarchingArmy.ReadIds(run.FighterIdsJson), now);
@@ -683,12 +846,13 @@ public class PartyService
                 AmbushCount = RegionConditionRules.AmbushQuestCount(weather),
                 Kills = struck == null ? new Dictionary<string, int>()
                     : new Dictionary<string, int>(_quests.ClampKills(request.Kills,
-                        ambush!.Riftborn?.DonorBiome ?? struck.Biome, AmbushRules.SkirmishTier, null))
+                        ambush!.Riftborn?.DonorBiome ?? struck.Biome, tier, null))
             });
         }
 
         _sessionLog.Log("AMBUSH-CLAIM",
-            $"user={userId} party={party.Id} run={run.Id} won={won} xp={experience} gold={gold} items={items.Count} materials={materials.Sum(m => m.Quantity)}");
+            $"user={userId} party={party.Id} run={run.Id} won={won} xp={experience} gold={gold} items={items.Count} materials={materials.Sum(m => m.Quantity)}" +
+            (caravan ? $" caravan wagons={wagons} perfect={request.Perfect == true} next={(party.AmbushAt.HasValue ? "second ambush" : "on to deliver")}" : ""));
         return (new PartyOutcome(PartyError.None), new AmbushClaimResponse(
             won, experience, items, materials, gold, balance, await ResponseAsync(gameInstanceId, userId, world)));
     }
@@ -713,6 +877,7 @@ public class PartyService
         party.RouteJson = JsonSerializer.Serialize(back);
         if (back.Count > 0) party.RegionId = back[0].RegionId;
         party.AmbushAt = null;
+        party.SecondAmbushAt = null;
         party.HaltedAt = null;
         party.AmbushRunId = null;
         party.AmbushRunStartedAt = null;
@@ -742,20 +907,26 @@ public class PartyService
                     RiftRules.AmbushMutators(invasion.RiftId)) };
         }
 
+        // A caravan's warband is fought as the caravan fight, at its tier, with the wagons still standing.
+        bool caravan = p.CaravanQuestId != null && p.CaravanWagons > 0;
+        int tier = caravan ? CaravanRules.Tier : AmbushRules.SkirmishTier;
+        int waves = caravan ? CaravanRules.Waves : SkirmishWaves;
+        int? wagons = caravan ? p.CaravanWagons : null;
+
         var regionId = p.HaltedAt is DateTime halted ? RegionAlong(p, halted) : null;
         if (regionId == null || regionId == destination.Region.RegionId)
-            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves),
+            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), tier, waves, null, wagons),
                 destination.Region);
 
         var region = WorldRegionBlob.ReadAllRegions(world).FirstOrDefault(r => r.RegionId == regionId);
         var sites = region == null ? null : RegionGenerator.Generate(region).Sites;
         if (sites == null || sites.Count == 0)
-            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), AmbushRules.SkirmishTier, SkirmishWaves),
+            return Riftborn(new AmbushDto(p.ToSiteId, Math.Max(1, destination.Site.Level), tier, waves, null, wagons),
                 destination.Region);
 
         var keep = sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? sites[0];
         int level = (int)Math.Round(sites.Average(s => Math.Max(1, s.Level)));
-        return Riftborn(new AmbushDto(keep.SiteId, Math.Max(1, level), AmbushRules.SkirmishTier, SkirmishWaves), region!);
+        return Riftborn(new AmbushDto(keep.SiteId, Math.Max(1, level), tier, waves, null, wagons), region!);
     }
 
     /// <summary>The region a company was struck in: where it stood when halted, else where it was bound.</summary>
@@ -952,6 +1123,8 @@ public class PartyService
         foreach (var p in parties) landed |= SettleArrival(p, now, events);
         if (landed) await _context.SaveChangesAsync();
         await SendLettersAsync(gameInstanceId, events);
+        if (parties.Any(p => p.State == CompanyState.Idle && p.CaravanQuestId != null))
+            await DeliverCaravansAsync(_context, parties, _sessionLog);
         return parties;
     }
 
@@ -1010,7 +1183,8 @@ public class PartyService
 
         return new PartiesResponse(
             parties.Select(p => new PartyDto(p.Id, p.Name, p.Banner, MarchingArmy.ReadIds(p.CharacterIdsJson),
-                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world, invasions), AutoOf(p))).ToList(),
+                p.SortOrder, p.State, p.RegionId, p.SiteId, JourneyOf(p), AmbushOf(p, world, invasions), AutoOf(p),
+                p.CaravanQuestId is Guid q && p.CaravanWagons > 0 ? new CaravanDto(q, p.CaravanWagons) : null)).ToList(),
             CompanyRules.MaxCompanies(standing.Cap),
             CompanyRules.MaxSize,
             standing.Cap,

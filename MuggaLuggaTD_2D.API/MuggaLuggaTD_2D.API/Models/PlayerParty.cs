@@ -94,6 +94,26 @@ public class PlayerParty
     /// <summary>When that run opened; a claim faster than a fight could be is refused.</summary>
     public DateTime? AmbushRunStartedAt { get; set; }
 
+    /// <summary>
+    /// A second ambush on a caravan's long road (Active Content F, phase 2): its share of the journey's time, which
+    /// becomes <see cref="AmbushAt"/> once the first is fought off. Never sent to the client.
+    /// </summary>
+    public double? SecondAmbushAt { get; set; }
+
+    // ---- A caravan (Active Content F, phase 2) ----
+
+    /// <summary>
+    /// The Escort quest whose caravan this company is taking, or null. Kept while it travels, is ambushed and turns
+    /// back; cleared when the caravan is delivered (the quest is then done), lost, or brought home after a flight.
+    /// </summary>
+    public Guid? CaravanQuestId { get; set; }
+
+    /// <summary>The caravan's wagons still standing: three at the start, fewer after a hard fight. Its share of the cargo.</summary>
+    public int CaravanWagons { get; set; }
+
+    /// <summary>Every fight on its road so far was a perfect defence (<see cref="CaravanRules.IsPerfect"/>).</summary>
+    public bool CaravanPerfect { get; set; }
+
     // ---- Auto mode (docs/design/auto-fight.md, phase 2) ----
 
     /// <summary>Whether the company fights on its own. Its player steers it no further until it is toggled off.</summary>

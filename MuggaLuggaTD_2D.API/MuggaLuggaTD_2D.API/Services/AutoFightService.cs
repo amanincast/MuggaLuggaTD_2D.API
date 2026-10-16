@@ -120,6 +120,8 @@ public class AutoFightService
             if (party.AutoMode) return new AutoOutcome(AutoError.None);
             if (party.State != CompanyState.Idle)
                 return new AutoOutcome(AutoError.Busy, $"{party.Name} is away. It can be sent off on its own once it is at rest.");
+            if (party.CaravanQuestId != null)
+                return new AutoOutcome(AutoError.Busy, $"{party.Name} has a caravan in its care. Caravans are escorted by hand.");
             if (MarchingArmy.ReadIds(party.CharacterIdsJson).Count == 0)
                 return new AutoOutcome(AutoError.Empty, $"{party.Name} has nobody in it to send.");
 

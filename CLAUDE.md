@@ -173,7 +173,12 @@ faction per realm, and `FactionRaid` rows for what they do.
 - **Hand-in:** a Gather quest spends its goods from the wallet (workers are settled first). Others need their
   count. Pays `QuestRules.RollChest` (one piece of the tier, the rest lower), gold and materials, marked
   handed in before the grant.
-- **Debug (Development only):** `POST quests/debug/fresh` and `quests/debug/finish`.
+- **Debug (Development only):** `POST quests/debug/fresh` `quests/debug/finish` and `quests/debug/escort`.
+- **Escorts** (`QuestKind.Escort`, caravans phase 2, 1.72.0): done not by deeds but when the company carrying the
+  caravan lands (`PartyService.DeliverCaravansAsync`, run after every party settle and by `QuestService` before it
+  answers): `Progress` = wagons through, `Perfect`. Hand-in pays the whole chest and gold/goods by the share
+  (`CaravanRules.DeliveredGold`/`DeliveredMaterials`). A lost caravan fight deletes the quest; giving it up lets the
+  company drop the caravan (`DropCaravanAsync`). Setting out: `POST parties/{id}/escort`. Unity `docs/systems/caravans.md`.
 
 ## Realm goal of the day (`RealmGoalService`, `RealmGoalController`; Unity `docs/systems/quests.md`)
 

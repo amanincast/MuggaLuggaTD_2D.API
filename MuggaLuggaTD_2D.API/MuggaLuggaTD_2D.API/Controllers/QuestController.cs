@@ -88,6 +88,19 @@ public class QuestController : ControllerBase
     }
 
     /// <summary>Debug, Development only: every quest taken is done. The Combat Debug window's "Finish my quests".</summary>
+    /// <summary>Debug, Development only: an Escort quest in the log now (Active Content F).</summary>
+    [HttpPost("debug/escort")]
+    public async Task<IActionResult> DebugEscort(Guid gameInstanceId)
+    {
+        if (!_environment.IsDevelopment()) return NotFound();
+        var userId = UserId();
+        if (userId == null) return Unauthorized();
+        if (!await HasAccess(gameInstanceId, userId)) return Forbid();
+        var made = await _quests.DebugEscortAsync(gameInstanceId, userId);
+        return made == null ? Conflict(new { error = "No room in the quest log, or no village with a neighbour to send a caravan to." })
+            : Ok(new { escort = made });
+    }
+
     [HttpPost("debug/finish")]
     public async Task<IActionResult> DebugFinish(Guid gameInstanceId)
     {

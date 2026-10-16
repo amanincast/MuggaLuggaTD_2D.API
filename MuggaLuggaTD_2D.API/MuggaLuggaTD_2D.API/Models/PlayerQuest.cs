@@ -36,7 +36,11 @@ public class PlayerQuest
     [Required]
     public string OfferJson { get; set; } = "{}";
 
+    /// <summary>How far it has come. For an Escort, the wagons that got through, stamped on arrival.</summary>
     public int Progress { get; set; }
+
+    /// <summary>An Escort delivered with a perfect defence on every fight of its road (<see cref="CaravanRules.IsPerfect"/>).</summary>
+    public bool Perfect { get; set; }
 
     public DateTime AcceptedAt { get; set; } = DateTime.UtcNow;
 

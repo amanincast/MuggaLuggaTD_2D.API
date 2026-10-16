@@ -1442,6 +1442,15 @@ namespace MuggaLuggaTD_2D.API.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
 
+                    b.Property<bool>("CaravanPerfect")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("CaravanQuestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CaravanWagons")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CharacterIdsJson")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1473,6 +1482,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
                     b.Property<string>("RouteJson")
                         .HasColumnType("text");
+
+                    b.Property<double?>("SecondAmbushAt")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("SiteId")
                         .HasMaxLength(64)
@@ -1529,6 +1541,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<string>("OfferJson")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("Perfect")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("Progress")
                         .HasColumnType("integer");

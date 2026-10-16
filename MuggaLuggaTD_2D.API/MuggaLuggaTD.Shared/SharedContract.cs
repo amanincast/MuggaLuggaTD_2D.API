@@ -291,6 +291,10 @@ namespace MuggaLuggaTD.Shared
         //   seed, two rift twists and four level-15 heroes (one per class); endless open-field waves at trial:{week};
         //   score = kills x seconds, held to what the server's clock allows (TrialRules.Check); 3 tries a UTC day;
         //   chest by finish (top 1% Legendary, 10% Rare, 50% Magic, else Uncommon). LetterKind.TrialChest.
-        public const string Version = "1.71.0";
+        // 1.72.0 - Caravans phase 2 (Active Content F): QuestKind.Escort (village elders, a good to a village 1-3 hexes
+        //   away, QuestOffer.DestinationSiteId), the board's village weights gain escort 25; CaravanRules: pace x1.5, a
+        //   guaranteed ambush (0.2-0.45 of the walk), a second on 3+ region routes at x2 odds (0.55-0.8); delivery pays the
+        //   chest, gold x2 and a cut of the cargo, gold and goods by the share of wagons standing, +25% gold if perfect.
+        public const string Version = "1.72.0";
     }
 }
