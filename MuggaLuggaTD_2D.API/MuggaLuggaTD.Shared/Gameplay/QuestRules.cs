@@ -21,7 +21,15 @@ namespace MuggaLuggaTD.Shared.Gameplay
         Ambush = 2,
 
         /// <summary>Bring a number of one material (<see cref="QuestOffer.Target"/>) to the giver.</summary>
-        Gather = 3
+        Gather = 3,
+
+        /// <summary>
+        /// Escort a caravan (Active Content F, phase 2): <see cref="QuestOffer.Count"/> of a good
+        /// (<see cref="QuestOffer.Target"/>) from the giver's village to <see cref="QuestOffer.DestinationSiteId"/>. A
+        /// company sets out with it from the village; the road meets a guaranteed ambush, fought as the caravan fight.
+        /// Done on arrival, with the share of the cargo that got through (<see cref="CaravanRules"/>).
+        /// </summary>
+        Escort = 4
     }
 
     /// <summary>
@@ -63,6 +71,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>Materials paid beside the chest.</summary>
         public List<MaterialGrant> Materials { get; set; } = new List<MaterialGrant>();
+
+        /// <summary>An Escort's destination: a village in another region (<see cref="QuestKind.Escort"/>). Null otherwise.</summary>
+        public string DestinationSiteId { get; set; }
     }
 
     /// <summary>
@@ -227,7 +238,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             foreach (var g in chosen)
             {
                 var random = DeterministicRandom.ForSubject(seed, Naming.Hash(g.Village.SiteId) + 1);
-                offers.Add(VillageOffer(ref random, $"{hour}.{set}.{g.Village.SiteId}", g.Region, g.Layout, g.Village, peoples, tuning));
+                offers.Add(VillageOffer(ref random, $"{hour}.{set}.{g.Village.SiteId}", g.Region, g.Layout, g.Village, peoples, tuning,
+                    all, userId));
             }
 
             // Wanderers the same way: the highest scores, one to a region first.
@@ -268,7 +280,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             && !string.Equals(region.OwnerUserId, userId, StringComparison.Ordinal);
 
         private static QuestOffer VillageOffer(ref DeterministicRandom random, string id, WorldRegionData region,
-            RegionLayout layout, SiteSpec village, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples, RunTuning tuning)
+            RegionLayout layout, SiteSpec village, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples, RunTuning tuning,
+            IReadOnlyList<WorldRegionData> world = null, string userId = null)
         {
             int level = AutoFightRules.MobLevel(layout.Sites);
             int tier = Math.Max(1, region.Tier);
@@ -280,17 +293,94 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
             var offer = new QuestOffer { Id = id, GiverId = village.SiteId, RegionId = region.RegionId, Level = level };
 
-            // Slay 35, clear 30, gather 35, less whatever this region cannot offer.
+            // Slay 35, clear 30, gather 35, escort 25, less whatever this region cannot offer. An escort needs a good
+            // to carry and a village to carry it to.
+            var destinations = trades.Count > 0 ? EscortDestinations(region, world, userId) : new List<(SiteSpec Site, int Hexes)>();
             int[] weights =
             {
                 folk.Count > 0 && fightable.Count > 0 ? 35 : 0,
                 fightable.Count > 0 ? 30 : 0,
-                35
+                35,
+                destinations.Count > 0 ? EscortWeight : 0
             };
-            var kind = new[] { QuestKind.Slay, QuestKind.Clear, QuestKind.Gather }[random.NextWeighted(weights)];
+            var kind = new[] { QuestKind.Slay, QuestKind.Clear, QuestKind.Gather, QuestKind.Escort }[random.NextWeighted(weights)];
+            if (kind == QuestKind.Escort)
+            {
+                Escort(ref random, offer, tier, trades, destinations, tuning);
+                return offer;
+            }
             Ask(ref random, offer, kind, region, tier, folk, fightable, trades, tuning);
             Reward(ref random, offer, tier, tuning);
             return offer;
+        }
+
+        /// <summary>
+        /// An Escort offer from a village of <paramref name="region"/>, or null when it has no good to send or no village near
+        /// enough to send it to. Seeded by <paramref name="id"/>. For Combat Debug; the board rolls its own.
+        /// </summary>
+        public static QuestOffer EscortOffer(string id, WorldRegionData region, IReadOnlyList<WorldRegionData> world, string userId, RunTuning tuning)
+        {
+            if (region == null) return null;
+            var layout = RegionGenerator.Generate(region);
+            var village = layout.Sites.Where(s => s.Type == LocationType.NeutralHome).OrderBy(s => s.SiteId, StringComparer.Ordinal).FirstOrDefault();
+            var trades = layout.Sites.Where(s => s.Type == LocationType.ResourceNode)
+                .Select(s => ResourceNodeRules.GoodOf(ResourceNodeRules.TradeOf(s.SiteId, region.Biome)))
+                .Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
+            var destinations = EscortDestinations(region, world, userId);
+            if (village == null || trades.Count == 0 || destinations.Count == 0) return null;
+
+            var random = DeterministicRandom.ForSubject(Naming.Hash(id), Naming.Hash(village.SiteId));
+            var offer = new QuestOffer
+            {
+                Id = id, GiverId = village.SiteId, RegionId = region.RegionId, Level = AutoFightRules.MobLevel(layout.Sites)
+            };
+            Escort(ref random, offer, Math.Max(1, region.Tier), trades, destinations, tuning);
+            return offer;
+        }
+
+        /// <summary>How often a village asks for an escort, against slay 35, clear 30 and gather 35. <i>(tune)</i></summary>
+        public const int EscortWeight = 25;
+
+        /// <summary>An escort goes to a village this many hexes away at least, and at most. <i>(tune)</i></summary>
+        public const int EscortNearest = 1, EscortFarthest = 3;
+
+        /// <summary>
+        /// The villages a caravan from <paramref name="from"/> may be sent to: one in each region
+        /// <see cref="EscortNearest"/> to <see cref="EscortFarthest"/> hexes away that no other player holds, with how
+        /// far it is. In region order, so the board stays a pure function.
+        /// </summary>
+        public static List<(SiteSpec Site, int Hexes)> EscortDestinations(WorldRegionData from, IReadOnlyList<WorldRegionData> world, string userId)
+        {
+            var found = new List<(SiteSpec Site, int Hexes)>();
+            if (from == null || world == null) return found;
+            foreach (var region in world.Where(r => r != null && r.RegionId != from.RegionId).OrderBy(r => r.RegionId, StringComparer.Ordinal))
+            {
+                int hexes = HexCoord.Distance(from.Hex, region.Hex);
+                if (hexes < EscortNearest || hexes > EscortFarthest || IsRivals(region, userId)) continue;
+                var village = RegionGenerator.Generate(region).Sites
+                    .Where(s => s.Type == LocationType.NeutralHome).OrderBy(s => s.SiteId, StringComparer.Ordinal).FirstOrDefault();
+                if (village != null) found.Add((village, hexes));
+            }
+            return found;
+        }
+
+        /// <summary>
+        /// An escort: a load of one of the village's goods to a village nearby, two regions away by preference. Pays a
+        /// quest's chest and <see cref="CaravanRules.EscortGoldFactor"/> its gold, and a cut of the cargo, all scaled at
+        /// delivery by the share that got through (<see cref="CaravanRules.DeliveredGold"/>).
+        /// </summary>
+        private static void Escort(ref DeterministicRandom random, QuestOffer offer, int tier, List<string> trades,
+            List<(SiteSpec Site, int Hexes)> destinations, RunTuning tuning)
+        {
+            offer.Kind = QuestKind.Escort;
+            offer.Target = trades[random.Next(trades.Count)];
+            offer.Count = 20 + 10 * Math.Min(tier, 3) + random.Next(11);
+            // Two hexes is the errand the spec describes; one and three are less likely.
+            int[] byDistance = destinations.Select(d => d.Hexes == 2 ? 3 : d.Hexes == 1 ? 1 : 2).ToArray();
+            offer.DestinationSiteId = destinations[random.NextWeighted(byDistance)].Site.SiteId;
+            Reward(ref random, offer, tier, tuning);
+            offer.Gold = (long)Math.Round(offer.Gold * CaravanRules.EscortGoldFactor);
+            offer.Materials.Add(new MaterialGrant { MaterialName = offer.Target, Quantity = Math.Max(1, offer.Count / CaravanRules.CargoCutEvery) });
         }
 
         /// <summary>
@@ -522,9 +612,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return Math.Min(quest.Count, progress + gained);
         }
 
-        /// <summary>Whether a quest is done: its count reached. A Gather quest is done when it is handed in.</summary>
+        /// <summary>
+        /// Whether a quest is done: its count reached. A Gather quest is done when it is handed in, an Escort when its
+        /// caravan arrives (the server stamps it; its progress is then the wagons that got through).
+        /// </summary>
         public static bool IsDone(QuestOffer quest, int progress) =>
-            quest != null && quest.Kind != QuestKind.Gather && progress >= quest.Count;
+            quest != null && quest.Kind != QuestKind.Gather && quest.Kind != QuestKind.Escort && progress >= quest.Count;
 
         /// <summary>
         /// The chest's pieces: one of <paramref name="tier"/>, and <see cref="ChestPieces"/> - 1 more, each one

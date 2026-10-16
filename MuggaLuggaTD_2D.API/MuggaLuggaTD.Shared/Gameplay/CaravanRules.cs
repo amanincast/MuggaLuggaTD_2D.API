@@ -160,6 +160,69 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static bool IsPerfect(int wagonsStanding, double lowestHealthShare) =>
             wagonsStanding >= Wagons && lowestHealthShare >= 0.5;
 
+        // -----------------------------------------------------------------
+        // The errand (phase 2): an Escort quest, the road and the pay
+        // -----------------------------------------------------------------
+
+        /// <summary>A caravan walks this much slower than a company alone: every region's walk is stretched by it.</summary>
+        public const double Pace = 1.5;
+
+        /// <summary>The guaranteed ambush strikes somewhere in this share of the journey's time (F7).</summary>
+        public const double FirstAmbushFrom = 0.2, FirstAmbushTo = 0.45;
+
+        /// <summary>A second ambush, on a long route, strikes in this later share, so it always comes after the first.</summary>
+        public const double SecondAmbushFrom = 0.55, SecondAmbushTo = 0.8;
+
+        /// <summary>A route through this many regions or more may meet a second ambush, at <see cref="SecondAmbushOdds"/> the usual chance.</summary>
+        public const int LongRouteRegions = 3;
+
+        public const double SecondAmbushOdds = 2.0;
+
+        /// <summary>An escort pays this many times a quest's gold: it is a long walk and a hard fight. <i>(tune)</i></summary>
+        public const double EscortGoldFactor = 2.0;
+
+        /// <summary>An escort pays one unit of its cargo in every this many carried, beside the essence. <i>(tune)</i></summary>
+        public const int CargoCutEvery = 5;
+
+        /// <summary>A perfect defence (<see cref="IsPerfect"/>) adds this share of the gold. <i>(tune)</i></summary>
+        public const double PerfectBonus = 0.25;
+
+        /// <summary>
+        /// The fewest seconds a caravan fight can take: its setup and a little more. A claim faster than this is refused.
+        /// </summary>
+        public const double MinimumFightSeconds = SetupSeconds + 10;
+
+        /// <summary>
+        /// When a caravan's road is struck (F7): always once, early in the walk; and on a route of
+        /// <see cref="LongRouteRegions"/> regions or more, a second time at <see cref="SecondAmbushOdds"/> the route's usual
+        /// <paramref name="routeChance"/> (capped at certain), later in the walk. Shares of the journey's time.
+        /// <paramref name="random"/> is the caller's, so the server owns the entropy and tests can fix it.
+        /// </summary>
+        public static (double First, double? Second) RollAmbushes(int regions, double routeChance, Random random)
+        {
+            random = random ?? new Random();
+            double first = FirstAmbushFrom + random.NextDouble() * (FirstAmbushTo - FirstAmbushFrom);
+            double? second = null;
+            if (regions >= LongRouteRegions && random.NextDouble() < Math.Min(1.0, Math.Max(0, routeChance) * SecondAmbushOdds))
+                second = SecondAmbushFrom + random.NextDouble() * (SecondAmbushTo - SecondAmbushFrom);
+            return (first, second);
+        }
+
+        /// <summary>The gold an escort pays on delivery: the offer's, by the share delivered, and the bonus for a perfect defence.</summary>
+        public static long DeliveredGold(long offerGold, int wagonsStanding, bool perfect) =>
+            (long)Math.Round(Math.Max(0, offerGold) * DeliveredShare(wagonsStanding) * (perfect ? 1 + PerfectBonus : 1));
+
+        /// <summary>The materials an escort pays on delivery: each of the offer's, by the share delivered (rounded, none below one dropped).</summary>
+        public static List<MaterialGrant> DeliveredMaterials(IEnumerable<MaterialGrant> offerMaterials, int wagonsStanding)
+        {
+            double share = DeliveredShare(wagonsStanding);
+            return (offerMaterials ?? Enumerable.Empty<MaterialGrant>())
+                .Where(m => m != null)
+                .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = (int)Math.Round(m.Quantity * share) })
+                .Where(m => m.Quantity > 0)
+                .ToList();
+        }
+
         public static string SiteId(string caravanId) => SitePrefix + caravanId;
 
         public static bool TryParseSiteId(string siteId, out string caravanId)

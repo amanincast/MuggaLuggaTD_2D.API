@@ -17,7 +17,8 @@ public enum QuestError
     TooManyActive,
     QuestNotFound,
     NotDone,
-    NotEnoughToBring
+    NotEnoughToBring,
+    NoEscort
 }
 
 public record QuestOutcome(QuestError Error, string? Message = null)
@@ -72,6 +73,8 @@ public class QuestService
         var regions = await RegionsAsync(gameInstanceId);
         if (regions == null) return (new QuestOutcome(QuestError.WorldNotFound, "This realm has no world yet."), null);
 
+        // A caravan that arrived while nobody looked is delivered now, so its quest reads as done.
+        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog);
         var state = await StateAsync(gameInstanceId, userId);
         await _context.SaveChangesAsync();
         return (new QuestOutcome(QuestError.None), await ResponseAsync(gameInstanceId, userId, state, regions));
@@ -117,6 +120,8 @@ public class QuestService
 
         _context.PlayerQuests.Remove(quest);
         await _context.SaveChangesAsync();
+        // Its caravan, if a company has it on the road, is let go: the company walks on alone.
+        if (quest.Offer.Kind == QuestKind.Escort) await PartyService.DropCaravanAsync(_context, gameInstanceId, userId, quest.Id);
         _sessionLog.Log("QUEST-ABANDON", $"user={userId} realm={gameInstanceId} offer={quest.OfferId}");
         return await BoardAsync(gameInstanceId, userId);
     }
@@ -131,6 +136,7 @@ public class QuestService
 
     private async Task<(QuestOutcome Outcome, QuestHandInResponse? Response)> HandInCoreAsync(Guid gameInstanceId, string userId, Guid questId)
     {
+        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog);
         var quest = await _context.PlayerQuests.FirstOrDefaultAsync(q =>
             q.Id == questId && q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null);
         if (quest == null) return (new QuestOutcome(QuestError.QuestNotFound, "No such quest."), null);
@@ -146,6 +152,12 @@ public class QuestService
             if (!spent.Succeeded) return (new QuestOutcome(QuestError.NotEnoughToBring, spent.Message), null);
             quest.Progress = offer.Count;
         }
+        else if (offer.Kind == QuestKind.Escort)
+        {
+            // Done when its caravan arrived (PartyService.DeliverCaravansAsync), with the wagons that got through.
+            if (quest.DoneAt == null || quest.Progress <= 0)
+                return (new QuestOutcome(QuestError.NoEscort, "The caravan has not arrived yet."), null);
+        }
         else if (!QuestRules.IsDone(offer, quest.Progress))
         {
             return (new QuestOutcome(QuestError.NotDone, "That quest is not done yet."), null);
@@ -157,13 +169,19 @@ public class QuestService
         await _context.SaveChangesAsync();
 
         string source = $"quest {quest.Id}";
+        // An escort pays its gold and goods by the share of the cargo that got through, the gold more for a perfect
+        // defence (CaravanRules); the chest comes whole.
+        bool escort = offer.Kind == QuestKind.Escort;
+        long gold = escort ? CaravanRules.DeliveredGold(offer.Gold, quest.Progress, quest.Perfect) : offer.Gold;
+        var materials = escort ? CaravanRules.DeliveredMaterials(offer.Materials, quest.Progress) : offer.Materials;
         var pieces = QuestRules.RollChest(_content.DroppableItems.ToList(), Dice, offer.Level, offer.ChestTier);
         await _items.GrantAsync(gameInstanceId, userId, pieces, source);
-        await _wallet.GrantAsync(gameInstanceId, userId, offer.Materials, source);
-        long balance = await _gold.GrantAsync(gameInstanceId, userId, offer.Gold, source);
+        await _wallet.GrantAsync(gameInstanceId, userId, materials, source);
+        long balance = await _gold.GrantAsync(gameInstanceId, userId, gold, source);
 
         _sessionLog.Log("QUEST-HANDIN",
-            $"user={userId} realm={gameInstanceId} offer={offer.Id} chest={offer.ChestTier} pieces={string.Join(",", pieces.Select(p => p.Rarity))} gold={offer.Gold}");
+            $"user={userId} realm={gameInstanceId} offer={offer.Id} chest={offer.ChestTier} pieces={string.Join(",", pieces.Select(p => p.Rarity))} gold={gold}" +
+            (escort ? $" escort wagons={quest.Progress} perfect={quest.Perfect}" : ""));
 
         var regions = await RegionsAsync(gameInstanceId) ?? new List<WorldRegionData>();
         var state = await StateAsync(gameInstanceId, userId);
@@ -171,7 +189,7 @@ public class QuestService
         await _context.SaveChangesAsync();
 
         return (new QuestOutcome(QuestError.None), new QuestHandInResponse(
-            pieces, offer.Gold, balance, offer.Materials, await ResponseAsync(gameInstanceId, userId, state, regions)));
+            pieces, gold, balance, materials, await ResponseAsync(gameInstanceId, userId, state, regions)));
     }
 
     /// <summary>Marks givers as looked at, which takes their gold "?" off the map.</summary>
@@ -270,6 +288,38 @@ public class QuestService
         await _context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Debug, Development only: an Escort quest in the log, from the village nearest the player's first company (or
+    /// any village they can see) to one nearby. Null when there is no room or no such pair of villages.
+    /// </summary>
+    public async Task<string?> DebugEscortAsync(Guid gameInstanceId, string userId)
+    {
+        var regions = await RegionsAsync(gameInstanceId);
+        if (regions == null) return null;
+        int active = await _context.PlayerQuests.CountAsync(q => q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null);
+        if (active >= QuestRules.MaxActive) return null;
+
+        var party = await _context.PlayerParties.AsNoTracking()
+            .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId).OrderBy(p => p.SortOrder).FirstOrDefaultAsync();
+        var lit = RegionSight.Lit(regions, userId);
+        var order = regions.Where(r => lit.Contains(r.RegionId))
+            .OrderBy(r => r.RegionId == party?.RegionId ? 0 : 1).ThenBy(r => r.RegionId, StringComparer.Ordinal);
+        long hour = QuestRules.HourOf(Clock());
+        foreach (var region in order)
+        {
+            var offer = QuestRules.EscortOffer($"{hour}.debug.{Guid.NewGuid():N}", region, regions, userId, _content.RunTuning);
+            if (offer == null) continue;
+            _context.PlayerQuests.Add(new PlayerQuest
+            {
+                GameInstanceId = gameInstanceId, UserId = userId, OfferId = offer.Id, Offer = offer, AcceptedAt = Clock()
+            });
+            await _context.SaveChangesAsync();
+            _sessionLog.Log("QUEST-ACCEPT", $"user={userId} realm={gameInstanceId} offer={offer.Id} kind=Escort (debug) from={offer.GiverId} to={offer.DestinationSiteId}");
+            return $"{offer.Count} {offer.Target} from {offer.GiverId} to {offer.DestinationSiteId}";
+        }
+        return null;
+    }
+
     /// <summary>Debug, Development only: every quest taken is done (a Gather quest still needs its goods).</summary>
     public async Task<int> DebugFinishAsync(Guid gameInstanceId, string userId)
     {
@@ -281,7 +331,8 @@ public class QuestService
         {
             var offer = quest.Offer;
             if (offer.Kind == QuestKind.Gather) continue;
-            quest.Progress = offer.Count;
+            // An escort is done as if its caravan arrived whole.
+            quest.Progress = offer.Kind == QuestKind.Escort ? CaravanRules.Wagons : offer.Count;
             quest.DoneAt = Clock();
             finished++;
         }
