@@ -34,8 +34,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
     /// Caravans, the protection fight (Active Content F; Mike's answers F1-F11, 2026-10-15): "Circle the wagons". The
     /// caravan is halted in a clearing, three wagons each carrying a third of the cargo. Most enemies go for the nearest
     /// wagon; elites, bosses and a share of the rest hunt the heroes. Waves come in by lanes, two or three of the four
-    /// sides. Before the first wave there is a setup, and after each wave a lull, in which the player places a small
-    /// kit of defences on fixed spots, paid with build points the fight grants (never gold or goods).
+    /// sides. Before the first wave there is a setup, and after each wave a lull; the player places a small
+    /// kit of defences on fixed spots at any time in the fight (Mike 2026-10-16), paid with build points the fight grants (never gold or goods).
     ///
     /// <para>Shared so the server prices the fight from the same waves and pays from the same share (phase 2). The
     /// fight itself is the client's; nothing here is stored.</para>
@@ -54,8 +54,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>Waves to hold off: a tier-2 skirmish's, one shorter (spec: "a little shorter than a clearing").</summary>
         public const int Waves = 5;
 
-        /// <summary>Seconds of setup before the first wave, with no enemies (F2).</summary>
-        public const double SetupSeconds = 20;
+        /// <summary>Seconds of setup before the first wave, with no enemies (F2; Mike 2026-10-16: 20 was too short, then 30).</summary>
+        public const double SetupSeconds = 30;
 
         /// <summary>Seconds of quiet after a wave is cleared before the next comes (F2).</summary>
         public const double LullSeconds = 8;
@@ -63,11 +63,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>The next wave comes this long after the last began even if the field is not clear: a slow defence is swamped.</summary>
         public const double MostWaveSeconds = 40;
 
-        /// <summary>Build points the fight starts with (F3).</summary>
-        public const int StartingPoints = 6;
+        /// <summary>Build points the fight starts with (F3; Mike 2026-10-16: 8, was 6).</summary>
+        public const int StartingPoints = 8;
 
-        /// <summary>Build points each cleared wave adds (F3).</summary>
-        public const int PointsPerWave = 2;
+        /// <summary>
+        /// Once the first wave comes, a build point every this many seconds (Mike 2026-10-16: points over time rather
+        /// than +2 a cleared wave; 20 s, then 10). The setup earns none: the starting points are its stock.
+        /// </summary>
+        public const double SecondsPerPoint = 10;
 
         /// <summary>Repairing a standing piece to full costs this much.</summary>
         public const int RepairCost = 1;
@@ -98,8 +101,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static readonly CaravanPiece[] Pieces =
             { CaravanPiece.Palisade, CaravanPiece.ArcherPost, CaravanPiece.TarPit, CaravanPiece.FireTrap };
 
-        /// <summary>Build points held after <paramref name="wavesCleared"/> waves, before any are spent.</summary>
-        public static int PointsEarned(int wavesCleared) => StartingPoints + (PointsPerWave * Math.Max(0, wavesCleared));
+        /// <summary>Build points held <paramref name="sinceFirstWave"/> seconds after the first wave came, before any are spent.</summary>
+        public static int PointsEarned(double sinceFirstWave) =>
+            StartingPoints + (int)Math.Floor(Math.Max(0, sinceFirstWave) / SecondsPerPoint);
+
+        /// <summary>Seconds until the next build point, <paramref name="sinceFirstWave"/> seconds after the first wave came.</summary>
+        public static double SecondsToNextPoint(double sinceFirstWave) =>
+            SecondsPerPoint - (Math.Max(0, sinceFirstWave) % SecondsPerPoint);
 
         /// <summary>
         /// Whether the <paramref name="arrival"/>-th enemy of the fight (0-based) hunts the heroes rather than the wagons:
