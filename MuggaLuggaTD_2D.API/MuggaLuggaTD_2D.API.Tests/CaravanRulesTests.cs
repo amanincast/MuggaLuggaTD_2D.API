@@ -17,11 +17,15 @@ public class CaravanRulesTests
     }
 
     [Fact]
-    public void ClearedWavesAddPoints()
+    public void PointsComeWithTimeOnceTheWavesBegin()
     {
-        Assert.Equal(6, CaravanRules.PointsEarned(0));
-        Assert.Equal(10, CaravanRules.PointsEarned(2));
-        Assert.Equal(6, CaravanRules.PointsEarned(-3));
+        Assert.Equal(8, CaravanRules.PointsEarned(0));
+        Assert.Equal(8, CaravanRules.PointsEarned(9.9));
+        Assert.Equal(9, CaravanRules.PointsEarned(10));
+        Assert.Equal(18, CaravanRules.PointsEarned(100));
+        Assert.Equal(8, CaravanRules.PointsEarned(-3));
+        Assert.Equal(10, CaravanRules.SecondsToNextPoint(0), 3);
+        Assert.Equal(5, CaravanRules.SecondsToNextPoint(35), 3);
     }
 
     [Fact]
@@ -60,8 +64,8 @@ public class CaravanRulesTests
     [Fact]
     public void TheFirstWaveWaitsForTheSetup()
     {
-        Assert.False(CaravanRules.NextWaveDue(0, 19.9, 19.9));
-        Assert.True(CaravanRules.NextWaveDue(0, 20, -1));
+        Assert.False(CaravanRules.NextWaveDue(0, 29.9, 29.9));
+        Assert.True(CaravanRules.NextWaveDue(0, 30, -1));
     }
 
     [Fact]
