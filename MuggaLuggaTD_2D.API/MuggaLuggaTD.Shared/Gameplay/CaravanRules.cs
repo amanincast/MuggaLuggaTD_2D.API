@@ -1,0 +1,165 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using MuggaLuggaTD.Shared.World;
+
+namespace MuggaLuggaTD.Shared.Gameplay
+{
+    /// <summary>The sides of the caravan's clearing an enemy lane can open on.</summary>
+    public enum CaravanSide
+    {
+        North = 0,
+        East = 1,
+        South = 2,
+        West = 3
+    }
+
+    /// <summary>The pieces of the defence kit (Active Content F, Mike's F4).</summary>
+    public enum CaravanPiece
+    {
+        /// <summary>A short wall with health: enemies break it or walk round it.</summary>
+        Palisade = 0,
+
+        /// <summary>A fixed tower that shoots the nearest enemy in range. It can be destroyed.</summary>
+        ArcherPost = 1,
+
+        /// <summary>Slows the enemies who cross it. Heroes walk through untouched.</summary>
+        TarPit = 2,
+
+        /// <summary>Bursts when an enemy steps on it, then re-arms.</summary>
+        FireTrap = 3
+    }
+
+    /// <summary>
+    /// Caravans, the protection fight (Active Content F; Mike's answers F1-F11, 2026-10-15): "Circle the wagons". The
+    /// caravan is halted in a clearing, three wagons each carrying a third of the cargo. Most enemies go for the nearest
+    /// wagon; elites, bosses and a share of the rest hunt the heroes. Waves come in by lanes, two or three of the four
+    /// sides. Before the first wave there is a setup, and after each wave a lull, in which the player places a small
+    /// kit of defences on fixed spots, paid with build points the fight grants (never gold or goods).
+    ///
+    /// <para>Shared so the server prices the fight from the same waves and pays from the same share (phase 2). The
+    /// fight itself is the client's; nothing here is stored.</para>
+    /// </summary>
+    public static class CaravanRules
+    {
+        /// <summary>A caravan fight is a pseudo-site, <c>caravan:{id}</c>.</summary>
+        public const string SitePrefix = "caravan:";
+
+        /// <summary>Wagons in the circle; each carries an equal share of the cargo.</summary>
+        public const int Wagons = 3;
+
+        /// <summary>The waves are sized as a tier this high (its factor on each wave's roster).</summary>
+        public const int Tier = 2;
+
+        /// <summary>Waves to hold off: a tier-2 skirmish's, one shorter (spec: "a little shorter than a clearing").</summary>
+        public const int Waves = 5;
+
+        /// <summary>Seconds of setup before the first wave, with no enemies (F2).</summary>
+        public const double SetupSeconds = 20;
+
+        /// <summary>Seconds of quiet after a wave is cleared before the next comes (F2).</summary>
+        public const double LullSeconds = 8;
+
+        /// <summary>The next wave comes this long after the last began even if the field is not clear: a slow defence is swamped.</summary>
+        public const double MostWaveSeconds = 40;
+
+        /// <summary>Build points the fight starts with (F3).</summary>
+        public const int StartingPoints = 6;
+
+        /// <summary>Build points each cleared wave adds (F3).</summary>
+        public const int PointsPerWave = 2;
+
+        /// <summary>Repairing a standing piece to full costs this much.</summary>
+        public const int RepairCost = 1;
+
+        /// <summary>One in this many ordinary enemies hunts the heroes rather than the wagons (F5).</summary>
+        public const int HunterEvery = 4;
+
+        /// <summary>Lanes a wave opens on: at least this many sides...</summary>
+        public const int FewestLanes = 2;
+
+        /// <summary>...and at most this many.</summary>
+        public const int MostLanes = 3;
+
+        /// <summary>A defence's price in build points (F3, F4).</summary>
+        public static int Cost(CaravanPiece piece)
+        {
+            switch (piece)
+            {
+                case CaravanPiece.Palisade: return 1;
+                case CaravanPiece.ArcherPost: return 3;
+                case CaravanPiece.TarPit: return 2;
+                case CaravanPiece.FireTrap: return 2;
+                default: return int.MaxValue;
+            }
+        }
+
+        /// <summary>All the pieces, in the order the build bar shows them.</summary>
+        public static readonly CaravanPiece[] Pieces =
+            { CaravanPiece.Palisade, CaravanPiece.ArcherPost, CaravanPiece.TarPit, CaravanPiece.FireTrap };
+
+        /// <summary>Build points held after <paramref name="wavesCleared"/> waves, before any are spent.</summary>
+        public static int PointsEarned(int wavesCleared) => StartingPoints + (PointsPerWave * Math.Max(0, wavesCleared));
+
+        /// <summary>
+        /// Whether the <paramref name="arrival"/>-th enemy of the fight (0-based) hunts the heroes rather than the wagons:
+        /// every elite and boss, and one ordinary enemy in <see cref="HunterEvery"/> (F5). So the player cannot just stand
+        /// on a wagon, and cannot leave the wagons to fight elsewhere.
+        /// </summary>
+        public static bool HuntsHeroes(int arrival, bool elite, bool boss) =>
+            elite || boss || (arrival >= 0 && arrival % HunterEvery == HunterEvery - 1);
+
+        /// <summary>
+        /// The sides wave <paramref name="wave"/> (1-based) comes in by: two or three of the four, from the arena's seed,
+        /// so the same caravan fight always comes the same way, and a side lane is known before the wave arrives.
+        /// </summary>
+        public static List<CaravanSide> Lanes(int arenaSeed, int wave)
+        {
+            var random = DeterministicRandom.ForSubject(Naming.Hash("caravan-lanes:" + arenaSeed), Naming.Hash("wave:" + wave));
+            int count = random.Next(FewestLanes, MostLanes + 1);
+            var sides = new List<CaravanSide> { CaravanSide.North, CaravanSide.East, CaravanSide.South, CaravanSide.West };
+            for (int i = sides.Count - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                var swap = sides[i];
+                sides[i] = sides[j];
+                sides[j] = swap;
+            }
+            return sides.Take(count).OrderBy(s => (int)s).ToList();
+        }
+
+        /// <summary>
+        /// Whether the next wave is due. The first comes when the setup is over; each later one after a lull on a clear
+        /// field, or once <see cref="MostWaveSeconds"/> have passed since the last began.
+        /// </summary>
+        /// <param name="wavesBegun">Waves already begun.</param>
+        /// <param name="sinceWaveBegan">Seconds since the last wave began (since the fight began, before the first).</param>
+        /// <param name="clearFor">Seconds the field has been clear; negative while anything stands.</param>
+        public static bool NextWaveDue(int wavesBegun, double sinceWaveBegan, double clearFor)
+        {
+            if (wavesBegun <= 0) return sinceWaveBegan >= SetupSeconds;
+            return clearFor >= LullSeconds || sinceWaveBegan >= MostWaveSeconds;
+        }
+
+        /// <summary>The share of the cargo, and of the pay, that got through: a third a wagon still standing (F6).</summary>
+        public static double DeliveredShare(int wagonsStanding) =>
+            Math.Max(0, Math.Min(Wagons, wagonsStanding)) / (double)Wagons;
+
+        /// <summary>The caravan is lost when no wagon stands.</summary>
+        public static bool IsLost(int wagonsStanding) => wagonsStanding <= 0;
+
+        /// <summary>A perfect defence: every wagon standing, none below half its health. A small bonus purse (phase 2).</summary>
+        public static bool IsPerfect(int wagonsStanding, double lowestHealthShare) =>
+            wagonsStanding >= Wagons && lowestHealthShare >= 0.5;
+
+        public static string SiteId(string caravanId) => SitePrefix + caravanId;
+
+        public static bool TryParseSiteId(string siteId, out string caravanId)
+        {
+            caravanId = null;
+            if (string.IsNullOrEmpty(siteId) || !siteId.StartsWith(SitePrefix, StringComparison.Ordinal)) return false;
+            caravanId = siteId.Substring(SitePrefix.Length);
+            return caravanId.Length > 0;
+        }
+    }
+}
