@@ -173,13 +173,20 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>A second ambush, on a long route, strikes in this later share, so it always comes after the first.</summary>
         public const double SecondAmbushFrom = 0.55, SecondAmbushTo = 0.8;
 
-        /// <summary>A route through this many regions or more may meet a second ambush, at <see cref="SecondAmbushOdds"/> the usual chance.</summary>
-        public const int LongRouteRegions = 3;
+        /// <summary>An escort this many hexes away or more is struck twice, always (Mike 2026-10-16).</summary>
+        public const int LongRouteHexes = 3;
 
-        public const double SecondAmbushOdds = 2.0;
+        /// <summary>
+        /// An escort pays this many times a quest's gold, by how far it goes (Mike 2026-10-16): ×1.5 for one hex, ×2 for
+        /// two, ×2.5 for three. A long walk and a hard fight. <i>(tune)</i>
+        /// </summary>
+        public static double EscortGoldFactor(int hexes) => 1.0 + 0.5 * Math.Max(1, hexes);
 
-        /// <summary>An escort pays this many times a quest's gold: it is a long walk and a hard fight. <i>(tune)</i></summary>
-        public const double EscortGoldFactor = 2.0;
+        /// <summary>
+        /// An escort's cargo, and so the goods it pays, by how far it goes (Mike 2026-10-16): as rolled for one hex, +25%
+        /// for two, +50% for three. <i>(tune)</i>
+        /// </summary>
+        public static double EscortCargoFactor(int hexes) => 1.0 + 0.25 * (Math.Max(1, hexes) - 1);
 
         /// <summary>An escort pays one unit of its cargo in every this many carried, beside the essence. <i>(tune)</i></summary>
         public const int CargoCutEvery = 5;
@@ -193,18 +200,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const double MinimumFightSeconds = SetupSeconds + 10;
 
         /// <summary>
-        /// When a caravan's road is struck (F7): always once, early in the walk; and on a route of
-        /// <see cref="LongRouteRegions"/> regions or more, a second time at <see cref="SecondAmbushOdds"/> the route's usual
-        /// <paramref name="routeChance"/> (capped at certain), later in the walk. Shares of the journey's time.
-        /// <paramref name="random"/> is the caller's, so the server owns the entropy and tests can fix it.
+        /// When a caravan's road is struck (F7): always once, early in the walk; and an escort
+        /// <see cref="LongRouteHexes"/> hexes away or more a second time, always, later in the walk (Mike 2026-10-16).
+        /// Shares of the journey's time. <paramref name="random"/> is the caller's, so the server owns the entropy and
+        /// tests can fix it.
         /// </summary>
-        public static (double First, double? Second) RollAmbushes(int regions, double routeChance, Random random)
+        public static (double First, double? Second) RollAmbushes(int hexes, Random random)
         {
             random = random ?? new Random();
             double first = FirstAmbushFrom + random.NextDouble() * (FirstAmbushTo - FirstAmbushFrom);
-            double? second = null;
-            if (regions >= LongRouteRegions && random.NextDouble() < Math.Min(1.0, Math.Max(0, routeChance) * SecondAmbushOdds))
-                second = SecondAmbushFrom + random.NextDouble() * (SecondAmbushTo - SecondAmbushFrom);
+            double? second = hexes >= LongRouteHexes
+                ? SecondAmbushFrom + random.NextDouble() * (SecondAmbushTo - SecondAmbushFrom)
+                : (double?)null;
             return (first, second);
         }
 

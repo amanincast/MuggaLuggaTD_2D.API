@@ -293,8 +293,8 @@ namespace MuggaLuggaTD.Shared
         //   chest by finish (top 1% Legendary, 10% Rare, 50% Magic, else Uncommon). LetterKind.TrialChest.
         // 1.72.0 - Caravans phase 2 (Active Content F): QuestKind.Escort (village elders, a good to a village 1-3 hexes
         //   away, QuestOffer.DestinationSiteId), the board's village weights gain escort 25; CaravanRules: pace x1.5, a
-        //   guaranteed ambush (0.2-0.45 of the walk), a second on 3+ region routes at x2 odds (0.55-0.8); delivery pays the
-        //   chest, gold x2 and a cut of the cargo, gold and goods by the share of wagons standing, +25% gold if perfect.
+        //   guaranteed ambush (0.2-0.45 of the walk), a second always on a 3-hex escort (0.55-0.8); gold x1.5/x2/x2.5 and
+        //   cargo +0/25/50% by hexes; delivery pays the chest, gold and goods by the share of wagons standing, +25% gold if perfect.
         public const string Version = "1.72.0";
     }
 }

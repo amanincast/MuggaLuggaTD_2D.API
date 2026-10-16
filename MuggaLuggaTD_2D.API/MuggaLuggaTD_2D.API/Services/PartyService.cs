@@ -341,7 +341,7 @@ public class PartyService
     /// <summary>
     /// Sets a company out from a village with an Escort quest's caravan (Active Content F, phase 2): to the quest's
     /// destination, at the caravan's pace (<see cref="CaravanRules.Pace"/>), with an ambush on the road for certain
-    /// and, on a long route, maybe a second (<see cref="CaravanRules.RollAmbushes"/>). The company must stand at the
+    /// and a second on an escort three hexes long (<see cref="CaravanRules.RollAmbushes"/>). The company must stand at the
     /// village that gave the quest; auto companies cannot take caravans (F8).
     /// </summary>
     public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> EscortAsync(
@@ -374,7 +374,12 @@ public class PartyService
         var (refused, route, chance) = await DepartAsync(gameInstanceId, userId, world, parties, party, offer.DestinationSiteId, now, CaravanRules.Pace);
         if (refused != null) return (refused, null);
 
-        var (first, second) = CaravanRules.RollAmbushes(route!.Legs.Count, chance, Dice);
+        // Struck once, and twice on an escort three hexes long (Mike 2026-10-16).
+        var regions = WorldRegionBlob.ReadAllRegions(world).ToList();
+        var giverRegion = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(offer.GiverId));
+        var destinationRegion = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(offer.DestinationSiteId));
+        int hexes = giverRegion == null || destinationRegion == null ? 1 : HexCoord.Distance(giverRegion.Hex, destinationRegion.Hex);
+        var (first, second) = CaravanRules.RollAmbushes(hexes, Dice);
         party.AmbushAt = first;
         party.SecondAmbushAt = second;
         party.CaravanQuestId = quest.Id;
@@ -384,7 +389,7 @@ public class PartyService
 
         _sessionLog.Log("CARAVAN-ESCORT",
             $"user={userId} party={party.Id} quest={quest.Id} {party.FromSiteId}->{party.ToSiteId} regions={route.Legs.Count} " +
-            $"secs={route.Duration.TotalSeconds:F0} ambush={first:F2} second={(second.HasValue ? second.Value.ToString("F2") : "none")} (route chance {chance:F2})");
+            $"secs={route.Duration.TotalSeconds:F0} hexes={hexes} ambush={first:F2} second={(second.HasValue ? second.Value.ToString("F2") : "none")}");
         return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world));
     }
 

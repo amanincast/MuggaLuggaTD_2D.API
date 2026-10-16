@@ -366,7 +366,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>
         /// An escort: a load of one of the village's goods to a village nearby, two regions away by preference. Pays a
-        /// quest's chest and <see cref="CaravanRules.EscortGoldFactor"/> its gold, and a cut of the cargo, all scaled at
+        /// quest's chest, and gold and cargo that grow with the distance (<see cref="CaravanRules.EscortGoldFactor"/>,
+        /// <see cref="CaravanRules.EscortCargoFactor"/>), a cut of the cargo as goods; all but the chest scaled at
         /// delivery by the share that got through (<see cref="CaravanRules.DeliveredGold"/>).
         /// </summary>
         private static void Escort(ref DeterministicRandom random, QuestOffer offer, int tier, List<string> trades,
@@ -374,12 +375,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         {
             offer.Kind = QuestKind.Escort;
             offer.Target = trades[random.Next(trades.Count)];
-            offer.Count = 20 + 10 * Math.Min(tier, 3) + random.Next(11);
             // Two hexes is the errand the spec describes; one and three are less likely.
             int[] byDistance = destinations.Select(d => d.Hexes == 2 ? 3 : d.Hexes == 1 ? 1 : 2).ToArray();
-            offer.DestinationSiteId = destinations[random.NextWeighted(byDistance)].Site.SiteId;
+            var destination = destinations[random.NextWeighted(byDistance)];
+            offer.DestinationSiteId = destination.Site.SiteId;
+            offer.Count = (int)Math.Round((20 + 10 * Math.Min(tier, 3) + random.Next(11)) * CaravanRules.EscortCargoFactor(destination.Hexes));
             Reward(ref random, offer, tier, tuning);
-            offer.Gold = (long)Math.Round(offer.Gold * CaravanRules.EscortGoldFactor);
+            offer.Gold = (long)Math.Round(offer.Gold * CaravanRules.EscortGoldFactor(destination.Hexes));
             offer.Materials.Add(new MaterialGrant { MaterialName = offer.Target, Quantity = Math.Max(1, offer.Count / CaravanRules.CargoCutEvery) });
         }
 

@@ -60,14 +60,15 @@ public class CaravanEscortTests : IDisposable
     /// Three regions in a row: the player's capital r0, then r1 and r2. An Escort quest in the log from r0's village to
     /// r2's, and the first company standing at r0's village, ready to set out.
     /// </summary>
-    private async Task<(Guid Instance, PartyDto Company, PlayerQuest Quest, string From, string To)> SeedAsync()
+    private async Task<(Guid Instance, PartyDto Company, PlayerQuest Quest, string From, string To)> SeedAsync(int hexes = 2)
     {
         var instance = await _db.AddInstanceAsync();
         var r0 = TestWorld.OwnedBy(TestIds.Player, "r0");
         r0.IsCapital = true;
-        var r1 = TestWorld.Region("r1", q: 1, r: 0);
-        var r2 = TestWorld.Region("r2", q: 2, r: 0);
-        await _db.AddWorldAsync(instance.Id, TestWorld.Blob(r0, r1, r2));
+        var row = new List<WorldRegionData> { r0 };
+        for (int q = 1; q <= Math.Max(hexes, 2); q++) row.Add(TestWorld.Region("r" + q, q: q, r: 0));
+        var r2 = row[hexes];
+        await _db.AddWorldAsync(instance.Id, TestWorld.Blob(row.ToArray()));
         var save = TestSave.Roster(TestSave.Character("hero-1"), TestSave.Character("hero-2"));
         save.ActiveCharacterIds = new List<string> { "hero-1", "hero-2" };
         await _db.AddPlayerSaveAsync(instance.Id, TestIds.Player, TestSave.ToJson(save));
@@ -120,9 +121,9 @@ public class CaravanEscortTests : IDisposable
     }
 
     /// <summary>Sets out, walks into the first ambush and opens its fight.</summary>
-    private async Task<(Guid Instance, PartyDto Company, PlayerQuest Quest, string From, string To, AmbushFightResponse Fight)> AmbushedAsync()
+    private async Task<(Guid Instance, PartyDto Company, PlayerQuest Quest, string From, string To, AmbushFightResponse Fight)> AmbushedAsync(int hexes = 2)
     {
-        var (instance, company, quest, from, to) = await SeedAsync();
+        var (instance, company, quest, from, to) = await SeedAsync(hexes);
         var (sent, _) = await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
         Assert.True(sent.Succeeded, sent.Message);
         await WalkToAsync(company.Id, CaravanRules.FirstAmbushTo + 0.02);
@@ -316,10 +317,10 @@ public class CaravanEscortTests : IDisposable
     }
 
     [Fact]
-    public async Task ALongRoad_CanBeStruckTwice_AndTheSecondFightHasOnlyTheSurvivors()
+    public async Task AThreeHexEscort_IsStruckTwice_AndTheSecondFightHasOnlyTheSurvivors()
     {
-        _dice = new FixedDice(0.0);   // rolls the second ambush
-        var (instance, company, _, _, _, fight) = await AmbushedAsync();
+        _dice = new FixedDice(0.0);
+        var (instance, company, _, _, _, fight) = await AmbushedAsync(hexes: 3);
         var stored = await _db.PlayerParties.AsNoTracking().SingleAsync(p => p.Id == company.Id);
         Assert.Equal(CaravanRules.SecondAmbushFrom, stored.SecondAmbushAt!.Value, 3);
 
@@ -332,6 +333,19 @@ public class CaravanEscortTests : IDisposable
         var halted = listed!.Parties[0];
         Assert.Equal(CompanyState.Ambushed, halted.State);
         Assert.Equal(1, halted.Ambush!.CaravanWagons);
+    }
+
+    [Fact]
+    public async Task ATwoHexEscort_IsStruckOnce()
+    {
+        _dice = new FixedDice(0.0);
+        var (instance, company, quest, _, _) = await SeedAsync(hexes: 2);
+
+        await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
+
+        var stored = await _db.PlayerParties.AsNoTracking().SingleAsync(p => p.Id == company.Id);
+        Assert.NotNull(stored.AmbushAt);
+        Assert.Null(stored.SecondAmbushAt);
     }
 
     [Fact]
@@ -385,25 +399,39 @@ public class CaravanEscortTests : IDisposable
             Assert.True(offer.Count > 0);
             var to = byId[SiteSpec.RegionIdOf(offer.DestinationSiteId)!];
             var from = byId[offer.RegionId];
-            Assert.InRange(HexCoord.Distance(from.Hex, to.Hex), QuestRules.EscortNearest, QuestRules.EscortFarthest);
+            int hexes = HexCoord.Distance(from.Hex, to.Hex);
+            Assert.InRange(hexes, QuestRules.EscortNearest, QuestRules.EscortFarthest);
+            // The cargo grows with the distance: 20 + 10 x tier (2) + 0-10, then x1, x1.25 or x1.5.
+            Assert.InRange(offer.Count, (int)Math.Round(40 * CaravanRules.EscortCargoFactor(hexes)), (int)Math.Round(50 * CaravanRules.EscortCargoFactor(hexes)));
             Assert.Equal(LocationType.NeutralHome, RegionGenerator.Generate(to).FindSite(offer.DestinationSiteId)!.Type);
             Assert.Contains(offer.Materials, m => m.MaterialName == offer.Target);
         }
     }
 
     [Fact]
-    public void TheRoadIsStruckOnce_AndALongOneMaybeTwice()
+    public void TheRoadIsStruckOnce_AndAThreeHexOneTwice()
     {
-        var once = CaravanRules.RollAmbushes(2, 1.0, new FixedDice(0.0));
-        Assert.Equal(CaravanRules.FirstAmbushFrom, once.First, 6);
-        Assert.Null(once.Second);   // two regions is not a long road
+        foreach (int hexes in new[] { 1, 2 })
+        {
+            var once = CaravanRules.RollAmbushes(hexes, new FixedDice(0.999));
+            Assert.InRange(once.First, CaravanRules.FirstAmbushFrom, CaravanRules.FirstAmbushTo);
+            Assert.Null(once.Second);
+        }
 
-        var twice = CaravanRules.RollAmbushes(3, 0.1, new FixedDice(0.0));
+        var twice = CaravanRules.RollAmbushes(3, new FixedDice(0.999));
         Assert.NotNull(twice.Second);
         Assert.True(twice.Second > twice.First);
+    }
 
-        var quiet = CaravanRules.RollAmbushes(4, 0.3, new FixedDice(0.65));   // 0.65 >= 0.3 x 2
-        Assert.Null(quiet.Second);
+    [Fact]
+    public void AFartherEscortPaysMore()
+    {
+        Assert.Equal(1.5, CaravanRules.EscortGoldFactor(1));
+        Assert.Equal(2.0, CaravanRules.EscortGoldFactor(2));
+        Assert.Equal(2.5, CaravanRules.EscortGoldFactor(3));
+        Assert.Equal(1.0, CaravanRules.EscortCargoFactor(1));
+        Assert.Equal(1.25, CaravanRules.EscortCargoFactor(2));
+        Assert.Equal(1.5, CaravanRules.EscortCargoFactor(3));
     }
 
     [Fact]
