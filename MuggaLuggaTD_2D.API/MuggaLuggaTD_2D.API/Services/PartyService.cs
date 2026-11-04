@@ -367,7 +367,9 @@ public class PartyService
             return (new PartyOutcome(PartyError.QuestNotFound, "There is no such caravan to escort."), null);
         if (parties.Any(p => p.CaravanQuestId == quest.Id))
             return (new PartyOutcome(PartyError.CaravanTaken, "Another of your companies already has that caravan."), null);
-        if (!string.Equals(party.SiteId, offer.GiverId, StringComparison.Ordinal))
+        // An elder's caravan waits at the elder's village; the Hall's at a village of the player's own (QuestRules.OriginOf).
+        string origin = QuestRules.OriginOf(offer);
+        if (!string.Equals(party.SiteId, origin, StringComparison.Ordinal))
             return (new PartyOutcome(PartyError.NotAtTheVillage, $"The caravan waits at its village. Bring {party.Name} there first."), null);
 
         var now = DateTime.UtcNow;
@@ -376,7 +378,7 @@ public class PartyService
 
         // Struck once, and twice on an escort three hexes long (Mike 2026-10-16).
         var regions = WorldRegionBlob.ReadAllRegions(world).ToList();
-        var giverRegion = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(offer.GiverId));
+        var giverRegion = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(origin));
         var destinationRegion = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(offer.DestinationSiteId));
         int hexes = giverRegion == null || destinationRegion == null ? 1 : HexCoord.Distance(giverRegion.Hex, destinationRegion.Hex);
         var (first, second) = CaravanRules.RollAmbushes(hexes, Dice);
