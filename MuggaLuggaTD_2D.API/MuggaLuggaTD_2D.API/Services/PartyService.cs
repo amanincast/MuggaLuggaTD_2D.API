@@ -502,7 +502,7 @@ public class PartyService
         if (_letters == null) return;
         foreach (var e in events)
         {
-            string what = e.Kind == LetterKind.CompanyAmbushed ? "ambushed" : "arrived";
+            string what = e.Kind is LetterKind.CompanyAmbushed or LetterKind.CaravanAmbushed ? "ambushed" : "arrived";
             await _letters.SendAsync(gameInstanceId, e.Party.UserId, e.Kind, e.At, $"party:{e.Party.Id}:{what}:{e.At.Ticks}",
                 e.RegionId, e.Party.Id.ToString(), detail: e.Party.Name);
         }
@@ -530,7 +530,9 @@ public class PartyService
                 party.HaltedAt = strikes;
                 party.RegionId = RegionAlong(party, strikes) ?? party.RegionId;
                 party.UpdatedAt = now;
-                events?.Add(new RoadEvent(party, LetterKind.CompanyAmbushed, strikes, party.RegionId));
+                // Raiders after a caravan's cargo are their own letter (Active Content F, phase 3).
+                bool caravan = party.CaravanQuestId != null && party.CaravanWagons > 0;
+                events?.Add(new RoadEvent(party, caravan ? LetterKind.CaravanAmbushed : LetterKind.CompanyAmbushed, strikes, party.RegionId));
                 return true;
             }
         }
@@ -552,7 +554,9 @@ public class PartyService
         party.State = CompanyState.Idle;
         party.SiteId = party.ToSiteId;
         if (!string.IsNullOrEmpty(party.ToSiteId)) party.RegionId = SiteSpec.RegionIdOf(party.ToSiteId);
-        events?.Add(new RoadEvent(party, LetterKind.CompanyArrived, arrivedAt, party.RegionId));
+        // A caravan that got through says so in its own letter (CaravanDelivered), not as a plain arrival.
+        if (party.CaravanQuestId == null)
+            events?.Add(new RoadEvent(party, LetterKind.CompanyArrived, arrivedAt, party.RegionId));
         party.AmbushAt = null;
         party.SecondAmbushAt = null;
         party.HaltedAt = null;
@@ -577,12 +581,15 @@ public class PartyService
     /// <summary>
     /// Stamps the Escort quests whose caravans have arrived (Active Content F): a company at rest still holding a caravan
     /// has delivered it, so its quest is done, with the wagons that got through as its progress and whether every fight
-    /// was perfect. Then the company lets the caravan go. Run after any settle; safe to run again.
+    /// was perfect. Then the company lets the caravan go, and its owner has a letter (phase 3). Run after any settle;
+    /// safe to run again.
     /// </summary>
-    public static async Task<int> DeliverCaravansAsync(ApplicationDbContext context, IEnumerable<PlayerParty> parties, ISessionLog? log)
+    public static async Task<int> DeliverCaravansAsync(ApplicationDbContext context, IEnumerable<PlayerParty> parties, ISessionLog? log,
+        LetterService? letters = null)
     {
         int delivered = 0, released = 0;
         var now = DateTime.UtcNow;
+        var arrivals = new List<(PlayerParty Party, PlayerQuest Quest)>();
         foreach (var party in parties.Where(p => p.State == CompanyState.Idle && p.CaravanQuestId != null).ToList())
         {
             var quest = await context.PlayerQuests.FirstOrDefaultAsync(q => q.Id == party.CaravanQuestId
@@ -593,6 +600,7 @@ public class PartyService
                 quest.Perfect = party.CaravanPerfect && party.CaravanWagons >= CaravanRules.Wagons;
                 quest.DoneAt = now;
                 delivered++;
+                arrivals.Add((party, quest));
                 log?.Log("CARAVAN-DELIVERED", $"user={party.UserId} party={party.Id} quest={quest.Id} wagons={quest.Progress} perfect={quest.Perfect}");
             }
             ClearCaravan(party);
@@ -600,6 +608,16 @@ public class PartyService
             released++;
         }
         if (released > 0) await context.SaveChangesAsync();
+
+        if (letters != null)
+        {
+            foreach (var (party, quest) in arrivals)
+            {
+                await letters.SendAsync(party.GameInstanceId, party.UserId, LetterKind.CaravanDelivered, quest.DoneAt ?? now,
+                    $"caravan:{quest.Id}:delivered", party.RegionId, quest.Id.ToString(),
+                    detail: $"{party.Name}|{quest.Progress}|{(quest.Perfect ? 1 : 0)}");
+            }
+        }
         return delivered;
     }
 
@@ -607,7 +625,8 @@ public class PartyService
     /// Settles this player's caravan companies by the clock and stamps any that have delivered (the quest book asks
     /// before it answers, so a caravan that arrived while nobody looked is done when the log is read).
     /// </summary>
-    public static async Task SettleCaravansAsync(ApplicationDbContext context, Guid gameInstanceId, string userId, ISessionLog? log)
+    public static async Task SettleCaravansAsync(ApplicationDbContext context, Guid gameInstanceId, string userId, ISessionLog? log,
+        LetterService? letters = null)
     {
         var carrying = await context.PlayerParties
             .Where(p => p.GameInstanceId == gameInstanceId && p.UserId == userId && p.CaravanQuestId != null)
@@ -617,7 +636,7 @@ public class PartyService
         bool changed = false;
         foreach (var p in carrying) changed |= SettleArrival(p, now);
         if (changed) await context.SaveChangesAsync();
-        await DeliverCaravansAsync(context, carrying, log);
+        await DeliverCaravansAsync(context, carrying, log, letters);
     }
 
     /// <summary>A company lets go of a caravan whose quest was given up: it walks on as an ordinary company.</summary>
@@ -777,6 +796,7 @@ public class PartyService
         party.AmbushRunStartedAt = null;
 
         long experience = 0, gold = 0, balance = 0;
+        string? lostCaravanIn = null;
         var items = new List<StateManagement.Models.ItemSaveData>();
         var materials = new List<MaterialGrant>();
         bool won = request.Won && elapsed <= WorldPveService.RunExpiry && ambush != null && (!caravan || wagons > 0);
@@ -826,6 +846,7 @@ public class PartyService
                 var lost = await _context.PlayerQuests.FirstOrDefaultAsync(q => q.Id == party.CaravanQuestId && q.HandedInAt == null);
                 if (lost != null) _context.PlayerQuests.Remove(lost);
                 _sessionLog.Log("CARAVAN-LOST", $"user={userId} party={party.Id} quest={party.CaravanQuestId}");
+                lostCaravanIn = AmbushRegionOf(party, world) ?? party.RegionId ?? "";
                 ClearCaravan(party);
             }
             // A lost ambush turns the company back, its fighters Bloodied (BloodiedRules).
@@ -835,6 +856,11 @@ public class PartyService
 
         party.UpdatedAt = now;
         await _context.SaveChangesAsync();
+
+        // The cargo is gone: its owner's letter (phase 3). The player saw it fall, but the inbox keeps the record.
+        if (lostCaravanIn != null && _letters != null)
+            await _letters.SendAsync(gameInstanceId, userId, LetterKind.CaravanLost, now, $"caravan:{run.Id}:lost",
+                lostCaravanIn.Length > 0 ? lostCaravanIn : null, party.Id.ToString(), detail: party.Name);
 
         // Quests: an ambush fought off, where it struck, and the kills, held to a skirmish's plan.
         if (won && _quests != null)
@@ -1129,7 +1155,7 @@ public class PartyService
         if (landed) await _context.SaveChangesAsync();
         await SendLettersAsync(gameInstanceId, events);
         if (parties.Any(p => p.State == CompanyState.Idle && p.CaravanQuestId != null))
-            await DeliverCaravansAsync(_context, parties, _sessionLog);
+            await DeliverCaravansAsync(_context, parties, _sessionLog, _letters);
         return parties;
     }
 

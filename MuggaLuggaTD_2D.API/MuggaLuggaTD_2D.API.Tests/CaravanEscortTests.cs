@@ -40,10 +40,15 @@ public class CaravanEscortTests : IDisposable
 
     private Random _dice = new FixedDice(0.999);
 
-    private PartyService Parties =>
-        new(_db, Tavern, _content, Wallet, Gold, _log, NullLogger<PartyService>.Instance, Items) { Dice = _dice };
+    /// <summary>The inbox, for the letter tests (phase 3); left out elsewhere, as the services allow.</summary>
+    private LetterService? _letters;
 
-    private QuestService Quests => new(_db, _content, Items, Gold, Wallet, _log);
+    private LetterService Letters => _letters ??= new LetterService(_db, new FakeHubContext(), NullLogger<LetterService>.Instance, new FakeClock());
+
+    private PartyService Parties =>
+        new(_db, Tavern, _content, Wallet, Gold, _log, NullLogger<PartyService>.Instance, Items, letters: _letters) { Dice = _dice };
+
+    private QuestService Quests => new(_db, _content, Items, Gold, Wallet, _log, letters: _letters);
 
     /// <summary>Always rolls the same: 0 strikes at the earliest and always rolls a second ambush, 0.999 the latest and never.</summary>
     private sealed class FixedDice : Random
@@ -372,6 +377,105 @@ public class CaravanEscortTests : IDisposable
         var (outcome, _) = await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
 
         Assert.Equal(PartyError.Busy, outcome.Error);
+    }
+
+    // -----------------------------------------------------------------
+    // Letters (phase 3)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ACaravanStruckOnTheRoad_SendsACaravanLetter_FlaggedWhileHalted()
+    {
+        _ = Letters;
+        var (instance, company, quest, _, _) = await SeedAsync();
+        await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
+        await WalkToAsync(company.Id, CaravanRules.FirstAmbushTo + 0.02);
+
+        await Parties.ListAsync(instance, TestIds.Player);
+
+        var page = await Letters.PageAsync(instance, TestIds.Player);
+        var letter = Assert.Single(page.Letters);
+        Assert.Equal(nameof(LetterKind.CaravanAmbushed), letter.Kind);
+        Assert.Equal(company.Id.ToString(), letter.SubjectId);
+        Assert.True(letter.Flagged);
+        Assert.Equal(LetterCategory.Companies, LetterRules.CategoryOf(LetterKind.CaravanAmbushed));
+    }
+
+    [Fact]
+    public async Task ADeliveredCaravan_SendsOneLetter_FlaggedUntilHandedIn()
+    {
+        _ = Letters;
+        var (instance, company, quest, _, _, fight) = await AmbushedAsync();
+        await BackdateRunAsync(fight.RunId);
+        await Parties.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(fight.RunId, true, Contract, null, 2, false));
+        await WalkToAsync(company.Id, 1.01);
+
+        // Read twice, by the company list and then the quest book: one letter, not a plain arrival as well.
+        await Parties.ListAsync(instance, TestIds.Player);
+        await Quests.BoardAsync(instance, TestIds.Player);
+
+        var letters = (await Letters.PageAsync(instance, TestIds.Player)).Letters;
+        Assert.DoesNotContain(letters, l => l.Kind == nameof(LetterKind.CompanyArrived));
+        var delivered = Assert.Single(letters, l => l.Kind == nameof(LetterKind.CaravanDelivered));
+        Assert.Equal(quest.Id.ToString(), delivered.SubjectId);
+        Assert.Equal($"{company.Name}|2|0", delivered.Detail);
+        Assert.True(delivered.Flagged);
+
+        await Quests.HandInAsync(instance, TestIds.Player, quest.Id);
+        Assert.False((await Letters.PageAsync(instance, TestIds.Player)).Letters
+            .Single(l => l.Kind == nameof(LetterKind.CaravanDelivered)).Flagged);
+    }
+
+    [Fact]
+    public async Task ADeliveryNoticedByTheQuestBook_StillSendsItsLetter()
+    {
+        _ = Letters;
+        var (instance, company, quest, _, _, fight) = await AmbushedAsync();
+        await BackdateRunAsync(fight.RunId);
+        await Parties.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(fight.RunId, true, Contract, null, 3, true));
+        await WalkToAsync(company.Id, 1.01);
+
+        await Quests.BoardAsync(instance, TestIds.Player);
+
+        var delivered = Assert.Single((await Letters.PageAsync(instance, TestIds.Player)).Letters,
+            l => l.Kind == nameof(LetterKind.CaravanDelivered));
+        Assert.Equal($"{company.Name}|3|1", delivered.Detail);
+    }
+
+    [Fact]
+    public async Task ALostCaravan_SendsALetter_FromWhereItWasStruck()
+    {
+        _ = Letters;
+        var (instance, company, _, _, _, fight) = await AmbushedAsync();
+        await BackdateRunAsync(fight.RunId);
+
+        await Parties.ClaimAmbushAsync(instance, TestIds.Player, company.Id,
+            new AmbushClaimRequest(fight.RunId, false, Contract, null, 0, false));
+
+        var lost = Assert.Single((await Letters.PageAsync(instance, TestIds.Player)).Letters,
+            l => l.Kind == nameof(LetterKind.CaravanLost));
+        Assert.Equal(company.Name, lost.Detail);
+        Assert.False(string.IsNullOrEmpty(lost.RegionId));
+        Assert.False(lost.Flagged);
+    }
+
+    [Fact]
+    public async Task AnOrdinaryJourney_StillWritesTheOrdinaryLetters()
+    {
+        _ = Letters;
+        var (instance, company, _, _, to) = await SeedAsync();
+        await Parties.TravelAsync(instance, TestIds.Player, company.Id, new PartyTravelRequest(to, Contract));
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == company.Id);
+        party.AmbushAt = null;
+        await _db.SaveChangesAsync();
+        await WalkToAsync(company.Id, 1.01);
+
+        await Parties.ListAsync(instance, TestIds.Player);
+
+        var letter = Assert.Single((await Letters.PageAsync(instance, TestIds.Player)).Letters);
+        Assert.Equal(nameof(LetterKind.CompanyArrived), letter.Kind);
     }
 
     // -----------------------------------------------------------------

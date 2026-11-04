@@ -291,7 +291,7 @@ public class LetterService
                 if (letter.RegionId != null && regions.Contains(letter.RegionId)) flagged.Add(letter.Id);
         }
 
-        var ambushed = candidates.Where(l => l.Kind == nameof(LetterKind.CompanyAmbushed)).ToList();
+        var ambushed = candidates.Where(l => l.Kind == nameof(LetterKind.CompanyAmbushed) || l.Kind == nameof(LetterKind.CaravanAmbushed)).ToList();
         if (ambushed.Count > 0)
         {
             var halted = (await _context.PlayerParties.AsNoTracking()
@@ -301,7 +301,7 @@ public class LetterService
                 if (letter.SubjectId != null && halted.Contains(letter.SubjectId)) flagged.Add(letter.Id);
         }
 
-        var quests = candidates.Where(l => l.Kind == nameof(LetterKind.QuestReady)).ToList();
+        var quests = candidates.Where(l => l.Kind == nameof(LetterKind.QuestReady) || l.Kind == nameof(LetterKind.CaravanDelivered)).ToList();
         if (quests.Count > 0)
         {
             var waiting = (await _context.PlayerQuests.AsNoTracking()

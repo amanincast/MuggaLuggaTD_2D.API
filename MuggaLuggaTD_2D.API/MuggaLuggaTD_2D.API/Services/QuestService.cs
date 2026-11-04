@@ -74,7 +74,7 @@ public class QuestService
         if (regions == null) return (new QuestOutcome(QuestError.WorldNotFound, "This realm has no world yet."), null);
 
         // A caravan that arrived while nobody looked is delivered now, so its quest reads as done.
-        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog);
+        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog, _letters);
         var state = await StateAsync(gameInstanceId, userId);
         await _context.SaveChangesAsync();
         return (new QuestOutcome(QuestError.None), await ResponseAsync(gameInstanceId, userId, state, regions));
@@ -136,7 +136,7 @@ public class QuestService
 
     private async Task<(QuestOutcome Outcome, QuestHandInResponse? Response)> HandInCoreAsync(Guid gameInstanceId, string userId, Guid questId)
     {
-        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog);
+        await PartyService.SettleCaravansAsync(_context, gameInstanceId, userId, _sessionLog, _letters);
         var quest = await _context.PlayerQuests.FirstOrDefaultAsync(q =>
             q.Id == questId && q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null);
         if (quest == null) return (new QuestOutcome(QuestError.QuestNotFound, "No such quest."), null);

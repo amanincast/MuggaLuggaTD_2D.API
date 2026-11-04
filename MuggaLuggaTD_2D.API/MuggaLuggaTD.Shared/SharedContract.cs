@@ -295,6 +295,9 @@ namespace MuggaLuggaTD.Shared
         //   away, QuestOffer.DestinationSiteId), the board's village weights gain escort 25; CaravanRules: pace x1.5, a
         //   guaranteed ambush (0.2-0.45 of the walk), a second always on a 3-hex escort (0.55-0.8); gold x1.5/x2/x2.5 and
         //   cargo +0/25/50% by hexes; delivery pays the chest, gold and goods by the share of wagons standing, +25% gold if perfect.
-        public const string Version = "1.72.0";
+        // 1.73.0 - Caravans phase 3 (Active Content F): LetterKind.CaravanAmbushed (flagged while halted),
+        //   CaravanDelivered (flagged until handed in; detail "{company}|{wagons}|{perfect}") and CaravanLost. A caravan's
+        //   ambush now writes CaravanAmbushed in place of CompanyAmbushed, so an older client would show a bare kind.
+        public const string Version = "1.73.0";
     }
 }
