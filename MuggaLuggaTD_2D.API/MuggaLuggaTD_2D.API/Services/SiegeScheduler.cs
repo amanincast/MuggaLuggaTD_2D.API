@@ -70,6 +70,11 @@ public class SiegeScheduler : BackgroundService
                 if (refused > 0)
                     _logger.LogWarning("Rate limits refused {Count} request(s) in the last minute.", refused);
 
+                // Bazaar listings and buy orders whose 72 hours are up go back (Marketplace row 5).
+                int returned = await scope.ServiceProvider.GetRequiredService<BazaarService>().SweepAsync();
+                if (returned > 0)
+                    _logger.LogInformation("Bazaar sweep: {Count} listing(s) or order(s) went back.", returned);
+
                 // Rifts are announced, opened and run out on the same sweep (Invasions spec §5.2).
                 var rifts = scope.ServiceProvider.GetRequiredService<RiftService>();
                 int moved = await rifts.AdvanceAllAsync();

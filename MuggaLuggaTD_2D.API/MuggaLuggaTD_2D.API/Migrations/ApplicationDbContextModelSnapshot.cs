@@ -1196,6 +1196,101 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.ToTable("Letters");
                 });
 
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.MarketOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BuyerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GameInstanceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("HeldGold")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("MaterialName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityFilled")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("GameInstanceId", "BuyerId", "Status");
+
+                    b.HasIndex("MaterialName", "Status", "CreatedAt");
+
+                    b.ToTable("MarketOrders");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.MarketSale", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GoodsKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("ItemType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Rarity")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("SoldAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UnitPrice")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoodsKey", "SoldAt");
+
+                    b.HasIndex("Kind", "SoldAt");
+
+                    b.ToTable("MarketSales");
+                });
+
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.MarketplaceListing", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1214,8 +1309,17 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("Deposit")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DepositRefunded")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("EarnedGold")
                         .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("GameInstanceId")
                         .HasColumnType("uuid");
@@ -1243,6 +1347,9 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<int>("QuantitySold")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -1268,6 +1375,8 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("GameInstanceId", "Status");
+
+                    b.HasIndex("Status", "ExpiresAt");
 
                     b.HasIndex("Kind", "Status", "GoodsKey", "CreatedAt");
 
@@ -2968,6 +3077,17 @@ namespace MuggaLuggaTD_2D.API.Migrations
                 });
 
             modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.Letter", b =>
+                {
+                    b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", "GameInstance")
+                        .WithMany()
+                        .HasForeignKey("GameInstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GameInstance");
+                });
+
+            modelBuilder.Entity("MuggaLuggaTD_2D.API.Models.MarketOrder", b =>
                 {
                     b.HasOne("MuggaLuggaTD_2D.API.Models.GameInstance", "GameInstance")
                         .WithMany()
