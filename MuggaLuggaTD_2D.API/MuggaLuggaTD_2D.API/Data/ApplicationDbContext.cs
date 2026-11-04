@@ -17,6 +17,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlayerGameData> PlayerGameData => Set<PlayerGameData>();
     public DbSet<Alliance> Alliances => Set<Alliance>();
     public DbSet<MarketplaceListing> MarketplaceListings => Set<MarketplaceListing>();
+    public DbSet<MarketOrder> MarketOrders => Set<MarketOrder>();
+    public DbSet<MarketSale> MarketSales => Set<MarketSale>();
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<PveRun> PveRuns => Set<PveRun>();
@@ -551,6 +553,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => new { e.GameInstanceId, e.Status });
             // A material queue is read by kind, status and name, oldest first.
             entity.HasIndex(e => new { e.Kind, e.Status, e.GoodsKey, e.CreatedAt });
+            // The expiry sweep reads what is still active and due.
+            entity.HasIndex(e => new { e.Status, e.ExpiresAt });
 
             entity.HasOne(e => e.GameInstance)
                 .WithMany(g => g.MarketplaceListings)
@@ -566,6 +570,26 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(u => u.MarketplaceListingsAsBuyer)
                 .HasForeignKey(e => e.BuyerId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Buy orders (Marketplace row 2): matched by material, oldest first; swept by status and expiry.
+        builder.Entity<MarketOrder>(entity =>
+        {
+            entity.HasIndex(e => new { e.MaterialName, e.Status, e.CreatedAt });
+            entity.HasIndex(e => new { e.GameInstanceId, e.BuyerId, e.Status });
+            entity.HasIndex(e => new { e.Status, e.ExpiresAt });
+
+            entity.HasOne(e => e.GameInstance)
+                .WithMany()
+                .HasForeignKey(e => e.GameInstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // The demand line (M1): what sold, by material or by gear type and rarity, over the week.
+        builder.Entity<MarketSale>(entity =>
+        {
+            entity.HasIndex(e => new { e.Kind, e.SoldAt });
+            entity.HasIndex(e => new { e.GoodsKey, e.SoldAt });
         });
 
         // Configure Friendship entity

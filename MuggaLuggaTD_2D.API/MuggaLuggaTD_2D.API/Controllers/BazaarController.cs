@@ -25,9 +25,12 @@ public class BazaarController : ControllerBase
     private readonly BazaarService _bazaar;
     private readonly GoldService _gold;
     private readonly SeasonScoreService _seasons;
+    private readonly IGameContentProvider _content;
 
-    public BazaarController(ApplicationDbContext context, BazaarService bazaar, GoldService gold, SeasonScoreService seasons)
+    public BazaarController(ApplicationDbContext context, BazaarService bazaar, GoldService gold, SeasonScoreService seasons,
+        IGameContentProvider content)
     {
+        _content = content;
         _context = context;
         _bazaar = bazaar;
         _gold = gold;
@@ -41,16 +44,21 @@ public class BazaarController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await HasAccess(gameInstanceId, userId)) return Forbid();
         await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
+        await _bazaar.SweepAsync();
 
-        int listed = await _context.MarketplaceListings.CountAsync(l =>
-            l.GameInstanceId == gameInstanceId && l.SellerId == userId && l.Status == ListingStatus.Active);
-
+        var (materialDemand, gearDemand) = await _bazaar.DemandAsync();
         return Ok(new BazaarBoardResponse(
             await _bazaar.MaterialsAsync(userId),
             await _bazaar.EquipmentAsync(userId),
             await _bazaar.OwedAsync(gameInstanceId, userId),
-            listed,
-            BazaarAssay.Fee));
+            await _bazaar.ListedCountAsync(gameInstanceId, userId),
+            BazaarAssay.Fee,
+            await _bazaar.WantedAsync(userId),
+            materialDemand,
+            gearDemand,
+            await _bazaar.OpenOrderCountAsync(gameInstanceId, userId),
+            BazaarAssay.MaxListings,
+            BazaarAssay.MaxOrders));
     }
 
     [HttpGet("mine")]
@@ -60,10 +68,12 @@ public class BazaarController : ControllerBase
         if (userId == null) return Unauthorized();
         if (!await HasAccess(gameInstanceId, userId)) return Forbid();
         await _seasons.EnsureSeasonCurrentAsync(gameInstanceId);
+        await _bazaar.SweepAsync();
 
         return Ok(new BazaarMineResponse(
             await _bazaar.MineAsync(gameInstanceId, userId),
-            await _bazaar.OwedAsync(gameInstanceId, userId)));
+            await _bazaar.OwedAsync(gameInstanceId, userId),
+            await _bazaar.MyOrdersAsync(gameInstanceId, userId)));
     }
 
     [HttpPost("list-item")]
@@ -83,10 +93,10 @@ public class BazaarController : ControllerBase
         var (userId, refusal) = await GateAsync(gameInstanceId, request.SharedContractVersion);
         if (refusal != null) return refusal;
 
-        var (outcome, listing) = await _bazaar.ListMaterialAsync(gameInstanceId, userId!, request.MaterialName, request.Quantity);
-        if (!outcome.Succeeded) return Refuse(outcome);
-        return Ok(new BazaarTradeResponse(await _gold.BalanceAsync(gameInstanceId, userId!), ListingId: listing!.Id,
-            Quantity: listing.Quantity));
+        var listed = await _bazaar.ListMaterialAsync(gameInstanceId, userId!, request.MaterialName, request.Quantity);
+        if (!listed.Outcome.Succeeded) return Refuse(listed.Outcome);
+        return Ok(new BazaarTradeResponse(await _gold.BalanceAsync(gameInstanceId, userId!), ListingId: listed.Listing!.Id,
+            Quantity: listed.Listing.Quantity, Filled: listed.SoldToOrders));
     }
 
     [HttpPost("buy-item")]
@@ -111,6 +121,34 @@ public class BazaarController : ControllerBase
             request.QuotedUnitPrice);
         if (!bought.Outcome.Succeeded) return Refuse(bought.Outcome);
         return Ok(new BazaarTradeResponse(await _gold.BalanceAsync(gameInstanceId, userId!), bought.Spent, bought.Quantity));
+    }
+
+    [HttpPost("orders")]
+    public async Task<ActionResult<BazaarTradeResponse>> PostOrder(Guid gameInstanceId, [FromBody] BazaarPostOrderRequest request)
+    {
+        var (userId, refusal) = await GateAsync(gameInstanceId, request.SharedContractVersion);
+        if (refusal != null) return refusal;
+
+        // The buyer saw a price; an order is refused rather than held at another one.
+        var material = _content.Materials.FirstOrDefault(m => m.MaterialName == request.MaterialName);
+        if (material != null && request.QuotedUnitPrice.HasValue && request.QuotedUnitPrice.Value != BazaarAssay.PriceOf(material))
+            return Conflict(new { error = $"The Assay now prices it at {BazaarAssay.PriceOf(material)}g." });
+
+        var ordered = await _bazaar.PostOrderAsync(gameInstanceId, userId!, request.MaterialName, request.Quantity);
+        if (!ordered.Outcome.Succeeded) return Refuse(ordered.Outcome);
+        return Ok(new BazaarTradeResponse(await _gold.BalanceAsync(gameInstanceId, userId!), ordered.Order!.UnitPrice * ordered.Order.Quantity,
+            ordered.Order.Quantity, Filled: ordered.Bought, OrderId: ordered.Order.Id));
+    }
+
+    [HttpPost("orders/{orderId:guid}/cancel")]
+    public async Task<ActionResult<BazaarTradeResponse>> CancelOrder(Guid gameInstanceId, Guid orderId)
+    {
+        var (userId, refusal) = await GateAsync(gameInstanceId, SharedContract.Version);
+        if (refusal != null) return refusal;
+
+        var (outcome, refunded) = await _bazaar.CancelOrderAsync(gameInstanceId, userId!, orderId);
+        if (!outcome.Succeeded) return Refuse(outcome);
+        return Ok(new BazaarTradeResponse(await _gold.BalanceAsync(gameInstanceId, userId!), OrderId: orderId, Refunded: refunded));
     }
 
     [HttpPost("{listingId:guid}/pull-back")]

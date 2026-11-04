@@ -42,7 +42,19 @@ public class BazaarTests : IDisposable
         _db.GameInstances.Add(new GameInstance { Id = Emberhold, Name = "Emberhold", OwnerId = Seller });
         _db.GameInstances.Add(new GameInstance { Id = Frostmere, Name = "Frostmere", OwnerId = Buyer });
         _db.SaveChanges();
+
+        // Listing takes a deposit (Marketplace row 8), so every seller starts with a purse in each world.
+        foreach (var realm in new[] { Emberhold, Frostmere })
+            foreach (var player in new[] { Seller, Rival })
+                Gold.GrantAsync(realm, player, Purse, "test").GetAwaiter().GetResult();
     }
+
+    /// <summary>What each seller starts with in each world, for deposits.</summary>
+    private const long Purse = 5_000;
+
+    /// <summary>The deposits a player has paid from a realm so far.</summary>
+    private long DepositsPaid(Guid realm, string player) =>
+        _db.MarketplaceListings.Where(l => l.GameInstanceId == realm && l.SellerId == player).Sum(l => l.Deposit);
 
     public void Dispose() => _db.Dispose();
 
@@ -159,12 +171,15 @@ public class BazaarTests : IDisposable
 
         Assert.Equal(unit * 10, bought.Spent);
         Assert.Equal(10_000 - unit * 10, await Gold.BalanceAsync(Frostmere, Buyer));
-        Assert.Equal(BazaarAssay.NetOf(unit * 10), await Bazaar.OwedAsync(Emberhold, Seller));
-        Assert.Equal(0, await Gold.BalanceAsync(Emberhold, Seller));   // not until collected
+        long deposit = DepositsPaid(Emberhold, Seller);
+        Assert.True(deposit > 0);
+        // Sold out, so the whole deposit comes back with the takings.
+        Assert.Equal(BazaarAssay.NetOf(unit * 10) + deposit, await Bazaar.OwedAsync(Emberhold, Seller));
+        Assert.Equal(Purse - deposit, await Gold.BalanceAsync(Emberhold, Seller));   // not until collected
 
         var (collected, balance) = await Bazaar.CollectAsync(Emberhold, Seller);
-        Assert.Equal(BazaarAssay.NetOf(unit * 10), collected);
-        Assert.Equal(collected, balance);
+        Assert.Equal(BazaarAssay.NetOf(unit * 10) + deposit, collected);
+        Assert.Equal(Purse, balance - BazaarAssay.NetOf(unit * 10));
         Assert.Equal(0, await Bazaar.OwedAsync(Emberhold, Seller));
         Assert.Equal(0, (await Bazaar.CollectAsync(Emberhold, Seller)).Collected);   // nothing twice
     }
@@ -247,7 +262,8 @@ public class BazaarTests : IDisposable
 
         Assert.Single(await Ledger.HeldAsync(Frostmere, Buyer));
         Assert.Empty(await Ledger.HeldAsync(Emberhold, Seller));
-        Assert.Equal(BazaarAssay.NetOf(board.Price), await Bazaar.OwedAsync(Emberhold, Seller));
+        // The tenth is kept; the deposit comes back with the takings.
+        Assert.Equal(BazaarAssay.NetOf(board.Price) + BazaarAssay.DepositOn(board.Price), await Bazaar.OwedAsync(Emberhold, Seller));
 
         var sold = Assert.Single(await Bazaar.MineAsync(Emberhold, Seller));
         Assert.Equal("Frostmere", sold.SoldIntoWorld);
@@ -278,7 +294,7 @@ public class BazaarTests : IDisposable
         Assert.True((await Bazaar.BuyEquipmentAsync(Frostmere, Buyer, listing!.Id, null)).Outcome.Succeeded);
         var late = await Bazaar.BuyEquipmentAsync(Frostmere, Rival, listing.Id, null);
         Assert.Equal(BazaarError.NotActive, late.Outcome.Error);
-        Assert.Equal(100_000, await Gold.BalanceAsync(Frostmere, Rival));
+        Assert.Equal(100_000 + Purse, await Gold.BalanceAsync(Frostmere, Rival));
     }
 
     // -----------------------------------------------------------------
@@ -363,7 +379,7 @@ public class BazaarTests : IDisposable
 
         await BazaarService.ExpireRealmAsync(_db, Gold, _log, Emberhold);
 
-        Assert.Equal(earned, await Gold.BalanceAsync(Emberhold, Seller));
+        Assert.Equal(Purse - DepositsPaid(Emberhold, Seller) + earned, await Gold.BalanceAsync(Emberhold, Seller));
         Assert.Equal(0, await Bazaar.OwedAsync(Emberhold, Seller));
         Assert.Empty(await Bazaar.EquipmentAsync(Buyer));
         Assert.Empty(_db.ItemGrants.Where(g => g.ItemId == "blade-1"));

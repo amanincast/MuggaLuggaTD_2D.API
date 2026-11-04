@@ -301,6 +301,9 @@ namespace MuggaLuggaTD.Shared
         // 1.74.0 - Escorts on the Hall's NOTICES board (Mike 2026-11-04): QuestOffer.OriginSiteId and QuestRules.OriginOf
         //   (a Hall escort's caravan waits at a village in a region the player holds); Escort joins the Hall's draw as a
         //   fourth kind when such a village has a good and a destination (HallEscortOrigins), so those boards change.
-        public const string Version = "1.74.0";
+        // 1.75.0 - The Marketplace (Mike 2026-10-10, 2026-11-04): BazaarAssay gains the listing deposit (DepositOn, 2%,
+        //   back as it sells: DepositBack), ListingHours (72), MaxListings (100), MaxOrders (20), MaxOrderQuantity (999)
+        //   and DemandDays (7). Prices stay at the assay; buy orders hold the assay price at posting.
+        public const string Version = "1.75.0";
     }
 }

@@ -80,6 +80,44 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static long PriceOf(MaterialTemplate material)
             => material == null ? MinimumPrice : PriceOf(material.Category, material.Tier);
 
+        // -----------------------------------------------------------------
+        // The market's terms (Marketplace spec, Mike 2026-10-10 / 2026-11-04)
+        // -----------------------------------------------------------------
+
+        /// <summary>A listing's deposit, as a share of what it would sell for (row 8). Back on a sale, kept on a pull-back or an expiry.</summary>
+        public const double DepositRate = 0.02;
+
+        /// <summary>How long a listing or a buy order stands before it goes back (row 5).</summary>
+        public const int ListingHours = 72;
+
+        /// <summary>Active listings one player may have from one realm (M2: high, for forge-feed churn).</summary>
+        public const int MaxListings = 100;
+
+        /// <summary>Open buy orders one player may have in one realm (M2).</summary>
+        public const int MaxOrders = 20;
+
+        /// <summary>The most one buy order may ask for.</summary>
+        public const int MaxOrderQuantity = 999;
+
+        /// <summary>How far back the demand line counts ("38 sold this week", M1).</summary>
+        public const int DemandDays = 7;
+
+        /// <summary>The deposit on a listing worth <paramref name="gross"/>: a fiftieth, rounded up, never less than 1.</summary>
+        public static long DepositOn(long gross) => gross <= 0 ? 0 : Math.Max(1, (long)Math.Ceiling(gross * DepositRate - 1e-9));
+
+        /// <summary>
+        /// The part of a <paramref name="deposit"/> a sale gives back when a listing of
+        /// <paramref name="quantity"/> goes from <paramref name="soldBefore"/> to <paramref name="soldAfter"/> sold.
+        /// Counted on the running total, so every refund of a listing that sells out adds up to the whole deposit.
+        /// </summary>
+        public static long DepositBack(long deposit, int quantity, int soldBefore, int soldAfter)
+        {
+            if (deposit <= 0 || quantity <= 0) return 0;
+            int before = Math.Max(0, Math.Min(quantity, soldBefore));
+            int after = Math.Max(before, Math.Min(quantity, soldAfter));
+            return deposit * after / quantity - deposit * before / quantity;
+        }
+
         /// <summary>The house's cut of a sale worth <paramref name="gross"/>.</summary>
         public static long FeeOn(long gross) => gross <= 0 ? 0 : (long)Math.Round(gross * Fee, MidpointRounding.AwayFromZero);
 

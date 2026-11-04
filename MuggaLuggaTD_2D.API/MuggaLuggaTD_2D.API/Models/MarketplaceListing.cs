@@ -13,7 +13,9 @@ public enum ListingStatus
     /// <summary>Pulled back by the seller; what was unsold went back to them.</summary>
     Cancelled,
     /// <summary>Its world reset while it was listed; what was unsold is gone (Mike, 2026-10-01).</summary>
-    Expired
+    Expired,
+    /// <summary>Unsold after its 72 hours (Marketplace row 5): what was left went back to the seller; the deposit was kept.</summary>
+    Returned
 }
 
 /// <summary>What is being sold: one piece of equipment, or a stack of a material.</summary>
@@ -96,6 +98,18 @@ public class MarketplaceListing : IRevisioned
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>When it goes back to the seller unsold (Marketplace row 5).</summary>
+    public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddHours(MuggaLuggaTD.Shared.Gameplay.BazaarAssay.ListingHours);
+
+    /// <summary>When it went back unsold, if it did.</summary>
+    public DateTime? ReturnedAt { get; set; }
+
+    /// <summary>The 2% the seller paid to list it (row 8). Paid back into <see cref="EarnedGold"/> as it sells.</summary>
+    public long Deposit { get; set; }
+
+    /// <summary>How much of <see cref="Deposit"/> has gone back so far.</summary>
+    public long DepositRefunded { get; set; }
 
     [NotMapped]
     public int QuantityLeft => Math.Max(0, Quantity - QuantitySold);
