@@ -63,6 +63,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Subject: the week. Detail: "{rarity}:{rank}:{total}:{score}".
         /// </summary>
         TrialChest,
+
+        /// <summary>
+        /// Raiders fell on a caravan in your care (Active Content F): fight or flee. Subject: the company. Detail: its
+        /// name. Flagged while the company is halted, like <see cref="CompanyAmbushed"/>.
+        /// </summary>
+        CaravanAmbushed,
+
+        /// <summary>
+        /// A caravan reached its village; the Escort quest is ready to hand in. Subject: the quest. Region: where it
+        /// arrived. Detail: "{company}|{wagons through}|{perfect 1/0}". Flagged until handed in.
+        /// </summary>
+        CaravanDelivered,
+
+        /// <summary>
+        /// Every wagon broke: the cargo and the errand are gone. Subject: the company. Region: where it was struck.
+        /// Detail: "{company}".
+        /// </summary>
+        CaravanLost,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -94,7 +112,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static bool CanFlag(LetterKind kind) =>
             kind == LetterKind.SiegeDeclaredOnYou || kind == LetterKind.HeroesCaptured ||
             kind == LetterKind.CompanyAmbushed || kind == LetterKind.QuestReady || kind == LetterKind.SeasonEnded ||
-            kind == LetterKind.RiftOmen || kind == LetterKind.RegionInvaded || kind == LetterKind.RiftSealed;
+            kind == LetterKind.RiftOmen || kind == LetterKind.RegionInvaded || kind == LetterKind.RiftSealed ||
+            kind == LetterKind.CaravanAmbushed || kind == LetterKind.CaravanDelivered;
 
         public static LetterCategory CategoryOf(LetterKind kind)
         {
@@ -103,8 +122,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.CompanyArrived:
                 case LetterKind.CompanyAmbushed:
                 case LetterKind.AutoReport:
+                case LetterKind.CaravanAmbushed:
+                case LetterKind.CaravanLost:
                     return LetterCategory.Companies;
                 case LetterKind.QuestReady:
+                case LetterKind.CaravanDelivered:
                 case LetterKind.BountyClaimed:
                     return LetterCategory.Quests;
                 case LetterKind.SeasonEnded:
