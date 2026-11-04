@@ -74,6 +74,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>An Escort's destination: a village in another region (<see cref="QuestKind.Escort"/>). Null otherwise.</summary>
         public string DestinationSiteId { get; set; }
+
+        /// <summary>
+        /// Where an Escort's caravan waits, when that is not the giver: a Hall escort's village in the player's own land
+        /// (Mike 2026-11-04). Null for an elder's escort, whose caravan waits at the giver. Read it through
+        /// <see cref="QuestRules.OriginOf"/>.
+        /// </summary>
+        public string OriginSiteId { get; set; }
     }
 
     /// <summary>
@@ -261,9 +268,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
             int hallLevel = levels.Count == 0 ? 1 : Math.Max(1, (int)Math.Round(levels.Average()));
             var hall = DeterministicRandom.ForSubject(seed, Naming.Hash(HallGiver));
             var kinds = new List<QuestKind> { QuestKind.Ambush, QuestKind.Clear, QuestKind.Gather };
+            // The Hall's own caravans (Mike 2026-11-04): a fourth kind in the draw, but only when the player holds a
+            // village with a good to send and somewhere to send it; otherwise the draw is as it always was.
+            var homeVillages = HallEscortOrigins(all, userId);
+            if (homeVillages.Count > 0) kinds.Add(QuestKind.Escort);
             hall.Shuffle(kinds);
             for (int i = 0; i < HallOffers && i < kinds.Count; i++)
-                offers.Add(HallOffer(ref hall, $"{hour}.{set}.{HallGiver}.{i}", kinds[i], hallLevel, tuning));
+            {
+                string offerId = $"{hour}.{set}.{HallGiver}.{i}";
+                offers.Add(kinds[i] == QuestKind.Escort
+                    ? HallEscort(offerId, seed, homeVillages, all, userId, tuning)
+                    : HallOffer(ref hall, offerId, kinds[i], hallLevel, tuning));
+            }
 
             // A Harvest Fair: the region's Gather quests pay more gold (the Hall's are of no region).
             foreach (var offer in offers.Where(o => o.Kind == QuestKind.Gather))
@@ -335,6 +351,58 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 Id = id, GiverId = village.SiteId, RegionId = region.RegionId, Level = AutoFightRules.MobLevel(layout.Sites)
             };
             Escort(ref random, offer, Math.Max(1, region.Tier), trades, destinations, tuning);
+            return offer;
+        }
+
+        /// <summary>Where an Escort's caravan waits: the Hall's village in the player's land, else the giver's village.</summary>
+        public static string OriginOf(QuestOffer offer) =>
+            offer == null ? null : !string.IsNullOrEmpty(offer.OriginSiteId) ? offer.OriginSiteId : offer.GiverId;
+
+        /// <summary>The goods a region's resource sites trade in, once each.</summary>
+        private static List<string> TradesOf(WorldRegionData region, RegionLayout layout) =>
+            layout.Sites.Where(s => s.Type == LocationType.ResourceNode)
+                .Select(s => ResourceNodeRules.GoodOf(ResourceNodeRules.TradeOf(s.SiteId, region.Biome)))
+                .Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
+
+        /// <summary>
+        /// The villages a Hall escort may leave from (Mike 2026-11-04): one in each region <paramref name="userId"/> holds
+        /// that has a good to send and a village near enough to send it to. In region order, so the board stays pure.
+        /// </summary>
+        public static List<(WorldRegionData Region, RegionLayout Layout, SiteSpec Village, List<string> Trades)> HallEscortOrigins(
+            IReadOnlyList<WorldRegionData> world, string userId)
+        {
+            var found = new List<(WorldRegionData, RegionLayout, SiteSpec, List<string>)>();
+            if (world == null || string.IsNullOrEmpty(userId)) return found;
+            foreach (var region in world.Where(r => r != null && string.Equals(r.OwnerUserId, userId, StringComparison.Ordinal))
+                         .OrderBy(r => r.RegionId, StringComparer.Ordinal))
+            {
+                var layout = RegionGenerator.Generate(region);
+                var village = layout.Sites.Where(s => s.Type == LocationType.NeutralHome).OrderBy(s => s.SiteId, StringComparer.Ordinal).FirstOrDefault();
+                if (village == null) continue;
+                var trades = TradesOf(region, layout);
+                if (trades.Count == 0 || EscortDestinations(region, world, userId).Count == 0) continue;
+                found.Add((region, layout, village, trades));
+            }
+            return found;
+        }
+
+        /// <summary>
+        /// The Hall's escort: the Guild's own goods from a village in the player's land, seeded by the board's hour, priced
+        /// as an elder's escort from that village would be (its region's tier, the distance).
+        /// </summary>
+        private static QuestOffer HallEscort(string id, ulong seed,
+            List<(WorldRegionData Region, RegionLayout Layout, SiteSpec Village, List<string> Trades)> origins,
+            IReadOnlyList<WorldRegionData> world, string userId, RunTuning tuning)
+        {
+            var random = DeterministicRandom.ForSubject(seed, Naming.Hash(HallGiver + ":escort"));
+            var origin = origins[random.Next(origins.Count)];
+            var offer = new QuestOffer
+            {
+                Id = id, GiverId = HallGiver, OriginSiteId = origin.Village.SiteId, RegionId = origin.Region.RegionId,
+                Level = AutoFightRules.MobLevel(origin.Layout.Sites)
+            };
+            Escort(ref random, offer, Math.Max(1, origin.Region.Tier), origin.Trades,
+                EscortDestinations(origin.Region, world, userId), tuning);
             return offer;
         }
 

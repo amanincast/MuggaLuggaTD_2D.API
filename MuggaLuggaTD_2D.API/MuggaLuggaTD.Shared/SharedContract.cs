@@ -298,6 +298,9 @@ namespace MuggaLuggaTD.Shared
         // 1.73.0 - Caravans phase 3 (Active Content F): LetterKind.CaravanAmbushed (flagged while halted),
         //   CaravanDelivered (flagged until handed in; detail "{company}|{wagons}|{perfect}") and CaravanLost. A caravan's
         //   ambush now writes CaravanAmbushed in place of CompanyAmbushed, so an older client would show a bare kind.
-        public const string Version = "1.73.0";
+        // 1.74.0 - Escorts on the Hall's NOTICES board (Mike 2026-11-04): QuestOffer.OriginSiteId and QuestRules.OriginOf
+        //   (a Hall escort's caravan waits at a village in a region the player holds); Escort joins the Hall's draw as a
+        //   fourth kind when such a village has a good and a destination (HallEscortOrigins), so those boards change.
+        public const string Version = "1.74.0";
     }
 }

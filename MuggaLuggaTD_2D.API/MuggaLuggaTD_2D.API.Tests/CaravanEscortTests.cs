@@ -512,6 +512,81 @@ public class CaravanEscortTests : IDisposable
         }
     }
 
+    // -----------------------------------------------------------------
+    // The Hall's NOTICES board (Mike 2026-11-04)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void TheHallsBoard_OffersEscortsFromAVillageYouHold()
+    {
+        var r0 = TestWorld.OwnedBy(TestIds.Player, "r0");
+        var world = new[] { r0, TestWorld.Region("r1", q: 1, r: 0), TestWorld.Region("r2", q: 2, r: 0) };
+        var boards = Enumerable.Range(0, 300)
+            .Select(h => QuestRules.Board("realm", TestIds.Player, 7000 + h, 0, world, new FakeGameContent().EnemyPeoples, new RunTuning()))
+            .ToList();
+
+        // Still two Hall quests an hour, one of the four kinds now.
+        Assert.All(boards, b => Assert.Equal(QuestRules.HallOffers, b.Count(o => o.GiverId == QuestRules.HallGiver)));
+        var hallEscorts = boards.SelectMany(b => b).Where(o => o.GiverId == QuestRules.HallGiver && o.Kind == QuestKind.Escort).ToList();
+        Assert.NotEmpty(hallEscorts);
+        foreach (var offer in hallEscorts)
+        {
+            // The caravan waits at a village of the player's own; it goes to a village 1-3 hexes away.
+            Assert.Equal("r0", SiteSpec.RegionIdOf(offer.OriginSiteId!));
+            Assert.Equal(offer.OriginSiteId, QuestRules.OriginOf(offer));
+            Assert.Equal(LocationType.NeutralHome, RegionGenerator.Generate(r0).FindSite(offer.OriginSiteId!)!.Type);
+            Assert.Equal("r0", offer.RegionId);
+            var to = world.Single(r => r.RegionId == SiteSpec.RegionIdOf(offer.DestinationSiteId!));
+            Assert.InRange(HexCoord.Distance(r0.Hex, to.Hex), QuestRules.EscortNearest, QuestRules.EscortFarthest);
+            Assert.True(offer.Gold > 0 && offer.Count > 0);
+        }
+
+        // An elder's escort has no origin of its own: its caravan waits at the elder.
+        var elders = boards.SelectMany(b => b).Where(o => o.GiverId != QuestRules.HallGiver && o.Kind == QuestKind.Escort).ToList();
+        Assert.All(elders, o => Assert.Equal(o.GiverId, QuestRules.OriginOf(o)));
+    }
+
+    [Fact]
+    public void HoldingNoVillage_TheHallOffersNoEscort()
+    {
+        var world = new[] { TestWorld.Region("r0", q: 0, r: 0), TestWorld.Region("r1", q: 1, r: 0), TestWorld.Region("r2", q: 2, r: 0) };
+        Assert.Empty(QuestRules.HallEscortOrigins(world, TestIds.Player));
+        var hall = Enumerable.Range(0, 200)
+            .SelectMany(h => QuestRules.Board("realm", TestIds.Player, 9000 + h, 0, world, new FakeGameContent().EnemyPeoples, new RunTuning()))
+            .Where(o => o.GiverId == QuestRules.HallGiver)
+            .ToList();
+        Assert.DoesNotContain(hall, o => o.Kind == QuestKind.Escort);
+        Assert.All(hall, o => Assert.Null(o.OriginSiteId));
+    }
+
+    [Fact]
+    public async Task AHallEscort_SetsOutFromItsVillage_NotFromTheHall()
+    {
+        var (instance, company, quest, from, to) = await SeedAsync();
+        // The same caravan, posted on the Hall's board: the giver is the Hall, the caravan waits at r0's village.
+        var stored = await _db.PlayerQuests.SingleAsync(q => q.Id == quest.Id);
+        stored.Offer = new QuestOffer
+        {
+            Id = stored.Offer.Id, GiverId = QuestRules.HallGiver, OriginSiteId = from, RegionId = "r0", Kind = QuestKind.Escort,
+            Target = "Grain", Count = 30, DestinationSiteId = to, Level = 5, ChestTier = ItemRarityTypes.Uncommon, Gold = 300,
+            Materials = stored.Offer.Materials,
+        };
+        await _db.SaveChangesAsync();
+
+        var party = await _db.PlayerParties.SingleAsync(p => p.Id == company.Id);
+        party.SiteId = TestWorld.KeepIn(TestWorld.OwnedBy(TestIds.Player, "r0"));
+        await _db.SaveChangesAsync();
+        var (away, _) = await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
+        Assert.Equal(PartyError.NotAtTheVillage, away.Error);
+
+        party.SiteId = from;
+        await _db.SaveChangesAsync();
+        var (sent, response) = await Parties.EscortAsync(instance, TestIds.Player, company.Id, Escort(quest.Id));
+        Assert.True(sent.Succeeded, sent.Message);
+        Assert.Equal(to, response!.Parties[0].Journey!.ToSiteId);
+        Assert.Equal(CaravanRules.Wagons, response.Parties[0].Caravan!.Wagons);
+    }
+
     [Fact]
     public void TheRoadIsStruckOnce_AndAThreeHexOneTwice()
     {
