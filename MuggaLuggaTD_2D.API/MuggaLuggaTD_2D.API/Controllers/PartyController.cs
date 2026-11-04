@@ -94,6 +94,18 @@ public class PartyController : ControllerBase
         return await MovedAsync(gameInstanceId, outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
     }
 
+    /// <summary>Sets a company out from a village with an Escort quest's caravan (Active Content F).</summary>
+    [HttpPost("{partyId:guid}/escort")]
+    public async Task<ActionResult<PartiesResponse>> Escort(Guid gameInstanceId, Guid partyId, [FromBody] PartyEscortRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.EscortAsync(gameInstanceId, userId, partyId, request);
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"escort {partyId} quest={request.QuestId}");
+    }
+
     /// <summary>Fights the warband that has a company halted: opens the run its claim will name.</summary>
     [HttpPost("{partyId:guid}/ambush/fight")]
     public async Task<ActionResult<AmbushFightResponse>> FightAmbush(Guid gameInstanceId, Guid partyId, [FromBody] AmbushOrderRequest request)

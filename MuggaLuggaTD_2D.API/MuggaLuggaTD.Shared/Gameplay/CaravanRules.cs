@@ -160,6 +160,76 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static bool IsPerfect(int wagonsStanding, double lowestHealthShare) =>
             wagonsStanding >= Wagons && lowestHealthShare >= 0.5;
 
+        // -----------------------------------------------------------------
+        // The errand (phase 2): an Escort quest, the road and the pay
+        // -----------------------------------------------------------------
+
+        /// <summary>A caravan walks this much slower than a company alone: every region's walk is stretched by it.</summary>
+        public const double Pace = 1.5;
+
+        /// <summary>The guaranteed ambush strikes somewhere in this share of the journey's time (F7).</summary>
+        public const double FirstAmbushFrom = 0.2, FirstAmbushTo = 0.45;
+
+        /// <summary>A second ambush, on a long route, strikes in this later share, so it always comes after the first.</summary>
+        public const double SecondAmbushFrom = 0.55, SecondAmbushTo = 0.8;
+
+        /// <summary>An escort this many hexes away or more is struck twice, always (Mike 2026-10-16).</summary>
+        public const int LongRouteHexes = 3;
+
+        /// <summary>
+        /// An escort pays this many times a quest's gold, by how far it goes (Mike 2026-10-16): ×1.5 for one hex, ×2 for
+        /// two, ×2.5 for three. A long walk and a hard fight. <i>(tune)</i>
+        /// </summary>
+        public static double EscortGoldFactor(int hexes) => 1.0 + 0.5 * Math.Max(1, hexes);
+
+        /// <summary>
+        /// An escort's cargo, and so the goods it pays, by how far it goes (Mike 2026-10-16): as rolled for one hex, +25%
+        /// for two, +50% for three. <i>(tune)</i>
+        /// </summary>
+        public static double EscortCargoFactor(int hexes) => 1.0 + 0.25 * (Math.Max(1, hexes) - 1);
+
+        /// <summary>An escort pays one unit of its cargo in every this many carried, beside the essence. <i>(tune)</i></summary>
+        public const int CargoCutEvery = 5;
+
+        /// <summary>A perfect defence (<see cref="IsPerfect"/>) adds this share of the gold. <i>(tune)</i></summary>
+        public const double PerfectBonus = 0.25;
+
+        /// <summary>
+        /// The fewest seconds a caravan fight can take: its setup and a little more. A claim faster than this is refused.
+        /// </summary>
+        public const double MinimumFightSeconds = SetupSeconds + 10;
+
+        /// <summary>
+        /// When a caravan's road is struck (F7): always once, early in the walk; and an escort
+        /// <see cref="LongRouteHexes"/> hexes away or more a second time, always, later in the walk (Mike 2026-10-16).
+        /// Shares of the journey's time. <paramref name="random"/> is the caller's, so the server owns the entropy and
+        /// tests can fix it.
+        /// </summary>
+        public static (double First, double? Second) RollAmbushes(int hexes, Random random)
+        {
+            random = random ?? new Random();
+            double first = FirstAmbushFrom + random.NextDouble() * (FirstAmbushTo - FirstAmbushFrom);
+            double? second = hexes >= LongRouteHexes
+                ? SecondAmbushFrom + random.NextDouble() * (SecondAmbushTo - SecondAmbushFrom)
+                : (double?)null;
+            return (first, second);
+        }
+
+        /// <summary>The gold an escort pays on delivery: the offer's, by the share delivered, and the bonus for a perfect defence.</summary>
+        public static long DeliveredGold(long offerGold, int wagonsStanding, bool perfect) =>
+            (long)Math.Round(Math.Max(0, offerGold) * DeliveredShare(wagonsStanding) * (perfect ? 1 + PerfectBonus : 1));
+
+        /// <summary>The materials an escort pays on delivery: each of the offer's, by the share delivered (rounded, none below one dropped).</summary>
+        public static List<MaterialGrant> DeliveredMaterials(IEnumerable<MaterialGrant> offerMaterials, int wagonsStanding)
+        {
+            double share = DeliveredShare(wagonsStanding);
+            return (offerMaterials ?? Enumerable.Empty<MaterialGrant>())
+                .Where(m => m != null)
+                .Select(m => new MaterialGrant { MaterialName = m.MaterialName, Quantity = (int)Math.Round(m.Quantity * share) })
+                .Where(m => m.Quantity > 0)
+                .ToList();
+        }
+
         public static string SiteId(string caravanId) => SitePrefix + caravanId;
 
         public static bool TryParseSiteId(string siteId, out string caravanId)
