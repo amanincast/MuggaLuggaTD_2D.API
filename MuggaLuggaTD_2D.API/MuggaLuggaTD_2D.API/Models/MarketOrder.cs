@@ -92,4 +92,16 @@ public class MarketSale
     public long UnitPrice { get; set; }
 
     public DateTime SoldAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>What it was called, for the sales log ("Cinder Blade", "Lesser Essence").</summary>
+    [MaxLength(200)]
+    public string GoodsName { get; set; } = string.Empty;
+
+    /// <summary>The seller and the realm the listing came from: the sales log's "sold".</summary>
+    public string? SellerId { get; set; }
+    public Guid? SellerRealm { get; set; }
+
+    /// <summary>The buyer and the realm they paid from: the sales log's "bought".</summary>
+    public string? BuyerId { get; set; }
+    public Guid? BuyerRealm { get; set; }
 }

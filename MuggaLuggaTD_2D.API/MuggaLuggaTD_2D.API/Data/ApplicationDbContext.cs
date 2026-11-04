@@ -590,6 +590,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(e => new { e.Kind, e.SoldAt });
             entity.HasIndex(e => new { e.GoodsKey, e.SoldAt });
+            // The sales log (Marketplace §2.4): a player's last sales and buys.
+            entity.HasIndex(e => new { e.SellerId, e.SoldAt });
+            entity.HasIndex(e => new { e.BuyerId, e.SoldAt });
         });
 
         // Configure Friendship entity

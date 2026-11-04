@@ -26,11 +26,13 @@ public class BazaarController : ControllerBase
     private readonly GoldService _gold;
     private readonly SeasonScoreService _seasons;
     private readonly IGameContentProvider _content;
+    private readonly IWebHostEnvironment _environment;
 
     public BazaarController(ApplicationDbContext context, BazaarService bazaar, GoldService gold, SeasonScoreService seasons,
-        IGameContentProvider content)
+        IGameContentProvider content, IWebHostEnvironment environment)
     {
         _content = content;
+        _environment = environment;
         _context = context;
         _bazaar = bazaar;
         _gold = gold;
@@ -73,7 +75,8 @@ public class BazaarController : ControllerBase
         return Ok(new BazaarMineResponse(
             await _bazaar.MineAsync(gameInstanceId, userId),
             await _bazaar.OwedAsync(gameInstanceId, userId),
-            await _bazaar.MyOrdersAsync(gameInstanceId, userId)));
+            await _bazaar.MyOrdersAsync(gameInstanceId, userId),
+            await _bazaar.SalesLogAsync(gameInstanceId, userId)));
     }
 
     [HttpPost("list-item")]
@@ -171,6 +174,31 @@ public class BazaarController : ControllerBase
 
         var (collected, balance) = await _bazaar.CollectAsync(gameInstanceId, userId!);
         return Ok(new BazaarTradeResponse(balance, Collected: collected));
+    }
+
+    // -----------------------------------------------------------------
+    // Debug hooks (Development only; Combat Debug → Bazaar)
+    // -----------------------------------------------------------------
+
+    [HttpPost("debug/seed")]
+    public Task<IActionResult> DebugSeed(Guid gameInstanceId) =>
+        DebugAsync(gameInstanceId, (realm, _) => _bazaar.DebugSeedAsync(realm));
+
+    [HttpPost("debug/expire-mine")]
+    public Task<IActionResult> DebugExpireMine(Guid gameInstanceId) =>
+        DebugAsync(gameInstanceId, (realm, user) => _bazaar.DebugExpireMineAsync(realm, user));
+
+    [HttpGet("debug/escrow")]
+    public Task<IActionResult> DebugEscrow(Guid gameInstanceId) =>
+        DebugAsync(gameInstanceId, (realm, user) => _bazaar.DebugEscrowAsync(realm, user));
+
+    private async Task<IActionResult> DebugAsync(Guid gameInstanceId, Func<Guid, string, Task<string>> act)
+    {
+        if (!_environment.IsDevelopment()) return NotFound();
+        var userId = UserId();
+        if (userId == null) return Unauthorized();
+        if (!await HasAccess(gameInstanceId, userId)) return Forbid();
+        return Ok(new { message = await act(gameInstanceId, userId) });
     }
 
     // -----------------------------------------------------------------
