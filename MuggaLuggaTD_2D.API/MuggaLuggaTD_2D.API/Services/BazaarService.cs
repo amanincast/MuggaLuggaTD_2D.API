@@ -57,6 +57,9 @@ public record BazaarMyOrder(Guid OrderId, string Name, int Quantity, int Filled,
 /// <summary>How much of a material sold in the last <see cref="BazaarAssay.DemandDays"/> days (M1).</summary>
 public record BazaarMaterialDemand(string Name, int Sold);
 
+/// <summary>One line of a player's sales log (§2.4): something they sold or bought.</summary>
+public record BazaarLogEntry(string Name, ListingKind Kind, int Quantity, long UnitPrice, bool Sold, DateTime At);
+
 /// <summary>How many pieces of one type and rarity sold in the last week (M1).</summary>
 public record BazaarGearDemand(ItemTypes Type, ItemRarityTypes Rarity, int Sold);
 
@@ -261,6 +264,21 @@ public class BazaarService
             o.HeldGold, o.Status, o.CreatedAt, o.ExpiresAt)).ToList();
     }
 
+    /// <summary>
+    /// The last <paramref name="count"/> things this player sold from this realm or bought into it, newest first
+    /// (the sales log, §2.4).
+    /// </summary>
+    public async Task<List<BazaarLogEntry>> SalesLogAsync(Guid realmId, string userId, int count = 20)
+    {
+        var sales = await _context.MarketSales.AsNoTracking()
+            .Where(s => (s.SellerId == userId && s.SellerRealm == realmId) || (s.BuyerId == userId && s.BuyerRealm == realmId))
+            .OrderByDescending(s => s.SoldAt)
+            .Take(count)
+            .ToListAsync();
+        return sales.Select(s => new BazaarLogEntry(s.GoodsName, s.Kind, s.Quantity, s.UnitPrice,
+            s.SellerId == userId && s.SellerRealm == realmId, s.SoldAt)).ToList();
+    }
+
     /// <summary>How many of this player's listings from this realm are still for sale.</summary>
     public Task<int> ListedCountAsync(Guid realmId, string sellerId) =>
         _context.MarketplaceListings.CountAsync(l =>
@@ -400,7 +418,7 @@ public class BazaarService
                 int take = Math.Min(listing.QuantityLeft, order.QuantityLeft);
                 if (take <= 0) continue;
 
-                SellUnits(listing, take, order.UnitPrice, order.GameInstanceId, now);
+                SellUnits(listing, take, order.UnitPrice, order.GameInstanceId, order.BuyerId, now);
                 FillOrder(order, take, now);
                 await _wallet.GrantAsync(order.GameInstanceId, order.BuyerId,
                     new[] { new MaterialGrant { MaterialName = material.MaterialName, Quantity = take } }, "bazaar-order-fill");
@@ -517,7 +535,7 @@ public class BazaarService
             }
 
             var now = DateTime.UtcNow;
-            SellUnits(listing, 1, price, buyerRealm, now, item);
+            SellUnits(listing, 1, price, buyerRealm, buyerId, now, item);
             listing.BuyerId = buyerId;
             await _context.SaveChangesAsync();
 
@@ -571,7 +589,7 @@ public class BazaarService
                 if (remaining == 0) break;
                 int take = Math.Min(remaining, listing.QuantityLeft);
                 if (take <= 0) continue;
-                SellUnits(listing, take, unit, buyerRealm, now);
+                SellUnits(listing, take, unit, buyerRealm, buyerId, now);
                 remaining -= take;
             }
             await _context.SaveChangesAsync();
@@ -640,7 +658,7 @@ public class BazaarService
             {
                 int take = Math.Min(order.QuantityLeft, listing.QuantityLeft);
                 if (take <= 0) continue;
-                SellUnits(listing, take, unit, buyerRealm, now);
+                SellUnits(listing, take, unit, buyerRealm, buyerId, now);
                 FillOrder(order, take, now);
                 bought += take;
                 if (order.QuantityLeft == 0) break;
@@ -793,6 +811,120 @@ public class BazaarService
     }
 
     // -----------------------------------------------------------------
+    // Debug hooks (Marketplace §8; Development only, Combat Debug → Bazaar)
+    // -----------------------------------------------------------------
+
+    /// <summary>The made-up trader whose stall and orders a seeded market holds. A real user row, so listings can name it.</summary>
+    public const string DebugTraderId = "debug-bazaar-trader";
+
+    /// <summary>
+    /// Fills the market for one tester: a trader lists 25 of three materials and two pieces of gear, and asks for 30 of
+    /// three others and of a good, so there is something to buy and something to sell into. Listed and wanted
+    /// materials never overlap, since only a new listing or order matches.
+    /// </summary>
+    public async Task<string> DebugSeedAsync(Guid realmId)
+    {
+        await TradeLock.WaitAsync();
+        try
+        {
+            if (!await _context.Users.AnyAsync(u => u.Id == DebugTraderId))
+            {
+                _context.Users.Add(new ApplicationUser
+                {
+                    Id = DebugTraderId, UserName = "debug-bazaar-trader", NormalizedUserName = "DEBUG-BAZAAR-TRADER",
+                    Email = "trader@debug.local", NormalizedEmail = "TRADER@DEBUG.LOCAL", DisplayName = "A travelling trader",
+                    SecurityStamp = Guid.NewGuid().ToString(),
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            var now = DateTime.UtcNow;
+            var materials = _content.Materials.Where(m => m.Category != MaterialCategory.Goods)
+                .OrderBy(m => m.Tier).ThenBy(m => m.Category).ThenBy(m => m.MaterialName).ToList();
+            var listed = materials.Take(3).ToList();
+            var wanted = materials.Skip(3).Take(3)
+                .Concat(_content.Materials.Where(m => m.Category == MaterialCategory.Goods).Take(1)).ToList();
+
+            foreach (var m in listed)
+                _context.MarketplaceListings.Add(new MarketplaceListing
+                {
+                    GameInstanceId = realmId, SellerId = DebugTraderId, Kind = ListingKind.Material, GoodsKey = m.MaterialName,
+                    GoodsName = m.MaterialName, Quantity = 25, CreatedAt = now, ExpiresAt = now.AddHours(BazaarAssay.ListingHours),
+                });
+            foreach (var m in wanted)
+            {
+                long unit = BazaarAssay.PriceOf(m);
+                _context.MarketOrders.Add(new MarketOrder
+                {
+                    GameInstanceId = realmId, BuyerId = DebugTraderId, MaterialName = m.MaterialName, Quantity = 30, UnitPrice = unit,
+                    HeldGold = unit * 30, CreatedAt = now, UpdatedAt = now, ExpiresAt = now.AddHours(BazaarAssay.ListingHours),
+                });
+            }
+            await _context.SaveChangesAsync();
+
+            int gear = 0;
+            var template = _content.DroppableItems.FirstOrDefault(t => t.ItemType == ItemTypes.Weapon) ?? _content.DroppableItems.FirstOrDefault();
+            if (template != null)
+            {
+                foreach (var rarity in new[] { ItemRarityTypes.Common, ItemRarityTypes.Rare })
+                {
+                    var piece = new ItemSaveData { Id = Guid.NewGuid().ToString(), ItemName = template.ItemName, ItemType = template.ItemType, ItemCount = 1 };
+                    Items.Utilities.ItemDropCalculator.ApplyDropProperties(piece, 1, template.ImplicitPool, template.ExplicitPool, rarity);
+                    piece.PowerTier = ItemPowerTier.Tier2;
+                    await _items.GrantAsync(realmId, DebugTraderId, new[] { piece }, "debug bazaar seed");
+
+                    var listingId = Guid.NewGuid();
+                    string? json = await _items.EscrowAsync(realmId, DebugTraderId, piece.Id, listingId);
+                    if (json == null) continue;
+                    _context.MarketplaceListings.Add(new MarketplaceListing
+                    {
+                        Id = listingId, GameInstanceId = realmId, SellerId = DebugTraderId, Kind = ListingKind.Equipment,
+                        GoodsKey = piece.Id, GoodsName = Clip(piece.ItemName ?? "Item"), ItemData = json, Quantity = 1,
+                        CreatedAt = now, ExpiresAt = now.AddHours(BazaarAssay.ListingHours),
+                    });
+                    gear++;
+                }
+                await _context.SaveChangesAsync();
+            }
+
+            return $"A trader set up: 25 each of {string.Join(", ", listed.Select(m => m.MaterialName))} and {gear} piece(s) of gear " +
+                   $"to buy; wants 30 each of {string.Join(", ", wanted.Select(m => m.MaterialName))}.";
+        }
+        finally { TradeLock.Release(); }
+    }
+
+    /// <summary>Runs out the clock on this player's listings and orders from this realm, then sweeps, as 72 hours would.</summary>
+    public async Task<string> DebugExpireMineAsync(Guid realmId, string userId)
+    {
+        var past = DateTime.UtcNow.AddSeconds(-1);
+        var listings = await _context.MarketplaceListings
+            .Where(l => l.GameInstanceId == realmId && l.SellerId == userId && l.Status == ListingStatus.Active).ToListAsync();
+        var orders = await _context.MarketOrders
+            .Where(o => o.GameInstanceId == realmId && o.BuyerId == userId && o.Status == MarketOrderStatus.Open).ToListAsync();
+        foreach (var l in listings) l.ExpiresAt = past;
+        foreach (var o in orders) o.ExpiresAt = past;
+        await _context.SaveChangesAsync();
+        await SweepAsync();
+        return $"{listings.Count} listing(s) and {orders.Count} order(s) ran out and went back.";
+    }
+
+    /// <summary>What the server holds for this player from this realm: listed goods, deposits, orders' gold, and what is owed.</summary>
+    public async Task<string> DebugEscrowAsync(Guid realmId, string userId)
+    {
+        var listings = await _context.MarketplaceListings.AsNoTracking()
+            .Where(l => l.GameInstanceId == realmId && l.SellerId == userId && l.Status == ListingStatus.Active).ToListAsync();
+        var orders = await _context.MarketOrders.AsNoTracking()
+            .Where(o => o.GameInstanceId == realmId && o.BuyerId == userId && o.Status == MarketOrderStatus.Open).ToListAsync();
+        long owed = await OwedAsync(realmId, userId);
+        int gear = listings.Count(l => l.Kind == ListingKind.Equipment);
+        int units = listings.Where(l => l.Kind == ListingKind.Material).Sum(l => l.QuantityLeft);
+        long deposits = listings.Sum(l => l.Deposit - l.DepositRefunded);
+        return $"Listed: {listings.Count} ({units} units, {gear} gear), deposits held {deposits}g. " +
+               $"Orders: {orders.Count}, holding {orders.Sum(o => o.HeldGold)}g for {orders.Sum(o => o.QuantityLeft)} units. " +
+               $"To collect: {owed}g.";
+    }
+
+    // -----------------------------------------------------------------
 
     private static BazaarOutcome TooManyListings => new(BazaarError.TooMany,
         $"You already have {BazaarAssay.MaxListings} listings on the Bazaar from this world.");
@@ -812,7 +944,8 @@ public class BazaarService
     /// earns the sale less the house's tenth, plus that share of their deposit back, and the sale is
     /// written down for the demand line.
     /// </summary>
-    private void SellUnits(MarketplaceListing listing, int take, long unit, Guid buyerRealm, DateTime now, ItemSaveData? item = null)
+    private void SellUnits(MarketplaceListing listing, int take, long unit, Guid buyerRealm, string buyerId, DateTime now,
+        ItemSaveData? item = null)
     {
         int before = listing.QuantitySold;
         listing.QuantitySold += take;
@@ -832,6 +965,11 @@ public class BazaarService
             Quantity = take,
             UnitPrice = unit,
             SoldAt = now,
+            GoodsName = listing.GoodsName,
+            SellerId = listing.SellerId,
+            SellerRealm = listing.GameInstanceId,
+            BuyerId = buyerId,
+            BuyerRealm = buyerRealm,
         });
     }
 

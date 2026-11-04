@@ -337,6 +337,68 @@ public class MarketplaceTests : IDisposable
         Assert.Empty(later);
     }
 
+    // -----------------------------------------------------------------
+    // The sales log (§2.4) and the debug hooks (§8)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task TheSalesLog_ShowsWhatYouSoldAndBought_InThisWorld()
+    {
+        await Give(Emberhold, Seller, 10);
+        await Bazaar.ListMaterialAsync(Emberhold, Seller, Essence, 10);
+        await Bazaar.BuyMaterialAsync(Frostmere, Buyer, Essence, 4, Unit);
+        await Bazaar.PostOrderAsync(Frostmere, Buyer, Essence, 2);   // fills from the same listing
+
+        var sold = await Bazaar.SalesLogAsync(Emberhold, Seller);
+        Assert.Equal(2, sold.Count);
+        Assert.All(sold, e => Assert.True(e.Sold));
+        Assert.Equal(new[] { 2, 4 }, sold.Select(e => e.Quantity));   // newest first
+        Assert.Equal(Essence, sold[0].Name);
+
+        var bought = await Bazaar.SalesLogAsync(Frostmere, Buyer);
+        Assert.Equal(2, bought.Count);
+        Assert.All(bought, e => Assert.False(e.Sold));
+        Assert.Empty(await Bazaar.SalesLogAsync(Emberhold, Buyer));   // per world
+    }
+
+    [Fact]
+    public async Task ASeededMarket_HasSomethingToBuyAndSomethingToSellInto()
+    {
+        var content = new FakeGameContent
+        {
+            Materials = Enumerable.Range(1, 6).Select(i => new MaterialTemplate { MaterialName = $"M{i}", Category = MaterialCategory.Essence, Tier = MaterialTier.Tier1 })
+                .Append(new MaterialTemplate { MaterialName = "Timber", Category = MaterialCategory.Goods, Tier = MaterialTier.Tier1 }).ToArray()
+        };
+        var bazaar = new BazaarService(_db, content, Ledger, Wallet, Gold, _log);
+        string said = await bazaar.DebugSeedAsync(Emberhold);
+        Assert.Contains("trader", said);
+
+        Assert.Equal(3, (await bazaar.MaterialsAsync(Seller)).Count);
+        var wanted = await bazaar.WantedAsync(Seller);
+        Assert.Equal(4, wanted.Count);
+        Assert.Empty(wanted.Select(w => w.Name).Intersect((await bazaar.MaterialsAsync(Seller)).Select(m => m.Name)));
+
+        // Selling into the trader's order works like any other.
+        await Give(Emberhold, Seller, 5, "M4");
+        Assert.Equal(5, (await bazaar.ListMaterialAsync(Emberhold, Seller, "M4", 5)).SoldToOrders);
+    }
+
+    [Fact]
+    public async Task ExpireMine_RunsOutOnlyThisPlayersClock()
+    {
+        await Give(Emberhold, Seller, 5);
+        await Bazaar.ListMaterialAsync(Emberhold, Seller, Essence, 5);
+        await Give(Emberhold, Rival, 5);
+        await Bazaar.ListMaterialAsync(Emberhold, Rival, Essence, 5);
+        await Bazaar.PostOrderAsync(Emberhold, Seller, "Timber", 3);
+
+        Assert.Contains("1 listing(s) and 1 order(s)", await Bazaar.DebugExpireMineAsync(Emberhold, Seller));
+        Assert.Equal(5, await Held(Emberhold, Seller));
+        Assert.Equal(ListingStatus.Active, _db.MarketplaceListings.AsNoTracking().Single(l => l.SellerId == Rival).Status);
+        Assert.Contains("Orders: 0", await Bazaar.DebugEscrowAsync(Emberhold, Seller));
+        Assert.Contains("Listed: 1", await Bazaar.DebugEscrowAsync(Emberhold, Rival));
+    }
+
     [Fact]
     public async Task MyOrdersShowWhatFilled()
     {

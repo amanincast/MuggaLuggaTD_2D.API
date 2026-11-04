@@ -25,7 +25,8 @@ public record BazaarBoardResponse(
     int MaxListings,
     int MaxOrders);
 
-public record BazaarMineResponse(List<BazaarMyListing> Listings, long Owed, List<BazaarMyOrder> Orders);
+/// <summary>MY LISTINGS: the player's listings and orders from this realm, what is owed, and the last 20 sales and buys.</summary>
+public record BazaarMineResponse(List<BazaarMyListing> Listings, long Owed, List<BazaarMyOrder> Orders, List<BazaarLogEntry> Log);
 
 public record BazaarListItemRequest([Required] string ItemId, [Required] string SharedContractVersion);
 

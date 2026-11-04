@@ -1259,7 +1259,18 @@ namespace MuggaLuggaTD_2D.API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BuyerId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("BuyerRealm")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("GoodsKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("GoodsName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -1276,6 +1287,12 @@ namespace MuggaLuggaTD_2D.API.Migrations
                     b.Property<int?>("Rarity")
                         .HasColumnType("integer");
 
+                    b.Property<string>("SellerId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("SellerRealm")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("SoldAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1284,9 +1301,13 @@ namespace MuggaLuggaTD_2D.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BuyerId", "SoldAt");
+
                     b.HasIndex("GoodsKey", "SoldAt");
 
                     b.HasIndex("Kind", "SoldAt");
+
+                    b.HasIndex("SellerId", "SoldAt");
 
                     b.ToTable("MarketSales");
                 });
