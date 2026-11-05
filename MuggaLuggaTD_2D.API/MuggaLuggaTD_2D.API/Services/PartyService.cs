@@ -339,6 +339,91 @@ public class PartyService
     }
 
     /// <summary>
+    /// A company sets out on foot in its region (Exploration spec, phase 1). Nothing moves: the company still stands
+    /// where it is, as everyone else sees it. Only its clock is stamped (<see cref="PlayerParty.UpdatedAt"/>), and
+    /// that is what <see cref="WalkArriveAsync"/>'s floor is measured from.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> WalkBeginAsync(
+        Guid gameInstanceId, string userId, Guid partyId, PartyTravelRequest request)
+    {
+        var (refused, world, party) = await WalkerAsync(gameInstanceId, userId, partyId, request);
+        if (refused != null) return (refused, null);
+        if (!string.Equals(request.SiteId, party!.SiteId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.NotInThisRegion, $"{party.Name} is not standing there."), null);
+
+        party.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        _sessionLog.Log("PARTY-WALK", $"user={userId} party={party.Id} begin at {party.SiteId}");
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world!));
+    }
+
+    /// <summary>
+    /// A walking company reaches a site of its region (Exploration spec §3.2): it now stands there, as after a
+    /// march, so PvE begin, garrisons and quests work unchanged. Refused if too little time has passed since the
+    /// company last changed to walk the shortest way there (<see cref="WalkRules.Floor"/>). Walking rolls no
+    /// ambush (row 8), and the company stays in its region.
+    /// </summary>
+    public async Task<(PartyOutcome Outcome, PartiesResponse? Response)> WalkArriveAsync(
+        Guid gameInstanceId, string userId, Guid partyId, PartyTravelRequest request)
+    {
+        var (refused, world, party) = await WalkerAsync(gameInstanceId, userId, partyId, request);
+        if (refused != null) return (refused, null);
+        if (string.Equals(request.SiteId, party!.SiteId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world!));
+
+        var regions = WorldRegionBlob.ReadAllRegions(world!).ToList();
+        var region = regions.FirstOrDefault(r => r.RegionId == party.RegionId);
+        if (region == null) return (new PartyOutcome(PartyError.SiteNotFound, "That region is not in this world."), null);
+        if (!string.Equals(SiteSpec.RegionIdOf(request.SiteId), region.RegionId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.NotInThisRegion, "That place is in another region; march there instead."), null);
+
+        var layout = RegionGenerator.Generate(region);
+        var to = layout.FindSite(request.SiteId);
+        var from = layout.FindSite(party.SiteId);
+        if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null);
+        if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null);
+
+        var hexes = regions.Select(r => r.Hex).ToHashSet();
+        var roads = RegionRoadNetwork.For(region, hexes.Contains);
+        var cells = WalkRules.CellsBetween(roads, from.Cell, to.Cell);
+        if (cells == null)
+            return (new PartyOutcome(PartyError.NoRoute, "No open ground leads there from where the company stands."), null);
+
+        var now = DateTime.UtcNow;
+        var since = now - DateTime.SpecifyKind(party.UpdatedAt, DateTimeKind.Utc);
+        var floor = WalkRules.Floor(cells.Value);
+        if (since < floor)
+            return (new PartyOutcome(PartyError.RunTooFast,
+                $"{party.Name} cannot have walked there yet ({Math.Ceiling((floor - since).TotalSeconds):F0}s more)."), null);
+
+        party.SiteId = to.SiteId;
+        party.UpdatedAt = now;
+        await _context.SaveChangesAsync();
+        _sessionLog.Log("PARTY-WALK", $"user={userId} party={party.Id} {from.SiteId}->{to.SiteId} cells={cells:F1} secs={since.TotalSeconds:F0} floor={floor.TotalSeconds:F0}");
+        return (new PartyOutcome(PartyError.None), await ResponseAsync(gameInstanceId, userId, world!));
+    }
+
+    /// <summary>A company that may walk: yours, idle at a site, out of auto mode, with someone in it.</summary>
+    private async Task<(PartyOutcome? Refused, JsonNode? World, PlayerParty? Party)> WalkerAsync(
+        Guid gameInstanceId, string userId, Guid partyId, PartyTravelRequest request)
+    {
+        if (request.SharedContractVersion != SharedContract.Version) return (Mismatch, null, null);
+        var world = await LoadWorldAsync(gameInstanceId);
+        if (world == null) return (new PartyOutcome(PartyError.WorldNotFound, "This realm has no world yet."), null, null);
+
+        var parties = await EnsureFirstAsync(gameInstanceId, userId, world);
+        var party = parties.FirstOrDefault(p => p.Id == partyId);
+        if (party == null) return (new PartyOutcome(PartyError.PartyNotFound, "No such company."), null, null);
+        if (party.AutoMode)
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is in auto mode. Take it out of auto mode to walk with it."), null, null);
+        if (party.State != CompanyState.Idle || string.IsNullOrEmpty(party.SiteId) || string.IsNullOrEmpty(party.RegionId))
+            return (new PartyOutcome(PartyError.Busy, $"{party.Name} is on the road. Walk with it when it arrives."), null, null);
+        if (MarchingArmy.ReadIds(party.CharacterIdsJson).Count == 0)
+            return (new PartyOutcome(PartyError.Empty, $"{party.Name} has nobody in it to walk with."), null, null);
+        return (null, world, party);
+    }
+
+    /// <summary>
     /// Sets a company out from a village with an Escort quest's caravan (Active Content F, phase 2): to the quest's
     /// destination, at the caravan's pace (<see cref="CaravanRules.Pace"/>), with an ambush on the road for certain
     /// and a second on an escort three hexes long (<see cref="CaravanRules.RollAmbushes"/>). The company must stand at the
