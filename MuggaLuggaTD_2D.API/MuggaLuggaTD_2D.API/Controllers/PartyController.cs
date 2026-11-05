@@ -94,6 +94,30 @@ public class PartyController : ControllerBase
         return await MovedAsync(gameInstanceId, outcome, response, userId, $"travel {partyId} -> {request.SiteId}");
     }
 
+    /// <summary>A company sets out on foot from where it stands (Exploration, phase 1): stamps its clock.</summary>
+    [HttpPost("{partyId:guid}/walk/begin")]
+    public async Task<ActionResult<PartiesResponse>> WalkBegin(Guid gameInstanceId, Guid partyId, [FromBody] PartyTravelRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.WalkBeginAsync(gameInstanceId, userId, partyId, request);
+        return Respond(outcome, response, userId, $"walk-begin {partyId} at {request.SiteId}");
+    }
+
+    /// <summary>A walking company reaches a site of its region, no sooner than the walk could take.</summary>
+    [HttpPost("{partyId:guid}/walk/arrive")]
+    public async Task<ActionResult<PartiesResponse>> WalkArrive(Guid gameInstanceId, Guid partyId, [FromBody] PartyTravelRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+        if (!await HasAccessToGameInstance(gameInstanceId, userId)) return Forbid();
+
+        var (outcome, response) = await _parties.WalkArriveAsync(gameInstanceId, userId, partyId, request);
+        return await MovedAsync(gameInstanceId, outcome, response, userId, $"walk-arrive {partyId} -> {request.SiteId}");
+    }
+
     /// <summary>Sets a company out from a village with an Escort quest's caravan (Active Content F).</summary>
     [HttpPost("{partyId:guid}/escort")]
     public async Task<ActionResult<PartiesResponse>> Escort(Guid gameInstanceId, Guid partyId, [FromBody] PartyEscortRequest request)

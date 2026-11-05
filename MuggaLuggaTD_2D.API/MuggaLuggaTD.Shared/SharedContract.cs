@@ -304,6 +304,8 @@ namespace MuggaLuggaTD.Shared
         // 1.75.0 - The Marketplace (Mike 2026-10-10, 2026-11-04): BazaarAssay gains the listing deposit (DepositOn, 2%,
         //   back as it sells: DepositBack), ListingHours (72), MaxListings (100), MaxOrders (20), MaxOrderQuantity (999)
         //   and DemandDays (7). Prices stay at the assay; buy orders hold the assay price at posting.
-        public const string Version = "1.75.0";
+        // 1.76.0 - Walking a region (Exploration, phase 1): WalkRules (CellsBetween, Floor, CellsPerSecond 1.2, SlackSeconds 2)
+        //   and the walk/begin + walk/arrive routes; a walked arrival stands the company at a site with no ambush.
+        public const string Version = "1.76.0";
     }
 }
