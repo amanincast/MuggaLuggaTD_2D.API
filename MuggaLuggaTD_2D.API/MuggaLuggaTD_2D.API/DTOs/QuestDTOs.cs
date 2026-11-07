@@ -17,7 +17,11 @@ public record QuestBoardResponse(
     List<QuestOffer> Offers,
     List<QuestEntry> Active,
     List<string> Seen,
-    int MaxActive);
+    int MaxActive,
+    List<QuestDoneEntry>? Done = null);
+
+/// <summary>A quest handed in: what it was and when. The quest book's DONE ribbon (design 13c) shows the last few.</summary>
+public record QuestDoneEntry(Guid Id, QuestOffer Offer, DateTime HandedInAt);
 
 public record QuestAcceptRequest(string OfferId);
 

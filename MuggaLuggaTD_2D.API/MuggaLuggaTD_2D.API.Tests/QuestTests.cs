@@ -319,6 +319,9 @@ public class QuestTests : IDisposable
         Assert.Equal(120, response.Gold);
         Assert.Equal(QuestRules.ChestPieces, await _db.ItemGrants.CountAsync(g => g.UserId == TestIds.Player));
         Assert.Equal(4, (await _db.PlayerMaterials.SingleAsync(m => m.MaterialName == "Lesser Essence")).Quantity);
+        // It leaves the log and is listed as done, for the book's DONE ribbon.
+        Assert.DoesNotContain(response.Board.Active, q => q.Id == quest.Id);
+        Assert.Equal(quest.Id, Assert.Single(response.Board.Done!).Id);
 
         var (twice, _) = await Quests().HandInAsync(realm, TestIds.Player, quest.Id);
         Assert.Equal(QuestError.QuestNotFound, twice.Error);

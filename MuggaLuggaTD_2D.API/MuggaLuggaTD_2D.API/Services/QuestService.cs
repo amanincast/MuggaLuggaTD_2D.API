@@ -409,11 +409,19 @@ public class QuestService
         state.UpdatedAt = Clock();
     }
 
+    /// <summary>How many handed-in quests the board carries for the book's DONE ribbon, newest first.</summary>
+    public const int DoneShown = 12;
+
     private async Task<QuestBoardResponse> ResponseAsync(Guid gameInstanceId, string userId, QuestBoardState state, List<WorldRegionData> regions)
     {
         var active = await _context.PlayerQuests.AsNoTracking()
             .Where(q => q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt == null)
             .OrderBy(q => q.AcceptedAt)
+            .ToListAsync();
+        var done = await _context.PlayerQuests.AsNoTracking()
+            .Where(q => q.GameInstanceId == gameInstanceId && q.UserId == userId && q.HandedInAt != null)
+            .OrderByDescending(q => q.HandedInAt)
+            .Take(DoneShown)
             .ToListAsync();
 
         return new QuestBoardResponse(
@@ -423,7 +431,8 @@ public class QuestService
             OffersOf(gameInstanceId, userId, state, regions),
             active.Select(q => new QuestEntry(q.Id, q.Offer, q.Progress, q.DoneAt != null, DateTime.SpecifyKind(q.AcceptedAt, DateTimeKind.Utc))).ToList(),
             state.SeenIds.ToList(),
-            QuestRules.MaxActive);
+            QuestRules.MaxActive,
+            done.Select(q => new QuestDoneEntry(q.Id, q.Offer, DateTime.SpecifyKind(q.HandedInAt!.Value, DateTimeKind.Utc))).ToList());
     }
 
     private async Task<List<WorldRegionData>?> RegionsAsync(Guid gameInstanceId)
