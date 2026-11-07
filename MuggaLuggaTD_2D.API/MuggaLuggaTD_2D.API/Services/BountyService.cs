@@ -16,8 +16,11 @@ public record BountyView(
     DateTime AppearedAt, DateTime MovesAt, DateTime EscapesAt,
     string? ClaimedByName, DateTime? ClaimedAt, bool ClaimedByMe, DateTime? MyNextAttemptAt);
 
-/// <summary>The realm's champions still roaming, and those brought down or escaped in the last day.</summary>
-public record BountiesResponse(List<BountyView> Live, List<BountyView> Recent, DateTime ServerNow);
+/// <summary>
+/// The realm's champions still roaming, those brought down or escaped in the last day, and the ones this player brought
+/// down this season (newest first, up to <see cref="BountyService.MineShown"/>: the WANTED book's MY KILLS, design 13d).
+/// </summary>
+public record BountiesResponse(List<BountyView> Live, List<BountyView> Recent, DateTime ServerNow, List<BountyView>? Mine = null);
 
 /// <summary>What the hub sends when a champion is brought down; the client asks for the rest.</summary>
 public record BountyClaimedNotification(long Slot, string Name, string Title, string ClaimedByName, string RegionId);
@@ -33,6 +36,9 @@ public sealed record BountyState(BountyChampion Champion, string RegionId, World
 public class BountyService
 {
     private static readonly TimeSpan RecentFor = TimeSpan.FromHours(24);
+
+    /// <summary>How many of this player's kills the board carries.</summary>
+    public const int MineShown = 20;
 
     private readonly ApplicationDbContext _context;
     private readonly IGameContentProvider _content;
@@ -133,7 +139,23 @@ public class BountyService
                 attempts.TryGetValue(BountyRules.SiteId(slot), out var last) ? last + BountyRules.AttemptEvery : null, now);
             (roaming ? live : recent).Add(view);
         }
-        return new BountiesResponse(live, recent.OrderByDescending(v => v.ClaimedAt ?? v.EscapesAt).ToList(), now);
+        // Mine: this season's champions this player brought down. Who each was is derived from its slot, as for the
+        // live ones; where it fell is stored. The bounty is worded from that region as it stands today.
+        var mineRows = await _context.Bounties.AsNoTracking()
+            .Where(b => b.GameInstanceId == gameInstanceId && b.SeasonNumber == instance.SeasonNumber && b.ClaimedByUserId == userId)
+            .OrderByDescending(b => b.ClaimedAt)
+            .Take(MineShown)
+            .ToListAsync();
+        string myName = mineRows.Count == 0 ? "" : names.GetValueOrDefault(userId)
+            ?? await _context.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => PlayerNames.Of(u.DisplayName, u.UserName)).FirstOrDefaultAsync() ?? "";
+        var mine = new List<BountyView>();
+        foreach (var row in mineRows)
+        {
+            var state = StateOf(gameInstanceId, row.Slot, row.ClaimedAt ?? now, regions, row, instance.SeasonNumber, instance.SeasonStartedAt);
+            if (state != null) mine.Add(ViewOf(state, now, myName, row.ClaimedAt, true, null, now));
+        }
+
+        return new BountiesResponse(live, recent.OrderByDescending(v => v.ClaimedAt ?? v.EscapesAt).ToList(), now, mine);
     }
 
     private BountyView ViewOf(BountyState state, DateTime now, string? claimedBy, DateTime? claimedAt, bool mine,
