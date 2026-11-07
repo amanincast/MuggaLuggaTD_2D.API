@@ -205,6 +205,13 @@ public class BountyTests : IDisposable
         var fallen = board.Recent.Single(b => b.Slot == slot);
         Assert.Equal(TestIds.Player, fallen.ClaimedByName);
         Assert.False(fallen.ClaimedByMe);
+
+        // MY KILLS: the winner has it, where it fell; the late one does not.
+        Assert.Empty(board.Mine!);
+        var kill = Assert.Single((await Bounties.ViewAsync(_realm, TestIds.Player)).Mine!);
+        Assert.Equal(slot, kill.Slot);
+        Assert.Equal("r2", kill.RegionId);
+        Assert.True(kill.ClaimedByMe);
     }
 
     [Fact]
