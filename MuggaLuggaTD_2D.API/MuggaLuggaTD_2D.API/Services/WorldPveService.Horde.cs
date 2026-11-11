@@ -157,7 +157,7 @@ public partial class WorldPveService
 
         var after = WorldRegionBlob.ReadRegion(resolved.RegionNode);
         var win = new HordeWinDto(target!, resolved.Region.RegionId, encounter.IsLair,
-            HordeRules.FreedCount(after, layout), HordeRules.Total(layout), HordeRules.LairOpen(after, layout),
+            HordeRules.FreedCount(after, layout), HordeRules.Total(layout, resolved.Region.Seed), HordeRules.LairOpen(after, layout),
             chestRarity, chest, encounter.IsLair ? HordeRules.ReclaimGold : 0);
 
         _logger.LogInformation("Horde site {Site} freed by {User} (run {RunId}): {Freed}/{Total}, reclaimed={Reclaimed}, {Xp} XP, {Gold} gold.",
@@ -166,5 +166,141 @@ public partial class WorldPveService
         return (new PveOutcome(PveError.None), new PveClaimResponse(
             run.LocationId, nameof(ConquestOutcome.RemoveLocation), rewards.Experience, rewards.Items, 0, materials,
             gold, goldBalance, WorldRewards: true, LockedUntil: null, WorldRewardsBackAt: null, Horde: win), world);
+    }
+
+    // -----------------------------------------------------------------
+    // Packs on the roads (phase 1b): fought where they are met, on a walk
+    // -----------------------------------------------------------------
+
+    /// <summary>
+    /// Opens a fight with a pack (<c>hordepack:{packId}</c>) as a walking company meets it. The region must be overrun and
+    /// the player's, the pack standing, and a company of theirs at rest in that region. Where on the road the pack was
+    /// met is the client's to say; the server holds the roster and refuses a pack already broken.
+    /// </summary>
+    public async Task<(PveOutcome Outcome, Guid RunId, HordeEncounterDto? Encounter)> BeginPackAsync(
+        Guid gameInstanceId, string userId, PveBeginRequest request)
+    {
+        if (!ContractMatches(request.SharedContractVersion, out var mismatch))
+            return (mismatch, Guid.Empty, null);
+
+        var worldRow = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        if (worldRow == null)
+            return (new PveOutcome(PveError.WorldNotFound, "World view data not found."), Guid.Empty, null);
+        var world = JsonNode.Parse(worldRow.GameData);
+
+        string? packId = HordeRules.PackOf(request.SiteId);
+        var regionNode = WorldRegionBlob.FindRegion(world, SiteSpec.RegionIdOf(packId));
+        if (packId == null || regionNode == null)
+            return (new PveOutcome(PveError.LocationNotFound, "There is no such warband."), Guid.Empty, null);
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        string? why = HordeRules.WhyNotBreak(region, packId, userId);
+        if (why != null)
+            return (new PveOutcome(PveError.NotPveTarget, why), Guid.Empty, null);
+
+        if (request.PartyId == null)
+            return (new PveOutcome(PveError.NoCompanyThere, "Walk there with a company first."), Guid.Empty, null);
+        var company = await PartyService.CompanyInRegionAsync(_context, gameInstanceId, userId, request.PartyId.Value, region.RegionId);
+        if (company == null)
+            return (new PveOutcome(PveError.NoCompanyThere, "That company is not in this land."), Guid.Empty, null);
+
+        var fighters = MarchingArmy.ReadIds(company.CharacterIdsJson)
+            .Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
+        var unavailable = await PartyService.WhyCannotFightAsync(_context, _logger, world, gameInstanceId, userId, fighters);
+        if (unavailable != null)
+            return (new PveOutcome(PveError.FightersUnavailable, unavailable), Guid.Empty, null);
+
+        var existing = await _context.PveRuns
+            .Where(r => r.GameInstanceId == gameInstanceId && r.UserId == userId && r.LocationId == request.SiteId && r.ClaimedAt == null)
+            .ToListAsync();
+        if (existing.Count > 0) _context.PveRuns.RemoveRange(existing);
+
+        var run = new PveRun
+        {
+            GameInstanceId = gameInstanceId,
+            UserId = userId,
+            LocationId = request.SiteId,
+            LocationType = (int)HordeRules.SiteType,
+            FighterIdsJson = MarchingArmy.WriteIds(fighters),
+            StartedAt = DateTime.UtcNow
+        };
+        _context.PveRuns.Add(run);
+        await _context.SaveChangesAsync();
+
+        var pack = HordeRules.Packs(region).First(p => p.Id == packId);
+        _logger.LogInformation("Pack run {RunId} opened by {User} against {Pack} (level {Level}, {Size}).", run.Id, userId, packId, pack.Level, pack.Size);
+        return (new PveOutcome(PveError.None), run.Id, PackEncounterOf(region, pack));
+    }
+
+    private static HordeEncounterDto PackEncounterOf(WorldRegionData region, HordeRules.Pack pack) => new(
+        HordeRules.PackSiteId(pack.Id), region.RegionId, HordeRules.SiteType, region.Biome, pack.Level, Math.Max(1, region.Tier),
+        IsLair: false, PackId: pack.Id, Size: pack.Size);
+
+    /// <summary>
+    /// Pays a broken pack, scaled to its size against a camp's waves, and marks it broken for good (row 7). The world
+    /// goes back for the caller to persist and broadcast.
+    /// </summary>
+    private async Task<(PveOutcome Outcome, PveClaimResponse? Response, JsonNode? World)> ClaimPackAsync(
+        Guid gameInstanceId, string userId, PveRun run, PveClaimRequest request)
+    {
+        run.ClaimedAt = DateTime.UtcNow;
+
+        var worldRow = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        string? packId = HordeRules.PackOf(run.LocationId);
+        var world = worldRow == null ? null : JsonNode.Parse(worldRow.GameData);
+        var regionNode = world == null ? null : WorldRegionBlob.FindRegion(world, SiteSpec.RegionIdOf(packId));
+        if (regionNode == null || packId == null)
+        {
+            await _context.SaveChangesAsync();
+            return (new PveOutcome(PveError.LocationNotFound, "That warband is gone."), null, null);
+        }
+        var region = WorldRegionBlob.ReadRegion(regionNode);
+        string? why = HordeRules.WhyNotBreak(region, packId, userId);
+        if (why != null)
+        {
+            await _context.SaveChangesAsync();
+            return (new PveOutcome(PveError.NotPveTarget, why), null, null);
+        }
+
+        var pack = HordeRules.Packs(region).First(p => p.Id == packId);
+        WorldRegionBlob.BreakHordePack(regionNode, packId);
+
+        // A pack is a skirmish: a camp's pay at its level, scaled by its size against a camp's planned fight.
+        var rewards = RunRewardCalculator.Calculate(pack.Level, Math.Max(1, region.Tier), _content.RunTuning,
+            _content.DroppableItems, Random.Shared, site: HordeRules.SiteType);
+        var materials = MaterialRewardCalculator.Calculate(pack.Level, Math.Max(1, region.Tier), _content.RunTuning,
+            _content.Materials, Random.Shared, site: HordeRules.SiteType);
+        double share = HordeRules.PackShareOfACamp(pack.Size);
+        rewards.Experience = Math.Max(1, (long)Math.Round(rewards.Experience * share));
+        rewards.Gold = GoldRules.GoldForClear(rewards.Experience);
+        if (rewards.Items.Count > 1) rewards.Items = rewards.Items.Take(1).ToList();
+        foreach (var grant in materials) grant.Quantity = Math.Max(1, (int)Math.Round(grant.Quantity * share));
+
+        await _wallet.GrantAsync(gameInstanceId, userId, materials, $"pack-claim run={run.Id}");
+        await _items.GrantAsync(gameInstanceId, userId, rewards.Items, $"pack-claim run={run.Id}");
+        long goldBalance = await _gold.GrantAsync(gameInstanceId, userId, rewards.Gold, $"pack-claim run={run.Id}");
+
+        if (_quests != null)
+        {
+            await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
+            {
+                RegionId = region.RegionId,
+                Kills = new Dictionary<string, int>(_quests.ClampKills(
+                    request.Kills, region.Biome, Math.Max(1, region.Tier), HordeRules.SiteType))
+            });
+        }
+        await _context.SaveChangesAsync();
+
+        var after = WorldRegionBlob.ReadRegion(regionNode);
+        var layout = RegionGenerator.Generate(after);
+        var win = new HordeWinDto(packId, region.RegionId, false,
+            HordeRules.FreedCount(after, layout), HordeRules.Total(layout, after.Seed), HordeRules.LairOpen(after, layout),
+            null, new List<StateManagement.Models.ItemSaveData>(), 0);
+
+        _logger.LogInformation("Pack {Pack} broken by {User} (run {RunId}): {Freed}/{Total}, {Xp} XP, {Gold} gold.",
+            packId, userId, run.Id, win.Freed, win.Total, rewards.Experience, rewards.Gold);
+
+        return (new PveOutcome(PveError.None), new PveClaimResponse(
+            run.LocationId, nameof(ConquestOutcome.RemoveLocation), rewards.Experience, rewards.Items, 0, materials,
+            rewards.Gold, goldBalance, WorldRewards: true, LockedUntil: null, WorldRewardsBackAt: null, Horde: win), world);
     }
 }

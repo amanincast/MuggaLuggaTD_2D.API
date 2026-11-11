@@ -215,7 +215,7 @@ public partial class WorldPveService
         run.ClaimedAt = now;
 
         // Giving up a horde fight costs nothing (Reclaiming row 6): we must be forgiving while people learn the game.
-        if (HordeRules.IsSiteId(run.LocationId))
+        if (HordeRules.IsSiteId(run.LocationId) || HordeRules.IsPackSiteId(run.LocationId))
         {
             await _context.SaveChangesAsync();
             return (new PveOutcome(PveError.None), new PveAbandonResponse(new List<BloodiedDto>()));
@@ -277,6 +277,8 @@ public partial class WorldPveService
 
         if (HordeRules.IsSiteId(run.LocationId))
             return await ClaimHordeAsync(gameInstanceId, userId, run, request);
+        if (HordeRules.IsPackSiteId(run.LocationId))
+            return await ClaimPackAsync(gameInstanceId, userId, run, request);
 
         var worldRow = await _context.WorldViewGameData
             .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);

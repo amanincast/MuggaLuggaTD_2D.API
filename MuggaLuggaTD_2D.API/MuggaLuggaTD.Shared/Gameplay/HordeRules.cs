@@ -105,22 +105,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return baseLevel + (int)Math.Round(NearLevelsAbove + t * (FarLevelsAbove - NearLevelsAbove));
         }
 
-        /// <summary>How many sites there are to free, the lair included.</summary>
-        public static int Total(RegionLayout layout) => HeldSites(layout).Count;
+        /// <summary>How much there is to take back: every held site (the lair included) and every pack.</summary>
+        public static int Total(RegionLayout layout, int seed) => HeldSites(layout).Count + Packs(layout, seed, 1).Count;
 
-        /// <summary>How many of them are free.</summary>
+        /// <summary>How much of it is taken back: sites freed and packs broken.</summary>
         public static int FreedCount(WorldRegionData region, RegionLayout layout)
         {
             if (region?.Horde == null) return 0;
-            var ids = new HashSet<string>(HeldSites(layout).Select(s => s.SiteId), StringComparer.Ordinal);
-            return region.Horde.Freed.Count(ids.Contains);
+            var sites = new HashSet<string>(HeldSites(layout).Select(s => s.SiteId), StringComparer.Ordinal);
+            var packs = new HashSet<string>(Packs(layout, region.Seed, 1).Select(p => p.Id), StringComparer.Ordinal);
+            return region.Horde.Freed.Count(sites.Contains) + region.Horde.Broken.Count(packs.Contains);
         }
 
-        /// <summary>The held sites still standing between the player and the lair: every one but the lair, not yet freed.</summary>
+        /// <summary>What still stands between the player and the lair: every held site but the lair, and every pack.</summary>
         public static int LeftBeforeLair(WorldRegionData region, RegionLayout layout)
         {
             if (!IsOverrun(region)) return 0;
-            return HeldSites(layout).Count(s => !IsLair(layout, s.SiteId) && !region.Horde.Freed.Contains(s.SiteId));
+            return HeldSites(layout).Count(s => !IsLair(layout, s.SiteId) && !region.Horde.Freed.Contains(s.SiteId))
+                   + Packs(layout, region.Seed, 1).Count(p => !region.Horde.Broken.Contains(p.Id));
         }
 
         /// <summary>The lair opens once every other held site is free.</summary>
@@ -150,6 +152,120 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const string RoadsHeld = "The roads out are held by the horde. Take back your land first.";
         public const string Protected = "That land is overrun, and its holder is taking it back. It can't be attacked yet.";
         public const string SiteHeld = "The horde holds it. Free it first.";
+
+        // -----------------------------------------------------------------
+        // Packs on the roads (phase 1b), fought where they are met on a walk
+        // -----------------------------------------------------------------
+
+        /// <summary>A pack's run is a pseudo-site too: <c>hordepack:{packId}</c>, the pack being <c>{regionId}:p{n}</c>.</summary>
+        public const string PackPrefix = "hordepack:";
+
+        /// <summary>How many packs a horde puts on the roads, at most (row 2: about ten); a small region has fewer.</summary>
+        public const int PackCount = 10;
+
+        /// <summary>A pack's size: 3 to 6 (row 2; Mike: "rather small, but since it's level 1 this might be OK").</summary>
+        public const int PackSmallest = 3, PackLargest = 6;
+
+        /// <summary>Packs keep this many region cells from any site, and from each other.</summary>
+        public const int PackClearOfSites = 2, PackSpacing = 4;
+
+        /// <summary>One pack: where it stands (a region cell on a road), how many, and how strong.</summary>
+        public sealed class Pack
+        {
+            public string Id;
+            public GridCell Cell;
+            public int Size;
+            public int Level;
+        }
+
+        /// <summary>About how many a camp's waves bring (the pay a pack's size is measured against).</summary>
+        public const int CampEnemies = 20;
+
+        /// <summary>A pack pays its share of a camp: its size against a camp's waves.</summary>
+        public static double PackShareOfACamp(int size) => Math.Max(1, size) / (double)CampEnemies;
+
+        public static string PackSiteId(string packId) => PackPrefix + packId;
+
+        public static bool IsPackSiteId(string siteId) =>
+            !string.IsNullOrEmpty(siteId) && siteId.StartsWith(PackPrefix, StringComparison.Ordinal);
+
+        public static string PackOf(string packSiteId) =>
+            IsPackSiteId(packSiteId) ? packSiteId.Substring(PackPrefix.Length) : null;
+
+        /// <summary>The region's packs, at its horde's level, whether broken or not.</summary>
+        public static List<Pack> Packs(WorldRegionData region) =>
+            region == null ? new List<Pack>() : Packs(RegionGenerator.Generate(region), region.Seed, Math.Max(1, region.Horde?.BaseLevel ?? 1));
+
+        /// <summary>
+        /// The packs a horde puts on a region's roads: seeded by the region, so every reader agrees. They stand on the
+        /// roads between sites (laid before the roads out, so a neighbour never moves one), clear of the sites and of
+        /// each other, the nearest the keep weakest.
+        /// </summary>
+        public static List<Pack> Packs(RegionLayout layout, int seed, int baseLevel)
+        {
+            var packs = new List<Pack>();
+            if (layout?.Sites == null || layout.Sites.Count == 0) return packs;
+            var roads = RegionRoadNetwork.Build(layout, seed, _ => false);
+            var candidates = new List<GridCell>();
+            var seen = new HashSet<GridCell>();
+            foreach (var path in roads.SitePaths)
+                foreach (var cell in path)
+                    if (seen.Add(cell) && layout.Sites.All(s => Chebyshev(s.Cell, cell) > PackClearOfSites))
+                        candidates.Add(cell);
+            candidates.Sort((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X));
+
+            var random = DeterministicRandom.ForSubject(unchecked((ulong)(uint)seed), Naming.Hash("horde-packs"));
+            for (int i = candidates.Count - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                var swap = candidates[i];
+                candidates[i] = candidates[j];
+                candidates[j] = swap;
+            }
+
+            var chosen = new List<GridCell>();
+            foreach (var cell in candidates)
+            {
+                if (chosen.Count >= PackCount) break;
+                if (chosen.Any(c => Chebyshev(c, cell) < PackSpacing)) continue;
+                chosen.Add(cell);
+            }
+
+            var keep = layout.Sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? layout.Sites[0];
+            chosen.Sort((a, b) => Distance(a, keep.Cell).CompareTo(Distance(b, keep.Cell)));
+            string regionId = SiteSpec.RegionIdOf(layout.Sites[0].SiteId);
+            for (int n = 0; n < chosen.Count; n++)
+            {
+                double t = chosen.Count <= 1 ? 0 : n / (double)(chosen.Count - 1);
+                packs.Add(new Pack
+                {
+                    Id = regionId + ":p" + n,
+                    Cell = chosen[n],
+                    Size = PackSmallest + random.Next(PackLargest - PackSmallest + 1),
+                    Level = baseLevel + (int)Math.Round(NearLevelsAbove + t * (FarLevelsAbove - NearLevelsAbove)),
+                });
+            }
+            return packs;
+        }
+
+        /// <summary>The packs still on the roads: overrun land, not yet broken.</summary>
+        public static List<Pack> StandingPacks(WorldRegionData region)
+        {
+            if (!IsOverrun(region)) return new List<Pack>();
+            return Packs(region).Where(p => !region.Horde.Broken.Contains(p.Id)).ToList();
+        }
+
+        /// <summary>Why this pack can't be fought now, or null when it can.</summary>
+        public static string WhyNotBreak(WorldRegionData region, string packId, string userId)
+        {
+            if (!IsOverrun(region)) return "No horde holds this land.";
+            if (!region.IsOwnedByPlayer(userId)) return "Only its holder can take this land back.";
+            if (Packs(region).All(p => p.Id != packId)) return "There is no such warband.";
+            if (region.Horde.Broken.Contains(packId)) return "That warband is already broken.";
+            return null;
+        }
+
+        private static int Chebyshev(GridCell a, GridCell b) => Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
         private static int Distance(GridCell a, GridCell b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
     }

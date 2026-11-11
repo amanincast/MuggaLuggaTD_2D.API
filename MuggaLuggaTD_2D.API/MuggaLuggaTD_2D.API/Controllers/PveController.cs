@@ -72,6 +72,8 @@ public class PveController : ControllerBase
             (outcome, runId, cache) = await _pve.BeginCacheAsync(gameInstanceId, userId, request);
         else if (HordeRules.IsSiteId(request.SiteId))
             (outcome, runId, horde) = await _pve.BeginHordeAsync(gameInstanceId, userId, request);
+        else if (HordeRules.IsPackSiteId(request.SiteId))
+            (outcome, runId, horde) = await _pve.BeginPackAsync(gameInstanceId, userId, request);
         else
             (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)

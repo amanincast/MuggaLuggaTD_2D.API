@@ -308,6 +308,9 @@ namespace MuggaLuggaTD.Shared
         //   and the walk/begin + walk/arrive routes; a walked arrival stands the company at a site with no ambush.
         // 1.77.0 - Reclaiming (Mike 2026-11-10): WorldRegionData.Horde (HordeState) and HordeRules. A new seat starts overrun;
         //   horde:{siteId} runs free its sites, the lair last; overrun land can't march out, earn, or be attacked.
-        public const string Version = "1.77.0";
+        // 1.78.0 - Reclaiming phase 1b: HordeRules.Packs (up to 10 seeded on the roads between sites, 3-6 strong, the ramp's
+        //   levels), hordepack:{packId} runs paid at their share of a camp; the lair now waits for the packs too, and the
+        //   count (Total, FreedCount) includes them.
+        public const string Version = "1.78.0";
     }
 }

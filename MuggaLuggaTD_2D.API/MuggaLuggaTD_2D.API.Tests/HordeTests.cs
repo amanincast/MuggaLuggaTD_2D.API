@@ -227,6 +227,8 @@ public class HordeTests : IDisposable
         var layout = RegionGenerator.Generate(region);
         foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
             region.Horde!.Freed.Add(site.SiteId);
+        foreach (var pack in HordeRules.Packs(region))
+            region.Horde!.Broken.Add(pack.Id);
         var instance = await SeedAsync(region);
         var lair = HordeRules.LairOf(layout)!;
 
@@ -343,5 +345,72 @@ public class HordeTests : IDisposable
         var sites = await hiring.SitesAsync(instance, TestIds.Player);
 
         Assert.Empty(sites);
+    }
+
+    // -----------------------------------------------------------------
+    // Packs on the roads (phase 1b)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void PacksStandOnTheRoads_ClearOfTheSites_TheSameForEveryReader()
+    {
+        var region = Overrun();
+        var layout = RegionGenerator.Generate(region);
+        var packs = HordeRules.Packs(region);
+        var again = HordeRules.Packs(region);
+        var roads = RegionRoadNetwork.Build(layout, region.Seed, _ => false);
+
+        Assert.InRange(packs.Count, 4, HordeRules.PackCount);
+        Assert.Equal(packs.Select(p => (p.Id, p.Cell, p.Size, p.Level)), again.Select(p => (p.Id, p.Cell, p.Size, p.Level)));
+        foreach (var pack in packs)
+        {
+            Assert.True(roads.IsRoad(pack.Cell), $"{pack.Id} is off the road");
+            Assert.All(layout.Sites, s => Assert.True(Math.Max(Math.Abs(s.Cell.X - pack.Cell.X), Math.Abs(s.Cell.Y - pack.Cell.Y)) > HordeRules.PackClearOfSites));
+            Assert.InRange(pack.Size, HordeRules.PackSmallest, HordeRules.PackLargest);
+        }
+        Assert.Equal(1 + HordeRules.NearLevelsAbove, packs.First().Level);
+        Assert.Equal(1 + HordeRules.FarLevelsAbove, packs.Last().Level);
+        Assert.Equal(HordeRules.HeldSites(layout).Count + packs.Count, HordeRules.Total(layout, region.Seed));
+    }
+
+    [Fact]
+    public async Task ABrokenPack_IsBrokenOnce_AndCounts()
+    {
+        var region = Overrun();
+        var instance = await SeedAsync(region);
+        var pack = HordeRules.Packs(region)[0];
+        var keep = TestWorld.SiteOfType(region, LocationType.Castle);
+        var request = (await StandAtAsync(instance, keep.SiteId)) with { SiteId = HordeRules.PackSiteId(pack.Id) };
+
+        var (begun, runId, encounter) = await Pve.BeginPackAsync(instance, TestIds.Player, request);
+        Assert.True(begun.Succeeded, begun.Message);
+        Assert.Equal(pack.Size, encounter!.Size);
+        var run = await _db.PveRuns.SingleAsync(r => r.Id == runId);
+        run.StartedAt = DateTime.UtcNow - TimeSpan.FromMinutes(1);
+        await _db.SaveChangesAsync();
+        var (claimed, response, world) = await Pve.ClaimAsync(instance, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+        Assert.True(claimed.Succeeded, claimed.Message);
+        var row = await _db.WorldViewGameData.SingleAsync(w => w.GameInstanceId == instance);
+        row.GameData = world!.ToJsonString();
+        await _db.SaveChangesAsync();
+
+        Assert.Equal(1, response!.Horde!.Freed);
+        Assert.Contains(pack.Id, (await StoredAsync(instance, "r1")).Horde!.Broken);
+        var (again, _, _) = await Pve.BeginPackAsync(instance, TestIds.Player, request);
+        Assert.Equal(PveError.NotPveTarget, again.Error);
+    }
+
+    [Fact]
+    public void TheLairWaitsForThePacksToo()
+    {
+        var region = Overrun();
+        var layout = RegionGenerator.Generate(region);
+        foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
+            region.Horde!.Freed.Add(site.SiteId);
+
+        Assert.False(HordeRules.LairOpen(region, layout));
+        Assert.Equal(HordeRules.Packs(region).Count, HordeRules.LeftBeforeLair(region, layout));
+        foreach (var pack in HordeRules.Packs(region)) region.Horde!.Broken.Add(pack.Id);
+        Assert.True(HordeRules.LairOpen(region, layout));
     }
 }
