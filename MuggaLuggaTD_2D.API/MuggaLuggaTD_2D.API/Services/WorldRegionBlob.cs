@@ -97,8 +97,62 @@ public static class WorldRegionBlob
             FortifyEndsAtUtcTicks = region["FortifyEndsAtUtcTicks"]?.GetValue<long>() ?? 0,
             Resolve = region["Resolve"]?.GetValue<int>() ?? 100,
             ClaimedAtUtcTicks = region["ClaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
-            SiteOverrides = ReadOverrides(region)
+            SiteOverrides = ReadOverrides(region),
+            Horde = ReadHorde(region["Horde"])
         };
+    }
+
+    // -----------------------------------------------------------------
+    // The horde (Reclaiming)
+    // -----------------------------------------------------------------
+
+    private static HordeState? ReadHorde(JsonNode? node)
+    {
+        if (node is not JsonObject horde) return null;
+        return new HordeState
+        {
+            BaseLevel = horde["BaseLevel"]?.GetValue<int>() ?? 1,
+            Freed = ReadStrings(horde["Freed"]),
+            Broken = ReadStrings(horde["Broken"]),
+            ReclaimedAtUtcTicks = horde["ReclaimedAtUtcTicks"]?.GetValue<long>() ?? 0
+        };
+    }
+
+    private static JsonObject WriteHorde(HordeState horde)
+    {
+        var freed = new JsonArray();
+        foreach (var id in horde.Freed) freed.Add(id);
+        var broken = new JsonArray();
+        foreach (var id in horde.Broken) broken.Add(id);
+        return new JsonObject
+        {
+            ["BaseLevel"] = horde.BaseLevel,
+            ["Freed"] = freed,
+            ["Broken"] = broken,
+            ["ReclaimedAtUtcTicks"] = horde.ReclaimedAtUtcTicks
+        };
+    }
+
+    /// <summary>Overruns a region: a horde holds every site but the keep until it is reclaimed.</summary>
+    public static void SetHorde(JsonNode regionNode, HordeState horde) => regionNode["Horde"] = WriteHorde(horde);
+
+    /// <summary>Marks a held site freed. False when the region has no horde, or the site was already free.</summary>
+    public static bool FreeHordeSite(JsonNode regionNode, string siteId)
+    {
+        var horde = ReadHorde(regionNode["Horde"]);
+        if (horde == null || horde.Freed.Contains(siteId)) return false;
+        horde.Freed.Add(siteId);
+        SetHorde(regionNode, horde);
+        return true;
+    }
+
+    /// <summary>The warlord fell: the region is reclaimed.</summary>
+    public static void Reclaim(JsonNode regionNode, DateTime at)
+    {
+        var horde = ReadHorde(regionNode["Horde"]);
+        if (horde == null) return;
+        horde.ReclaimedAtUtcTicks = at.Ticks;
+        SetHorde(regionNode, horde);
     }
 
     /// <summary>
@@ -532,7 +586,7 @@ public static class WorldRegionBlob
 
     private static JsonObject WriteRegion(WorldRegionData region)
     {
-        return new JsonObject
+        var node = new JsonObject
         {
             ["RegionId"] = region.RegionId,
             ["Hex"] = new JsonObject { ["Q"] = region.Hex.Q, ["R"] = region.Hex.R },
@@ -549,6 +603,8 @@ public static class WorldRegionBlob
             ["ClaimedAtUtcTicks"] = region.ClaimedAtUtcTicks,
             ["SiteOverrides"] = new JsonObject()
         };
+        if (region.Horde != null) node["Horde"] = WriteHorde(region.Horde);
+        return node;
     }
 }
 

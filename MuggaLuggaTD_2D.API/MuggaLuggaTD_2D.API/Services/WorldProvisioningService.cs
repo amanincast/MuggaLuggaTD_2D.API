@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.World;
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.Models;
 
@@ -148,6 +149,8 @@ public class WorldProvisioningService
         seat["Entrenchment"] = StartingEntrenchment;
         seat["Tier"] = 1;
         seat["Biome"] = (int)BiomeType.Grassland;
+        // A new seat starts overrun (Reclaiming, Mike 2026-11-10): the land is taken back before the game opens.
+        WorldRegionBlob.SetHorde(seat, HordeRules.NewHorde(await RealmGoalService.RosterLevelAsync(_context, _logger, gameInstanceId, userId)));
 
         row.GameData = world!.ToJsonString();
         row.UpdatedAt = DateTime.UtcNow;
@@ -226,6 +229,10 @@ public class WorldProvisioningService
         // rather than the same one it just finished, which would make a reset a memory wipe.
         int seed = SeedFor(gameInstanceId, instance?.SeasonNumber ?? 1);
         var regions = WorldMapGenerator.Generate(seed, seats);
+        // Every seat starts overrun, in every season (Reclaiming, Mike 2026-11-10: "the same even when a new season
+        // starts"). The ramp starts at the player's level, so a returning roster still has a fight on its hands.
+        foreach (var capital in regions.Where(r => r.IsCapital && !string.IsNullOrEmpty(r.OwnerUserId)))
+            capital.Horde = HordeRules.NewHorde(await RealmGoalService.RosterLevelAsync(_context, _logger, gameInstanceId, capital.OwnerUserId));
         // The cast the generator seated (Factions 2): three drawn from the seed, recorded so every reader agrees.
         return WorldRegionBlob.BuildWorld(seed, regions, WorldMapGenerator.CastFor(seed, regions));
     }

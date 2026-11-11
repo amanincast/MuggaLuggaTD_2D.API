@@ -66,6 +66,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static double RateFor(WorldRegionData region)
         {
             if (region == null) return 0;
+            // Overrun land earns nothing until it is taken back (Reclaiming row 1).
+            if (HordeRules.IsOverrun(region)) return 0;
 
             int entrenchment = region.Entrenchment < 0 ? 0 : (region.Entrenchment > 5 ? 5 : region.Entrenchment);
 

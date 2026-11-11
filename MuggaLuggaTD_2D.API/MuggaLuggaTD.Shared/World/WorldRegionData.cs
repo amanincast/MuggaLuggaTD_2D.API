@@ -81,12 +81,39 @@ namespace MuggaLuggaTD.Shared.World
         /// </summary>
         public Dictionary<string, SiteOverride> SiteOverrides = new Dictionary<string, SiteOverride>();
 
+        /// <summary>
+        /// The horde that holds this region, or null when none ever has (Reclaiming, Mike 2026-11-10). A new seat starts
+        /// with one: the land is overrun until its holder frees every site and kills the warlord in the lair. Ask
+        /// <see cref="Gameplay.HordeRules"/> rather than reading it directly. Written only by the server.
+        /// </summary>
+        public HordeState Horde;
+
         public bool IsOwnedByPlayer(string userId)
         {
             return Ownership == LocationOwnership.Player
                    && !string.IsNullOrEmpty(userId)
                    && string.Equals(OwnerUserId, userId, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// A horde's hold on a region (Reclaiming). Which sites it holds, where its lair is and how strong it is all come
+    /// from <see cref="Gameplay.HordeRules"/> over the region's seed; only what has been taken back is stored.
+    /// </summary>
+    [Serializable]
+    public class HordeState
+    {
+        /// <summary>The level the horde's ramp starts from: 1, or a returning player's roster level when higher.</summary>
+        public int BaseLevel = 1;
+
+        /// <summary>The ids of the sites freed from it, the lair last.</summary>
+        public List<string> Freed = new List<string>();
+
+        /// <summary>The ids of the packs broken on foot (phase 1b).</summary>
+        public List<string> Broken = new List<string>();
+
+        /// <summary>When the warlord fell and the region was reclaimed, as UTC ticks; 0 while it is overrun.</summary>
+        public long ReclaimedAtUtcTicks;
     }
 
     /// <summary>

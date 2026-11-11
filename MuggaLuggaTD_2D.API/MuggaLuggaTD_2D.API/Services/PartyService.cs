@@ -498,6 +498,9 @@ public class PartyService
         if (to == null) return (new PartyOutcome(PartyError.SiteNotFound, "There is no such place in this region."), null, 0);
         var from = RegionGenerator.Generate(home).FindSite(party.SiteId);
         if (from == null) return (new PartyOutcome(PartyError.NoRoute, $"{party.Name} has nowhere to set out from."), null, 0);
+        // Overrun land (Reclaiming row 1): the roads out are held until the region is taken back. Inside it, companies go where they like.
+        if (HordeRules.IsOverrun(home) && !string.Equals(region.RegionId, home.RegionId, StringComparison.Ordinal))
+            return (new PartyOutcome(PartyError.NoRoute, HordeRules.RoadsHeld), null, 0);
 
         // Across the world, region by region, each walked on its own roads (§6, phase 4).
         var byHex = regions.GroupBy(r => r.Hex).ToDictionary(g => g.Key, g => g.First());

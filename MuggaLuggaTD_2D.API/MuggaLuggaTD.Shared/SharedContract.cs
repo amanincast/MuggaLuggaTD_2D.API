@@ -306,6 +306,8 @@ namespace MuggaLuggaTD.Shared
         //   and DemandDays (7). Prices stay at the assay; buy orders hold the assay price at posting.
         // 1.76.0 - Walking a region (Exploration, phase 1): WalkRules (CellsBetween, Floor, CellsPerSecond 1.2, SlackSeconds 2)
         //   and the walk/begin + walk/arrive routes; a walked arrival stands the company at a site with no ambush.
-        public const string Version = "1.76.0";
+        // 1.77.0 - Reclaiming (Mike 2026-11-10): WorldRegionData.Horde (HordeState) and HordeRules. A new seat starts overrun;
+        //   horde:{siteId} runs free its sites, the lair last; overrun land can't march out, earn, or be attacked.
+        public const string Version = "1.77.0";
     }
 }
