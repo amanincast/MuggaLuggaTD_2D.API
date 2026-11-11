@@ -199,7 +199,8 @@ public class HiringService
 
         var sites = new List<HiringSite>();
         foreach (var region in regions)
-            foreach (var site in RegionGenerator.Generate(region).Sites.Where(s => s.Type == LocationType.ResourceNode))
+            // A site the horde holds can't be worked until it is freed (Reclaiming row 1).
+            foreach (var site in RegionGenerator.Generate(region).Sites.Where(s => s.Type == LocationType.ResourceNode && !HordeRules.IsHeld(region, s)))
                 sites.Add(new HiringSite(site.SiteId, region.RegionId, ResourceNodeRules.TradeOf(site.SiteId, region.Biome),
                     region.Tier, region.Biome, ResourceNodeRules.SlotsFor(region.Tier), used.GetValueOrDefault(site.SiteId)));
         return sites;
@@ -224,6 +225,8 @@ public class HiringService
             if (target == null)
             {
                 var region = regions.FirstOrDefault(r => r.RegionId == SiteSpec.RegionIdOf(siteId));
+                if (region != null && HordeRules.IsOverrun(region))
+                    return new HiringOutcome(HiringError.NoSuchSite, HordeRules.SiteHeld);
                 return region != null && !region.IsOwnedByPlayer(userId)
                     ? new HiringOutcome(HiringError.NotYourLand, "Workers can only be sent to land you hold.")
                     : new HiringOutcome(HiringError.NoSuchSite, "There is no resource site there.");

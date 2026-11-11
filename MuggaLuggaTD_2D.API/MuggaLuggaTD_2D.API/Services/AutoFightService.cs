@@ -125,6 +125,12 @@ public class AutoFightService
             if (MarchingArmy.ReadIds(party.CharacterIdsJson).Count == 0)
                 return new AutoOutcome(AutoError.Empty, $"{party.Name} has nobody in it to send.");
 
+            // Overrun land is taken back by hand (Reclaiming): the companies there wait for their leader.
+            var world = await LoadWorldAsync(gameInstanceId);
+            var here = world == null ? null : WorldRegionBlob.ReadAllRegions(world).FirstOrDefault(r => r.RegionId == party.RegionId);
+            if (HordeRules.IsOverrun(here))
+                return new AutoOutcome(AutoError.Busy, $"The horde holds this land. Lead {party.Name} yourself until it is taken back.");
+
             party.AutoMode = true;
             party.AutoOrder = AutoOrder.None;
             party.AutoRegionId = null;

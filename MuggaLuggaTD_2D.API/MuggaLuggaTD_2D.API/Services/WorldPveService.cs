@@ -213,6 +213,14 @@ public partial class WorldPveService
 
         var now = DateTime.UtcNow;
         run.ClaimedAt = now;
+
+        // Giving up a horde fight costs nothing (Reclaiming row 6): we must be forgiving while people learn the game.
+        if (HordeRules.IsSiteId(run.LocationId))
+        {
+            await _context.SaveChangesAsync();
+            return (new PveOutcome(PveError.None), new PveAbandonResponse(new List<BloodiedDto>()));
+        }
+
         var fighters = MarchingArmy.ReadIds(run.FighterIdsJson);
         await AutoFightService.BloodyAsync(_context, gameInstanceId, userId, fighters, now);
         await _context.SaveChangesAsync();
@@ -266,6 +274,9 @@ public partial class WorldPveService
             var (cacheOutcome, cacheResponse) = await ClaimCacheAsync(gameInstanceId, userId, run, request);
             return (cacheOutcome, cacheResponse, null);
         }
+
+        if (HordeRules.IsSiteId(run.LocationId))
+            return await ClaimHordeAsync(gameInstanceId, userId, run, request);
 
         var worldRow = await _context.WorldViewGameData
             .FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
@@ -474,6 +485,10 @@ public partial class WorldPveService
             if (!resolved.Site.IsFightable)
                 return new PveOutcome(PveError.NotPveTarget, "That site is already yours.");
         }
+
+        // Overrun land (Reclaiming): a site the horde holds is freed first, with its horde fight.
+        if (HordeRules.IsHeld(region, resolved.Site))
+            return new PveOutcome(PveError.NotPveTarget, HordeRules.SiteHeld);
 
         if (ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type) == ConquestOutcome.None)
             return new PveOutcome(PveError.NotPveTarget, "That site has no combat to complete.");

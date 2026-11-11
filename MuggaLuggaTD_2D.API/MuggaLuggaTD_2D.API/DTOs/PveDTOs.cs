@@ -25,7 +25,35 @@ public record PveBeginRequest(
 );
 
 public record PveBeginResponse(Guid RunId, RiftEncounterDto? Rift = null, BountyEncounterDto? Bounty = null,
-    CacheEncounterDto? Cache = null);
+    CacheEncounterDto? Cache = null, HordeEncounterDto? Horde = null);
+
+/// <summary>
+/// A fight to free a site from the horde (Reclaiming), sent with the run: the site, its land, the horde's level there,
+/// and whether it is the lair, whose fight ends with the warlord.
+/// </summary>
+public record HordeEncounterDto(
+    string SiteId,
+    string RegionId,
+    MuggaLuggaTD.Shared.World.LocationType SiteType,
+    MuggaLuggaTD.Shared.World.BiomeType Biome,
+    int Level,
+    int Tier,
+    bool IsLair);
+
+/// <summary>
+/// A site freed from the horde: how far the reclaiming has come, whether the lair is now open, and, for the lair, the
+/// reclaim reward (a chest and gold, on top of the fight's own pay).
+/// </summary>
+public record HordeWinDto(
+    string SiteId,
+    string RegionId,
+    bool Reclaimed,
+    int Freed,
+    int Total,
+    bool LairOpen,
+    Enums.ItemRarityTypes? ChestRarity,
+    List<StateManagement.Models.ItemSaveData> Chest,
+    long ReclaimGold);
 
 /// <summary>
 /// A treasure map's cache (Active Content D), sent with the run: where it lies, the site it waits by, and the guardians'
@@ -177,7 +205,9 @@ public record PveClaimResponse(
     /// <summary>A treasure map's cache opened (Active Content D); null for any other run.</summary>
     CacheWinDto? Cache = null,
     /// <summary>A treasure map this clear found (Active Content D); null most of the time.</summary>
-    MuggaLuggaTD_2D.API.Services.TreasureMapView? FoundMap = null
+    MuggaLuggaTD_2D.API.Services.TreasureMapView? FoundMap = null,
+    /// <summary>A site freed from the horde (Reclaiming); null for any other run.</summary>
+    HordeWinDto? Horde = null
 );
 
 /// <summary>

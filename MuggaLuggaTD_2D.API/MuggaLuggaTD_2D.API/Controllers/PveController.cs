@@ -61,6 +61,7 @@ public class PveController : ControllerBase
         RiftEncounterDto? rift = null;
         BountyEncounterDto? bounty = null;
         CacheEncounterDto? cache = null;
+        HordeEncounterDto? horde = null;
         PveOutcome outcome;
         Guid runId;
         if (RiftRules.IsSiteId(request.SiteId))
@@ -69,6 +70,8 @@ public class PveController : ControllerBase
             (outcome, runId, bounty) = await _pve.BeginBountyAsync(gameInstanceId, userId, request);
         else if (TreasureMapRules.IsSiteId(request.SiteId))
             (outcome, runId, cache) = await _pve.BeginCacheAsync(gameInstanceId, userId, request);
+        else if (HordeRules.IsSiteId(request.SiteId))
+            (outcome, runId, horde) = await _pve.BeginHordeAsync(gameInstanceId, userId, request);
         else
             (outcome, runId) = await _pve.BeginAsync(gameInstanceId, userId, request);
         if (!outcome.Succeeded)
@@ -80,8 +83,9 @@ public class PveController : ControllerBase
         _sessionLog.Log("PVE-BEGIN", $"user={userId} site={request.SiteId} run={runId}" +
             (rift == null ? "" : $" rift tier={rift.Tier} donor={rift.DonorBiome} mutators={string.Join("+", rift.Mutators)}") +
             (bounty == null ? "" : $" bounty={bounty.Name} region={bounty.RegionId} tier={bounty.Tier} mutators={string.Join("+", bounty.Mutators)}") +
-            (cache == null ? "" : $" cache={cache.MapId} region={cache.RegionId} tier={cache.Tier} level={cache.Level}"));
-        return Ok(new PveBeginResponse(runId, rift, bounty, cache));
+            (cache == null ? "" : $" cache={cache.MapId} region={cache.RegionId} tier={cache.Tier} level={cache.Level}") +
+            (horde == null ? "" : $" horde={horde.SiteId} level={horde.Level} lair={horde.IsLair}"));
+        return Ok(new PveBeginResponse(runId, rift, bounty, cache, horde));
     }
 
     /// <summary>
@@ -146,6 +150,19 @@ public class PveController : ControllerBase
             var won = response.Cache;
             _sessionLog.Log("PVE-CLAIM",
                 $"user={userId} site={response.SiteId} cache={won.MapId} gold={won.Gold} chest={won.ChestRarity} chain={won.NextMap != null}");
+            return Ok(response);
+        }
+
+        // A site freed from the horde changes the land: everyone sees the region's count, and its hex lights when reclaimed.
+        if (response?.Horde != null && updatedWorld != null)
+        {
+            await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
+            // Reclaimed land starts earning: the rates are worked out again from the changed world.
+            if (response.Horde.Reclaimed) await _seasons.SettleAllAsync(gameInstanceId);
+            var freed = response.Horde;
+            _sessionLog.Log("PVE-CLAIM",
+                $"user={userId} site={response.SiteId} horde freed={freed.Freed}/{freed.Total} reclaimed={freed.Reclaimed} " +
+                $"xp={response.Experience} gold={response.Gold} chest={freed.ChestRarity}");
             return Ok(response);
         }
 
