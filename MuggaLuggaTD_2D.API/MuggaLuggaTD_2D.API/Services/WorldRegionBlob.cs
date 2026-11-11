@@ -146,6 +146,16 @@ public static class WorldRegionBlob
         return true;
     }
 
+    /// <summary>Marks a pack broken. False when the region has no horde, or the pack was already broken.</summary>
+    public static bool BreakHordePack(JsonNode regionNode, string packId)
+    {
+        var horde = ReadHorde(regionNode["Horde"]);
+        if (horde == null || horde.Broken.Contains(packId)) return false;
+        horde.Broken.Add(packId);
+        SetHorde(regionNode, horde);
+        return true;
+    }
+
     /// <summary>The warlord fell: the region is reclaimed.</summary>
     public static void Reclaim(JsonNode regionNode, DateTime at)
     {

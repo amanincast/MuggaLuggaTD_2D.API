@@ -38,7 +38,10 @@ public record HordeEncounterDto(
     MuggaLuggaTD.Shared.World.BiomeType Biome,
     int Level,
     int Tier,
-    bool IsLair);
+    bool IsLair,
+    /// <summary>A pack on the roads (phase 1b): its id and how many; null and 0 for a site.</summary>
+    string? PackId = null,
+    int Size = 0);
 
 /// <summary>
 /// A site freed from the horde: how far the reclaiming has come, whether the lair is now open, and, for the lair, the

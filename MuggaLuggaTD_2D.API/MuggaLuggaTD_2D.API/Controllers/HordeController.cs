@@ -69,6 +69,8 @@ public class HordeController : ControllerBase
                 var layout = RegionGenerator.Generate(region);
                 foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
                     WorldRegionBlob.FreeHordeSite(node, site.SiteId);
+                foreach (var pack in HordeRules.Packs(region))
+                    WorldRegionBlob.BreakHordePack(node, pack.Id);
                 break;
             }
             case "clear":
