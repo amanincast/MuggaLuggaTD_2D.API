@@ -114,6 +114,7 @@ public static class WorldRegionBlob
             BaseLevel = horde["BaseLevel"]?.GetValue<int>() ?? 1,
             Freed = ReadStrings(horde["Freed"]),
             Broken = ReadStrings(horde["Broken"]),
+            LairTries = horde["LairTries"]?.GetValue<int>() ?? 0,
             ReclaimedAtUtcTicks = horde["ReclaimedAtUtcTicks"]?.GetValue<long>() ?? 0
         };
     }
@@ -129,6 +130,7 @@ public static class WorldRegionBlob
             ["BaseLevel"] = horde.BaseLevel,
             ["Freed"] = freed,
             ["Broken"] = broken,
+            ["LairTries"] = horde.LairTries,
             ["ReclaimedAtUtcTicks"] = horde.ReclaimedAtUtcTicks
         };
     }
@@ -154,6 +156,15 @@ public static class WorldRegionBlob
         horde.Broken.Add(packId);
         SetHorde(regionNode, horde);
         return true;
+    }
+
+    /// <summary>The lair's fight was begun once more (the warlord eases after losses, HordeRules.LairEase).</summary>
+    public static void TryLair(JsonNode regionNode)
+    {
+        var horde = ReadHorde(regionNode["Horde"]);
+        if (horde == null) return;
+        horde.LairTries++;
+        SetHorde(regionNode, horde);
     }
 
     /// <summary>The warlord fell: the region is reclaimed.</summary>

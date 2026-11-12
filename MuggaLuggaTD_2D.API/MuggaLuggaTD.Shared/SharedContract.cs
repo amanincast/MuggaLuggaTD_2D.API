@@ -318,6 +318,9 @@ namespace MuggaLuggaTD.Shared
         // 1.80.0 - Rarity by level (Mike 2026-11-12, after a first fight dropped a Celestial): a drop can be Legendary
         //   only from creature level 8 (ItemDropCalculator.LegendaryFromLevel), Celestial from 18, GodLike from 26; below,
         //   the best is Rare. Odds above a gate are unchanged. The rolls take the caller's Random (one per thread otherwise).
-        public const string Version = "1.80.0";
+        // 1.81.0 - Reclaiming phase 1 wrap-up (Mike 2026-11-12): the warlord's guard, a sixteenth warband (the largest, a level
+        //   under the lair) at the lair's door (HordeRules.GuardSuffix), which the lair waits for; HordeState.LairTries, and
+        //   from the third loss the warlord stands a level lower per loss, at most 3 (HordeRules.LairEase). Packs re-roll.
+        public const string Version = "1.81.0";
     }
 }

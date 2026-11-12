@@ -392,7 +392,7 @@ public class HordeTests : IDisposable
         var again = HordeRules.Packs(region);
         var roads = RegionRoadNetwork.Build(layout, region.Seed, _ => false);
 
-        Assert.Equal(HordeRules.PackCount, packs.Count);
+        Assert.Equal(HordeRules.PackCount + 1, packs.Count);   // and the warlord's guard
         Assert.Equal(packs.Select(p => (p.Id, p.Cell, p.Size, p.Level)), again.Select(p => (p.Id, p.Cell, p.Size, p.Level)));
         foreach (var pack in packs)
         {
@@ -405,8 +405,9 @@ public class HordeTests : IDisposable
                 (s.Type == LocationType.Castle ? HordeRules.PackClearOfKeep : HordeRules.PackClearOfSites), $"{pack.Id} is too near {s.SiteId}"));
             Assert.InRange(pack.Size, HordeRules.PackSmallest, HordeRules.PackLargest);
         }
-        Assert.Equal(1 + HordeRules.NearLevelsAbove, packs.First().Level);
-        Assert.Equal(1 + HordeRules.FarLevelsAbove, packs.Last().Level);
+        var road = packs.Where(p => !HordeRules.IsGuard(p.Id)).ToList();
+        Assert.Equal(1 + HordeRules.NearLevelsAbove, road.First().Level);
+        Assert.Equal(1 + HordeRules.FarLevelsAbove, road.Last().Level);
         Assert.Equal(HordeRules.HeldSites(layout).Count + packs.Count, HordeRules.Total(layout, region.Seed));
     }
 
@@ -449,5 +450,81 @@ public class HordeTests : IDisposable
         Assert.Equal(HordeRules.Packs(region).Count, HordeRules.LeftBeforeLair(region, layout));
         foreach (var pack in HordeRules.Packs(region)) region.Horde!.Broken.Add(pack.Id);
         Assert.True(HordeRules.LairOpen(region, layout));
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 1 wrap-up: the warlord's guard, and a warlord that eases
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void TheWarlordsGuard_StandsAtTheLairsDoor_TheLargest_ALevelUnderIt()
+    {
+        var region = Overrun();
+        var layout = RegionGenerator.Generate(region);
+        var lair = HordeRules.LairOf(layout)!;
+        var packs = HordeRules.Packs(region);
+        var guard = Assert.Single(packs, p => HordeRules.IsGuard(p.Id));
+
+        Assert.Equal("r1" + HordeRules.GuardSuffix, guard.Id);
+        Assert.InRange(Math.Max(Math.Abs(guard.Cell.X - lair.Cell.X), Math.Abs(guard.Cell.Y - lair.Cell.Y)),
+            HordeRules.PackClearOfSites + 1, HordeRules.GuardReach);
+        Assert.Equal(HordeRules.PackLargest, guard.Size);
+        Assert.Equal(HordeRules.LevelAt(region, layout, lair.SiteId) - 1, guard.Level);
+        Assert.All(packs.Where(p => p != guard), p =>
+            Assert.True(Math.Max(Math.Abs(p.Cell.X - guard.Cell.X), Math.Abs(p.Cell.Y - guard.Cell.Y)) >= HordeRules.PackSpacing, p.Id));
+
+        // The lair waits for it, as for any warband.
+        foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
+            region.Horde!.Freed.Add(site.SiteId);
+        foreach (var pack in packs.Where(p => p != guard)) region.Horde!.Broken.Add(pack.Id);
+        Assert.Equal(1, HordeRules.LeftBeforeLair(region, layout));
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0)]   // never tried: the card, and the first fight
+    [InlineData(1, 0, 0)]
+    [InlineData(2, 0, 0)]
+    [InlineData(3, 1, 0)]   // three lost: the card shows the fourth fight a level lower
+    [InlineData(4, 2, 1)]   // the fourth under way (three lost before it) is a level lower
+    [InlineData(5, 3, 2)]
+    [InlineData(9, 3, 3)]   // at most three
+    public void TheWarlordEases_FromTheThirdLoss(int tries, int nextFight, int underWay)
+    {
+        var region = Overrun();
+        region.Horde!.LairTries = tries;
+        Assert.Equal(nextFight, HordeRules.LairEase(region, nextFight: true));
+        Assert.Equal(underWay, HordeRules.LairEase(region));
+    }
+
+    [Fact]
+    public async Task EachTryAtTheLair_IsCounted_AndTheFourthMeetsAWeakerWarlord()
+    {
+        var region = Overrun();
+        var layout = RegionGenerator.Generate(region);
+        foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
+            region.Horde!.Freed.Add(site.SiteId);
+        foreach (var pack in HordeRules.Packs(region)) region.Horde!.Broken.Add(pack.Id);
+        var instance = await SeedAsync(region);
+        var lair = HordeRules.LairOf(layout)!;
+        int full = HordeRules.LevelAt(region, layout, lair.SiteId);
+
+        var levels = new List<int>();
+        for (int i = 0; i < 4; i++)
+        {
+            var (begun, _, encounter) = await Pve.BeginHordeAsync(instance, TestIds.Player, await StandAtAsync(instance, lair.SiteId));
+            Assert.True(begun.Succeeded, begun.Message);
+            levels.Add(encounter!.Level);
+        }
+
+        Assert.Equal(new[] { full, full, full, full - 1 }, levels);
+        Assert.Equal(4, (await StoredAsync(instance, "r1")).Horde!.LairTries);
+
+        // The fourth is won at the level it was fought at, and the region is reclaimed.
+        var run = await _db.PveRuns.SingleAsync(r => r.ClaimedAt == null);
+        run.StartedAt = DateTime.UtcNow - TimeSpan.FromMinutes(2);
+        await _db.SaveChangesAsync();
+        var (claimed, response, _) = await Pve.ClaimAsync(instance, TestIds.Player, "Mike", new PveClaimRequest(run.Id, Contract));
+        Assert.True(claimed.Succeeded, claimed.Message);
+        Assert.True(response!.Horde!.Reclaimed);
     }
 }

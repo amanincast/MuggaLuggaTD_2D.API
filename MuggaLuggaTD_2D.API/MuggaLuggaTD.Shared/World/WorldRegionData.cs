@@ -112,6 +112,12 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>The ids of the packs broken on foot (phase 1b).</summary>
         public List<string> Broken = new List<string>();
 
+        /// <summary>
+        /// How many times the lair's fight was begun (phase 1 wrap-up). Every one before the win was lost or given up,
+        /// and from the third loss the warlord eases (<see cref="Gameplay.HordeRules.LairEase"/>).
+        /// </summary>
+        public int LairTries;
+
         /// <summary>When the warlord fell and the region was reclaimed, as UTC ticks; 0 while it is overrun.</summary>
         public long ReclaimedAtUtcTicks;
     }
