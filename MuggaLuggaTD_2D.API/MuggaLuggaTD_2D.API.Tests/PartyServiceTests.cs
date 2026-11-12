@@ -139,6 +139,25 @@ public class PartyServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AFirstCompanyFormedBeforeTheSeat_StandsAtTheKeepOnceThereIsOne()
+    {
+        // A newcomer's save loads before the world seats them, so their first company was formed nowhere and could
+        // neither walk nor march: Reclaiming's intro never started (2026-11-12).
+        var (instance, keep) = await SeedAsync();
+        await Service.ListAsync(instance, TestIds.Player);
+        var stray = await _db.PlayerParties.SingleAsync();
+        stray.RegionId = null;
+        stray.SiteId = null;
+        await _db.SaveChangesAsync();
+
+        var (_, response) = await Service.ListAsync(instance, TestIds.Player);
+
+        var first = Assert.Single(response!.Parties);
+        Assert.Equal("r1", first.RegionId);
+        Assert.Equal(keep, first.SiteId);
+    }
+
+    [Fact]
     public async Task TheFirstCompanyIsFormedOnce()
     {
         var (instance, _) = await SeedAsync();

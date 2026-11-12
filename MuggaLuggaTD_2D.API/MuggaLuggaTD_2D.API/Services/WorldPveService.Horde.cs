@@ -141,8 +141,15 @@ public partial class WorldPveService
         await _items.GrantAsync(gameInstanceId, userId, rewards.Items.Concat(chest).ToList(), $"horde-claim run={run.Id}");
         long goldBalance = await _gold.GrantAsync(gameInstanceId, userId, gold, $"horde-claim run={run.Id}");
 
-        // Freeing your land counts as First Steps' "clear" (the ledger's fight).
+        // Freeing your land counts as First Steps' "clear" (the ledger's fight); the warlord's fall is "reclaim".
         if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
+        if (_firstSteps != null && encounter.IsLair) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Reclaim);
+
+        // The reclaim reward's free worker (row 5), at work at the first resource site freed.
+        (Models.HiredWorker Worker, string SiteId)? given = null;
+        if (encounter.IsLair && _hiring != null)
+            given = await _hiring.GrantReclaimWorkerAsync(gameInstanceId, userId, WorldRegionBlob.ReadRegion(resolved.RegionNode),
+                WorldRegionBlob.ReadAllRegions(world));
 
         if (_quests != null)
         {
@@ -158,7 +165,8 @@ public partial class WorldPveService
         var after = WorldRegionBlob.ReadRegion(resolved.RegionNode);
         var win = new HordeWinDto(target!, resolved.Region.RegionId, encounter.IsLair,
             HordeRules.FreedCount(after, layout), HordeRules.Total(layout, resolved.Region.Seed), HordeRules.LairOpen(after, layout),
-            chestRarity, chest, encounter.IsLair ? HordeRules.ReclaimGold : 0);
+            chestRarity, chest, encounter.IsLair ? HordeRules.ReclaimGold : 0,
+            given?.Worker.Name, given?.Worker.Trade.ToString(), given?.SiteId);
 
         _logger.LogInformation("Horde site {Site} freed by {User} (run {RunId}): {Freed}/{Total}, reclaimed={Reclaimed}, {Xp} XP, {Gold} gold.",
             target, userId, run.Id, win.Freed, win.Total, win.Reclaimed, rewards.Experience, gold);

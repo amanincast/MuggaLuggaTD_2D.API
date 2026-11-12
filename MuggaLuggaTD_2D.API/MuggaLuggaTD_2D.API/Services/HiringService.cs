@@ -173,6 +173,50 @@ public class HiringService
         return (new HiringOutcome(HiringError.None), worker);
     }
 
+    /// <summary>
+    /// Reclaiming's free worker (row 5): a Skilled local of the right trade, already at work at the first resource
+    /// site the player freed in <paramref name="region"/>. Null when the region has no resource site or every bed is
+    /// taken. <paramref name="regions"/> is the world as it now stands (the caller saves it).
+    /// </summary>
+    public async Task<(HiredWorker Worker, string SiteId)?> GrantReclaimWorkerAsync(Guid gameInstanceId, string userId,
+        WorldRegionData region, IReadOnlyList<WorldRegionData> regions)
+    {
+        var layout = RegionGenerator.Generate(region);
+        var resources = layout.Sites.Where(s => s.Type == LocationType.ResourceNode).ToList();
+        if (resources.Count == 0) return null;
+        var freed = region.Horde?.Freed ?? new List<string>();
+        var site = resources.OrderBy(s => freed.IndexOf(s.SiteId) is var i && i >= 0 ? i : int.MaxValue).First();
+
+        int held = RosterCapRules.RegionsHeldBy(userId, regions);
+        int used = await _context.HiredWorkers.CountAsync(w => w.GameInstanceId == gameInstanceId && w.UserId == userId);
+        if (used >= HiringRules.BedsFor(held)) return null;
+
+        var trade = ResourceNodeRules.TradeOf(site.SiteId, region.Biome);
+        var roll = HiringRules.Roll(Dice, region.Biome);
+        var now = Clock();
+        var worker = new HiredWorker
+        {
+            GameInstanceId = gameInstanceId,
+            UserId = userId,
+            Name = roll.Name,
+            Trade = trade,
+            Tier = HordeRules.ReclaimWorkerTier,
+            Traits = HiringTraits.Write(roll.Traits.Where(t => t != WorkerTrait.Versatile).Take(1).ToList()),
+            HomeBiome = region.Biome,
+            Look = roll.Look,
+            HiredAt = now,
+            LastSettledAt = now,
+            SiteId = site.SiteId,
+            AssignedAt = now
+        };
+        _context.HiredWorkers.Add(worker);
+        await _context.SaveChangesAsync();
+        await RerateAsync(gameInstanceId, regions, new[] { site.SiteId });
+
+        _sessionLog.Log("HIRING-RECLAIM", $"user={userId} realm={gameInstanceId} {worker.Name} {worker.Trade}/{worker.Tier} at={site.SiteId}");
+        return (worker, site.SiteId);
+    }
+
     // -----------------------------------------------------------------
     // The workforce
     // -----------------------------------------------------------------

@@ -1212,7 +1212,11 @@ public class PartyService
     private async Task<List<PlayerParty>> EnsureFirstAsync(Guid gameInstanceId, string userId, JsonNode world)
     {
         var parties = await ReadPartiesAsync(gameInstanceId, userId);
-        if (parties.Count > 0) return await SettledAsync(gameInstanceId, parties);
+        if (parties.Count > 0)
+        {
+            await PlaceStraysAsync(parties, world, userId);
+            return await SettledAsync(gameInstanceId, parties);
+        }
 
         var gate = FirstCompanyLocks.GetOrAdd($"{gameInstanceId}:{userId}", _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync();
@@ -1287,6 +1291,25 @@ public class PartyService
 
         party.RegionId = capital.RegionId;
         party.SiteId = RegionGenerator.Generate(capital).Sites.FirstOrDefault(s => s.Type == LocationType.Castle)?.SiteId;
+    }
+
+    /// <summary>
+    /// A newcomer's first company is formed when their save first loads, which can come before the world seats them:
+    /// with no capital yet, it was formed nowhere, and a company nowhere can't walk or march (Reclaiming's intro could
+    /// not start). Once the seat exists, the next read stands it at the keep.
+    /// </summary>
+    private async Task PlaceStraysAsync(List<PlayerParty> parties, JsonNode world, string userId)
+    {
+        bool placed = false;
+        foreach (var party in parties)
+        {
+            if (party.State != CompanyState.Idle || !string.IsNullOrEmpty(party.RegionId) || !string.IsNullOrEmpty(party.SiteId)) continue;
+            StandAtCapital(party, world, userId);
+            if (string.IsNullOrEmpty(party.SiteId)) continue;
+            placed = true;
+            _sessionLog.Log("PARTY-PLACE", $"user={userId} party={party.Id} at={party.SiteId} (formed before the seat)");
+        }
+        if (placed) await _context.SaveChangesAsync();
     }
 
     private async Task<PartiesResponse> ResponseAsync(Guid gameInstanceId, string userId, JsonNode world)
