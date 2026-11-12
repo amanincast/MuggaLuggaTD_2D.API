@@ -71,7 +71,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ItemCount = 1
             };
             Items.Utilities.ItemDropCalculator.ApplyDropProperties(
-                item, level, template.ImplicitPool, template.ExplicitPool, rarity);
+                item, level, template.ImplicitPool, template.ExplicitPool, rarity, random);
             return item;
         }
     }

@@ -100,10 +100,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
                     // An open-field enemy is one of many: it drops at its share of the usual odds.
                     if (itemTemplates != null && itemTemplates.Count > 0
-                        && ItemDropCalculator.ShouldDropItem(enemyLevel)
+                        && ItemDropCalculator.ShouldDropItem(enemyLevel, random)
                         && (share >= 1.0 || random.NextDouble() < share))
                     {
-                        var drop = RollItem(itemTemplates[random.Next(itemTemplates.Count)], enemyLevel, rarityStepsDown);
+                        var drop = RollItem(itemTemplates[random.Next(itemTemplates.Count)], enemyLevel, rarityStepsDown, random);
                         if (drop != null) rewards.Items.Add(drop);
                     }
                 }
@@ -162,7 +162,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Builds a persisted item from a content template, running the same rarity/tier/attribute
         /// rolls the client's drop path uses.
         /// </summary>
-        private static ItemSaveData RollItem(ItemTemplate template, int enemyLevel, int rarityStepsDown)
+        private static ItemSaveData RollItem(ItemTemplate template, int enemyLevel, int rarityStepsDown, Random random)
         {
             if (template == null)
                 return null;
@@ -178,9 +178,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             ItemRarityTypes? rarity = null;
             if (rarityStepsDown > 0)
                 rarity = (ItemRarityTypes)Math.Max((int)ItemRarityTypes.Common,
-                    (int)ItemDropCalculator.CalculateRarity(enemyLevel) - rarityStepsDown);
+                    (int)ItemDropCalculator.CalculateRarity(enemyLevel, random) - rarityStepsDown);
 
-            ItemDropCalculator.ApplyDropProperties(item, enemyLevel, template.ImplicitPool, template.ExplicitPool, rarity);
+            ItemDropCalculator.ApplyDropProperties(item, enemyLevel, template.ImplicitPool, template.ExplicitPool, rarity, random);
             return item;
         }
     }
