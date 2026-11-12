@@ -41,7 +41,8 @@ public class HordeController : ControllerBase
 
     /// <summary>
     /// Changes my capital's horde: <c>overrun</c> (a fresh one, at my level), <c>lair</c> (every site freed but the
-    /// lair), or <c>clear</c> (no horde, as a seat made before Reclaiming).
+    /// lair), <c>guard</c> (the same, but the warlord's guard still stands), <c>lost</c> (one more lair try, as a lost
+    /// fight leaves; the third eases the warlord), or <c>clear</c> (no horde, as a seat made before Reclaiming).
     /// </summary>
     [HttpPost("debug/{what}")]
     public async Task<IActionResult> Debug(Guid gameInstanceId, string what)
@@ -63,21 +64,25 @@ public class HordeController : ControllerBase
                 WorldRegionBlob.SetHorde(node, HordeRules.NewHorde(await RealmGoalService.RosterLevelAsync(_context, _logger, gameInstanceId, userId)));
                 break;
             case "lair":
+            case "guard":
             {
                 var region = WorldRegionBlob.ReadRegion(node);
                 if (!HordeRules.IsOverrun(region)) return BadRequest(new { message = "Your land is not overrun." });
                 var layout = RegionGenerator.Generate(region);
                 foreach (var site in HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)))
                     WorldRegionBlob.FreeHordeSite(node, site.SiteId);
-                foreach (var pack in HordeRules.Packs(region))
+                foreach (var pack in HordeRules.Packs(region).Where(p => what == "lair" || !HordeRules.IsGuard(p.Id)))
                     WorldRegionBlob.BreakHordePack(node, pack.Id);
                 break;
             }
+            case "lost":
+                WorldRegionBlob.TryLair(node);
+                break;
             case "clear":
                 (node as JsonObject)?.Remove("Horde");
                 break;
             default:
-                return BadRequest(new { message = "overrun, lair or clear." });
+                return BadRequest(new { message = "overrun, lair, guard, lost or clear." });
         }
 
         row.GameData = world!.ToJsonString();

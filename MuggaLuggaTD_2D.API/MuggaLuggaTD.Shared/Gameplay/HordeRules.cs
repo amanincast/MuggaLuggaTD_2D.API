@@ -32,6 +32,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>The lair's warlord stands this many levels over the base (row 4: about LV 6 for a new player).</summary>
         public const int LairLevelsAbove = 5;
 
+        /// <summary>
+        /// A player who can't win (spec §4, Mike 2026-11-12: "a good idea if the player can't beat it"): from the
+        /// <see cref="LairEasesAfter"/>th loss at the lair, the warlord stands a level lower for each further loss, at
+        /// most <see cref="LairEaseMost"/> lower.
+        /// </summary>
+        public const int LairEasesAfter = 3, LairEaseMost = 3;
+
+        /// <summary>
+        /// How many levels the warlord has eased. <paramref name="nextFight"/>: for the fight not yet begun (the card),
+        /// whose losses are every try so far; otherwise for the fight under way, whose own try is not a loss.
+        /// </summary>
+        public static int LairEase(WorldRegionData region, bool nextFight = false)
+        {
+            int tries = Math.Max(0, region?.Horde?.LairTries ?? 0);
+            int losses = nextFight ? tries : Math.Max(0, tries - 1);
+            return Math.Min(LairEaseMost, Math.Max(0, losses - (LairEasesAfter - 1)));
+        }
+
         /// <summary>The reclaim reward (row 5): a Rare chest at the lair's level, and gold.</summary>
         public const long ReclaimGold = 500;
 
@@ -99,10 +117,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
             !string.IsNullOrEmpty(siteId) && LairOf(layout)?.SiteId == siteId;
 
         /// <summary>The level of the horde at a held site: a ramp outward from the keep (row 4), the lair at its top.</summary>
-        public static int LevelAt(WorldRegionData region, RegionLayout layout, string siteId)
+        public static int LevelAt(WorldRegionData region, RegionLayout layout, string siteId, bool nextFight = false)
         {
             int baseLevel = Math.Max(1, region?.Horde?.BaseLevel ?? 1);
-            if (IsLair(layout, siteId)) return baseLevel + LairLevelsAbove;
+            if (IsLair(layout, siteId)) return baseLevel + LairLevelsAbove - LairEase(region, nextFight);
             var ramp = HeldSites(layout).Where(s => !IsLair(layout, s.SiteId)).ToList();
             int index = ramp.FindIndex(s => s.SiteId == siteId);
             if (index < 0) return baseLevel;
@@ -199,6 +217,18 @@ namespace MuggaLuggaTD.Shared.Gameplay
             public int Level;
         }
 
+        /// <summary>
+        /// The warlord's guard (row 4, phase 1 wrap-up): one more warband, the largest, at the lair's door, a level under
+        /// the warlord. It is a pack like the rest, so the lair waits for it too.
+        /// </summary>
+        public const string GuardSuffix = ":guard";
+        public const int GuardLevelsAbove = LairLevelsAbove - 1;
+
+        /// <summary>The guard stands this many region cells from the lair, at most (and clear of it, as every pack is).</summary>
+        public const int GuardReach = 3;
+
+        public static bool IsGuard(string packId) => packId != null && packId.EndsWith(GuardSuffix, StringComparison.Ordinal);
+
         /// <summary>About how many a camp's waves bring (the pay a pack's size is measured against).</summary>
         public const int CampEnemies = 20;
 
@@ -253,11 +283,31 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var random = DeterministicRandom.ForSubject(unchecked((ulong)(uint)seed), Naming.Hash("horde-packs"));
             var candidates = Shuffled(onRoad, random).Concat(Shuffled(besideRoad, random)).ToList();
 
+            // The guard first, so the other warbands keep their distance from it: the nearest road cell to the lair's
+            // door, else open land, on the side facing home.
+            var keepSite = layout.Sites.FirstOrDefault(s => s.Type == LocationType.Castle) ?? layout.Sites[0];
+            var lair = LairOf(layout);
+            GridCell? guard = null;
+            if (lair != null)
+            {
+                var roadCells = new HashSet<GridCell>(onRoad);
+                guard = onRoad.Concat(besideRoad)
+                    .Where(c => Chebyshev(c, lair.Cell) <= GuardReach)
+                    .OrderBy(c => roadCells.Contains(c) ? 0 : 1)
+                    .ThenBy(c => Chebyshev(c, lair.Cell))
+                    .ThenBy(c => Distance(c, keepSite.Cell))
+                    .ThenBy(c => c.Y).ThenBy(c => c.X)
+                    .Cast<GridCell?>()
+                    .FirstOrDefault();
+            }
+
             var chosen = new List<GridCell>();
+            if (guard.HasValue) candidates.Remove(guard.Value);
             foreach (var cell in candidates)
             {
                 if (chosen.Count >= PackCount) break;
                 if (chosen.Any(c => Chebyshev(c, cell) < PackSpacing)) continue;
+                if (guard.HasValue && Chebyshev(guard.Value, cell) < PackSpacing) continue;
                 chosen.Add(cell);
             }
 
@@ -275,6 +325,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
                     Level = baseLevel + (int)Math.Round(NearLevelsAbove + t * (FarLevelsAbove - NearLevelsAbove)),
                 });
             }
+            if (guard.HasValue)
+                packs.Add(new Pack { Id = regionId + GuardSuffix, Cell = guard.Value, Size = PackLargest, Level = baseLevel + GuardLevelsAbove });
             return packs;
         }
 

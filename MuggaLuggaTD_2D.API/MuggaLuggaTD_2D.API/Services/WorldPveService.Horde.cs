@@ -66,11 +66,24 @@ public partial class WorldPveService
             StartedAt = DateTime.UtcNow
         };
         _context.PveRuns.Add(run);
+
+        // The lair counts its tries: every one before the win was lost or given up, and from the third loss the
+        // warlord eases (HordeRules.LairEase). Counted here, as a loss is never reported, only a win claimed.
+        if (HordeRules.IsLair(layout, target))
+        {
+            var tracked = await _context.WorldViewGameData.FirstAsync(w => w.GameInstanceId == gameInstanceId);
+            var live = JsonNode.Parse(tracked.GameData)!;
+            var liveSite = WorldRegionBlob.ResolveSite(live, target)!;
+            WorldRegionBlob.TryLair(liveSite.RegionNode);
+            tracked.GameData = live.ToJsonString();
+            tracked.UpdatedAt = DateTime.UtcNow;
+            resolved = WorldRegionBlob.ResolveSite(live, target)!;
+        }
         await _context.SaveChangesAsync();
 
         var encounter = HordeEncounterOf(resolved, layout);
-        _logger.LogInformation("Horde run {RunId} opened by {User} at {Site} (level {Level}, lair {Lair}).",
-            run.Id, userId, target, encounter.Level, encounter.IsLair);
+        _logger.LogInformation("Horde run {RunId} opened by {User} at {Site} (level {Level}, lair {Lair}, try {Try}, eased {Eased}).",
+            run.Id, userId, target, encounter.Level, encounter.IsLair, resolved.Region.Horde?.LairTries ?? 0, HordeRules.LairEase(resolved.Region));
         return (new PveOutcome(PveError.None), run.Id, encounter);
     }
 
