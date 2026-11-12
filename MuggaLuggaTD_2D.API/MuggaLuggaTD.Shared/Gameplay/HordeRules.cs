@@ -35,6 +35,11 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>The reclaim reward (row 5): a Rare chest at the lair's level, and gold.</summary>
         public const long ReclaimGold = 500;
 
+        /// <summary>
+        /// The reclaim reward's free worker (row 5): a Skilled local, at work at the first resource site freed (phase 1c).
+        /// </summary>
+        public const WorkerTier ReclaimWorkerTier = WorkerTier.Skilled;
+
         public static string SiteId(string siteId) => SitePrefix + siteId;
 
         public static bool IsSiteId(string siteId) =>
@@ -160,14 +165,30 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>A pack's run is a pseudo-site too: <c>hordepack:{packId}</c>, the pack being <c>{regionId}:p{n}</c>.</summary>
         public const string PackPrefix = "hordepack:";
 
-        /// <summary>How many packs a horde puts on the roads, at most (row 2: about ten); a small region has fewer.</summary>
-        public const int PackCount = 10;
+        /// <summary>
+        /// How many packs a horde puts on the roads, at most. Row 2 said about ten; Mike 2026-11-12, "the more the merrier":
+        /// with packs beside the roads too, a seat now has 15 (it was 3 to 10, about 6).
+        /// </summary>
+        public const int PackCount = 15;
 
         /// <summary>A pack's size: 3 to 6 (row 2; Mike: "rather small, but since it's level 1 this might be OK").</summary>
         public const int PackSmallest = 3, PackLargest = 6;
 
-        /// <summary>Packs keep this many region cells from any site, and from each other.</summary>
-        public const int PackClearOfSites = 2, PackSpacing = 4;
+        /// <summary>
+        /// Packs stand more than this many region cells from any site, and at least this far from each other. A region
+        /// cell is 6 walk tiles and a sleeper sees 9, so packs 2 cells apart (12 tiles) rarely wake each other (when they
+        /// do, it is one engagement, paid together), and one clear of a site stands about 12 tiles from its door.
+        /// </summary>
+        public const int PackClearOfSites = 1, PackSpacing = 2;
+
+        /// <summary>
+        /// The keep keeps them further off: a walk starts at its door, and a pack one cell away saw the party and
+        /// charged three seconds in, before a newcomer had their bearings (2026-11-12).
+        /// </summary>
+        public const int PackClearOfKeep = 2;
+
+        /// <summary>Packs may stand on open land this many cells off a road (6 walk tiles: in sight from it).</summary>
+        public const int PackBesideRoad = 1;
 
         /// <summary>One pack: where it stands (a region cell on a road), how many, and how strong.</summary>
         public sealed class Pack
@@ -206,22 +227,31 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var packs = new List<Pack>();
             if (layout?.Sites == null || layout.Sites.Count == 0) return packs;
             var roads = RegionRoadNetwork.Build(layout, seed, _ => false);
-            var candidates = new List<GridCell>();
+            bool ClearOfSites(GridCell cell) => layout.Sites.All(s =>
+                Chebyshev(s.Cell, cell) > (s.Type == LocationType.Castle ? PackClearOfKeep : PackClearOfSites));
+            var onRoad = new List<GridCell>();
             var seen = new HashSet<GridCell>();
             foreach (var path in roads.SitePaths)
                 foreach (var cell in path)
-                    if (seen.Add(cell) && layout.Sites.All(s => Chebyshev(s.Cell, cell) > PackClearOfSites))
-                        candidates.Add(cell);
-            candidates.Sort((a, b) => a.Y != b.Y ? a.Y.CompareTo(b.Y) : a.X.CompareTo(b.X));
+                    if (seen.Add(cell) && ClearOfSites(cell))
+                        onRoad.Add(cell);
+
+            // Beside the road too (Mike 2026-11-12, more warbands): open land a cell off it, still in sight of the road,
+            // so a small seat with short roads fills up as a large one does. Road cells are taken first.
+            var besideRoad = new List<GridCell>();
+            foreach (var path in roads.SitePaths)
+                foreach (var cell in path)
+                    for (int dx = -PackBesideRoad; dx <= PackBesideRoad; dx++)
+                        for (int dy = -PackBesideRoad; dy <= PackBesideRoad; dy++)
+                        {
+                            var near = new GridCell(cell.X + dx, cell.Y + dy);
+                            if (near.X < 0 || near.Y < 0 || near.X >= layout.Width || near.Y >= layout.Height) continue;
+                            if (!seen.Add(near) || !ClearOfSites(near) || !RegionLayout.IsBuildable(layout.TerrainAt(near))) continue;
+                            besideRoad.Add(near);
+                        }
 
             var random = DeterministicRandom.ForSubject(unchecked((ulong)(uint)seed), Naming.Hash("horde-packs"));
-            for (int i = candidates.Count - 1; i > 0; i--)
-            {
-                int j = random.Next(i + 1);
-                var swap = candidates[i];
-                candidates[i] = candidates[j];
-                candidates[j] = swap;
-            }
+            var candidates = Shuffled(onRoad, random).Concat(Shuffled(besideRoad, random)).ToList();
 
             var chosen = new List<GridCell>();
             foreach (var cell in candidates)
@@ -246,6 +276,20 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 });
             }
             return packs;
+        }
+
+        /// <summary>A seeded shuffle, in a fixed order first so every reader agrees.</summary>
+        private static List<GridCell> Shuffled(List<GridCell> cells, DeterministicRandom random)
+        {
+            var list = cells.OrderBy(c => c.Y).ThenBy(c => c.X).ToList();
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                var swap = list[i];
+                list[i] = list[j];
+                list[j] = swap;
+            }
+            return list;
         }
 
         /// <summary>The packs still on the roads: overrun land, not yet broken.</summary>

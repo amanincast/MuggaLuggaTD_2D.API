@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using MuggaLuggaTD.Shared.Gameplay;
+using MuggaLuggaTD.Shared.World;
 using MuggaLuggaTD_2D.API.Data;
 using MuggaLuggaTD_2D.API.Models;
 using StateManagement.Models;
@@ -7,7 +9,7 @@ using StateManagement.Models;
 namespace MuggaLuggaTD_2D.API.Services;
 
 /// <summary>
-/// First Steps (design 12c): the six steps a player takes on a world, and the Rare chest for taking
+/// First Steps (design 12c): the seven steps a player takes on a world, and the Rare chest for taking
 /// all of them. See <see cref="FirstStepsProgress"/> and <see cref="FirstStepsRules"/>.
 ///
 /// <para>Steps are recorded by the service that did the thing (<see cref="TavernService"/>,
@@ -36,6 +38,28 @@ public class FirstStepsService
     public async Task<FirstStepsProgress?> ReadAsync(Guid gameInstanceId, string userId)
         => await _context.FirstStepsProgress.AsNoTracking()
             .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
+
+    /// <summary>
+    /// The steps done: those recorded, and Reclaim when the player's seat is not overrun (made before Reclaiming, or
+    /// already taken back), so no older seat loses its chest to a step it could never take.
+    /// </summary>
+    public async Task<List<string>> DoneAsync(Guid gameInstanceId, string userId, FirstStepsProgress? progress = null)
+    {
+        progress ??= await ReadAsync(gameInstanceId, userId);
+        var done = progress?.DoneSteps.ToList() ?? new List<string>();
+        if (!done.Contains(FirstStepsRules.Reclaim) && !await SeatOverrunAsync(gameInstanceId, userId))
+            done.Add(FirstStepsRules.Reclaim);
+        return done;
+    }
+
+    private async Task<bool> SeatOverrunAsync(Guid gameInstanceId, string userId)
+    {
+        var row = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        if (row == null) return false;
+        var seat = WorldRegionBlob.ReadAllRegions(JsonNode.Parse(row.GameData))
+            .FirstOrDefault(r => r.IsCapital && r.IsOwnedByPlayer(userId));
+        return HordeRules.IsOverrun(seat);
+    }
 
     /// <summary>Ticks a step. Idempotent, and never throws.</summary>
     public async Task RecordAsync(Guid gameInstanceId, string userId, string step)
@@ -69,12 +93,12 @@ public class FirstStepsService
         }
     }
 
-    /// <summary>Opens the chest: all six done, not yet opened. Grants one Rare piece of gear.</summary>
+    /// <summary>Opens the chest: every step done, not yet opened. Grants one Rare piece of gear.</summary>
     public async Task<(FirstStepsError Error, ItemSaveData? Item)> OpenChestAsync(Guid gameInstanceId, string userId)
     {
         var progress = await _context.FirstStepsProgress
             .FirstOrDefaultAsync(p => p.GameInstanceId == gameInstanceId && p.UserId == userId);
-        if (progress == null || !FirstStepsRules.AllDone(progress.DoneSteps))
+        if (progress == null || !FirstStepsRules.AllDone(await DoneAsync(gameInstanceId, userId, progress)))
             return (FirstStepsError.NotFinished, null);
         if (progress.ChestOpenedAt != null)
             return (FirstStepsError.AlreadyOpened, null);

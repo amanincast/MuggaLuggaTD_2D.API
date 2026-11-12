@@ -311,6 +311,10 @@ namespace MuggaLuggaTD.Shared
         // 1.78.0 - Reclaiming phase 1b: HordeRules.Packs (up to 10 seeded on the roads between sites, 3-6 strong, the ramp's
         //   levels), hordepack:{packId} runs paid at their share of a camp; the lair now waits for the packs too, and the
         //   count (Total, FreedCount) includes them.
-        public const string Version = "1.78.0";
+        // 1.79.0 - Reclaiming phase 1c. More warbands (Mike 2026-11-12, "the more the merrier"): PackCount 15, PackSpacing 2,
+        //   PackClearOfSites 1 (2 for the keep, where a walk starts), and packs may stand on open land a cell beside a road (PackBesideRoad), so a seat has 15
+        //   where it had 3-10 (about 6); pack ids and levels re-roll. FirstStepsRules gains Reclaim (seven steps; a seat
+        //   not overrun counts it done). The lair's win gives a Skilled worker (HordeRules.ReclaimWorkerTier).
+        public const string Version = "1.79.0";
     }
 }

@@ -73,6 +73,45 @@ public class FirstStepsTests : IDisposable
             "an item the ledger did not record would vanish at the next save");
     }
 
+    // Reclaiming phase 1c: "Reclaim your land" is a step, taken when the warlord falls.
+
+    private async Task SeatAsync(Guid realm, bool overrun)
+    {
+        var seat = TestWorld.OwnedBy(Player, "r1", tier: 1);
+        seat.IsCapital = true;
+        if (overrun) seat.Horde = HordeRules.NewHorde(1);
+        await _db.AddWorldAsync(realm, TestWorld.Blob(seat));
+    }
+
+    private async Task DoAllBut(Guid realm, string skipped)
+    {
+        foreach (var step in FirstStepsRules.Steps.Where(s => s != skipped)) await Steps.RecordAsync(realm, Player, step);
+    }
+
+    [Fact]
+    public async Task AnOverrunSeat_KeepsTheChestShut_UntilItIsReclaimed()
+    {
+        await SeatAsync(Emberhold, overrun: true);
+        await DoAllBut(Emberhold, FirstStepsRules.Reclaim);
+
+        Assert.DoesNotContain(FirstStepsRules.Reclaim, await Steps.DoneAsync(Emberhold, Player));
+        Assert.Equal(FirstStepsError.NotFinished, (await Steps.OpenChestAsync(Emberhold, Player)).Error);
+
+        await Steps.RecordAsync(Emberhold, Player, FirstStepsRules.Reclaim);
+        Assert.Equal(FirstStepsError.None, (await Steps.OpenChestAsync(Emberhold, Player)).Error);
+    }
+
+    [Fact]
+    public async Task ASeatThatWasNeverOverrun_HasReclaimedAlready()
+    {
+        // Seats made before Reclaiming have no horde: they must not lose their chest to a step they can't take.
+        await SeatAsync(Emberhold, overrun: false);
+        await DoAllBut(Emberhold, FirstStepsRules.Reclaim);
+
+        Assert.Contains(FirstStepsRules.Reclaim, await Steps.DoneAsync(Emberhold, Player));
+        Assert.Equal(FirstStepsError.None, (await Steps.OpenChestAsync(Emberhold, Player)).Error);
+    }
+
     [Fact]
     public async Task TheChestOpensOnce()
     {

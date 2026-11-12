@@ -62,7 +62,7 @@ public class FirstStepsController : ControllerBase
         return error switch
         {
             FirstStepsError.None => Ok(new FirstStepsChestResponse(item!, (await ProgressOf(gameInstanceId, userId)).Done)),
-            FirstStepsError.NotFinished => Conflict(new { error = "Finish all six steps first." }),
+            FirstStepsError.NotFinished => Conflict(new { error = "Finish every step first." }),
             FirstStepsError.AlreadyOpened => Conflict(new { error = "You have already opened this world's chest." }),
             _ => Conflict(new { error = "The chest is empty: there is no gear to give." })
         };
@@ -71,7 +71,7 @@ public class FirstStepsController : ControllerBase
     private async Task<FirstStepsResponse> ProgressOf(Guid gameInstanceId, string userId)
     {
         var progress = await _steps.ReadAsync(gameInstanceId, userId);
-        return new FirstStepsResponse(progress?.DoneSteps.ToList() ?? new List<string>(), progress?.ChestOpenedAt != null);
+        return new FirstStepsResponse(await _steps.DoneAsync(gameInstanceId, userId, progress), progress?.ChestOpenedAt != null);
     }
 
     private string? UserId() => User.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -56,7 +56,10 @@ public record HordeWinDto(
     bool LairOpen,
     Enums.ItemRarityTypes? ChestRarity,
     List<StateManagement.Models.ItemSaveData> Chest,
-    long ReclaimGold);
+    long ReclaimGold,
+    string? WorkerName = null,
+    string? WorkerTrade = null,
+    string? WorkerSiteId = null);
 
 /// <summary>
 /// A treasure map's cache (Active Content D), sent with the run: where it lies, the site it waits by, and the guardians'

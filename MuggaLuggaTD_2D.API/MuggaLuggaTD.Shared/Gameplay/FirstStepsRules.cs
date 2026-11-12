@@ -25,8 +25,14 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const string Clear = "clear";
         public const string Garrison = "garrison";
 
-        /// <summary>In the ledger's order.</summary>
-        public static readonly IReadOnlyList<string> Steps = new[] { Company, Equip, Hire, March, Clear, Garrison };
+        /// <summary>
+        /// Reclaim your land (Reclaiming phase 1c): recorded when the warlord falls. A seat that is not overrun (made
+        /// before Reclaiming, or already reclaimed) counts it as done, so no older seat loses its chest.
+        /// </summary>
+        public const string Reclaim = "reclaim";
+
+        /// <summary>In the ledger's order. Reclaiming comes first: until it is done, the roads out are held.</summary>
+        public static readonly IReadOnlyList<string> Steps = new[] { Company, Equip, Reclaim, Hire, March, Clear, Garrison };
 
         /// <summary>What a client may tick itself. Everything else the server records.</summary>
         public static readonly IReadOnlyList<string> ClientReported = new[] { Company, Equip };

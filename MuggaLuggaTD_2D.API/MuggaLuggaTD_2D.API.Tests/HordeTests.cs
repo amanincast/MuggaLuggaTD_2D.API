@@ -76,16 +76,17 @@ public class HordeTests : IDisposable
     }
 
     /// <summary>Frees a site with a won horde fight, writing back the world the claim returns.</summary>
-    private async Task<PveClaimResponse> FreeAsync(Guid instance, string siteId)
+    private async Task<PveClaimResponse> FreeAsync(Guid instance, string siteId, WorldPveService? service = null)
     {
-        var (begun, runId, encounter) = await Pve.BeginHordeAsync(instance, TestIds.Player, await StandAtAsync(instance, siteId));
+        var pve = service ?? Pve;
+        var (begun, runId, encounter) = await pve.BeginHordeAsync(instance, TestIds.Player, await StandAtAsync(instance, siteId));
         Assert.True(begun.Succeeded, begun.Message);
         Assert.NotNull(encounter);
         var run = await _db.PveRuns.SingleAsync(r => r.Id == runId);
         run.StartedAt = DateTime.UtcNow - TimeSpan.FromMinutes(2);
         await _db.SaveChangesAsync();
 
-        var (claimed, response, world) = await Pve.ClaimAsync(instance, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
+        var (claimed, response, world) = await pve.ClaimAsync(instance, TestIds.Player, "Mike", new PveClaimRequest(runId, Contract));
         Assert.True(claimed.Succeeded, claimed.Message);
         var row = await _db.WorldViewGameData.SingleAsync(w => w.GameInstanceId == instance);
         row.GameData = world!.ToJsonString();
@@ -247,6 +248,37 @@ public class HordeTests : IDisposable
     }
 
     [Fact]
+    public async Task TheLairsWin_GivesAWorker_AtTheFirstResourceSiteFreed_AndTicksTheLedger()
+    {
+        // Phase 1c (row 5): a free worker, already at work, and "Reclaim your land" on First Steps.
+        var region = Overrun();
+        var layout = RegionGenerator.Generate(region);
+        var held = HordeRules.HeldSites(layout).Where(s => !HordeRules.IsLair(layout, s.SiteId)).ToList();
+        var resources = held.Where(s => s.Type == LocationType.ResourceNode).ToList();
+        Assert.NotEmpty(resources);
+        var firstResource = resources.Last();   // freed first below, so not simply the layout's first
+        region.Horde!.Freed.Add(firstResource.SiteId);
+        foreach (var site in held.Where(s => s.SiteId != firstResource.SiteId)) region.Horde.Freed.Add(site.SiteId);
+        foreach (var pack in HordeRules.Packs(region)) region.Horde.Broken.Add(pack.Id);
+        var instance = await SeedAsync(region);
+        var lair = HordeRules.LairOf(layout)!;
+
+        var steps = new FirstStepsService(_db, _content, Items, new FakeSessionLog());
+        var hiring = new HiringService(_db, Wallet, Gold, new FakeSessionLog());
+        var pve = new WorldPveService(_db, _content, Wallet, Gold, Tavern, NullLogger<WorldPveService>.Instance, Items,
+            steps, hiring);
+        var response = await FreeAsync(instance, lair.SiteId, pve);
+
+        var worker = await _db.HiredWorkers.SingleAsync();
+        Assert.Equal(firstResource.SiteId, worker.SiteId);
+        Assert.Equal(HordeRules.ReclaimWorkerTier, worker.Tier);
+        Assert.Equal(ResourceNodeRules.TradeOf(firstResource.SiteId, region.Biome), worker.Trade);
+        Assert.Equal(worker.Name, response!.Horde!.WorkerName);
+        Assert.Equal(firstResource.SiteId, response.Horde.WorkerSiteId);
+        Assert.Contains(FirstStepsRules.Reclaim, await steps.DoneAsync(instance, TestIds.Player));
+    }
+
+    [Fact]
     public async Task GivingUpAHordeFight_BloodiesNobody()
     {
         var region = Overrun();
@@ -360,12 +392,17 @@ public class HordeTests : IDisposable
         var again = HordeRules.Packs(region);
         var roads = RegionRoadNetwork.Build(layout, region.Seed, _ => false);
 
-        Assert.InRange(packs.Count, 4, HordeRules.PackCount);
+        Assert.Equal(HordeRules.PackCount, packs.Count);
         Assert.Equal(packs.Select(p => (p.Id, p.Cell, p.Size, p.Level)), again.Select(p => (p.Id, p.Cell, p.Size, p.Level)));
         foreach (var pack in packs)
         {
-            Assert.True(roads.IsRoad(pack.Cell), $"{pack.Id} is off the road");
-            Assert.All(layout.Sites, s => Assert.True(Math.Max(Math.Abs(s.Cell.X - pack.Cell.X), Math.Abs(s.Cell.Y - pack.Cell.Y)) > HordeRules.PackClearOfSites));
+            bool besideRoad = Enumerable.Range(-HordeRules.PackBesideRoad, 2 * HordeRules.PackBesideRoad + 1).Any(dx =>
+                Enumerable.Range(-HordeRules.PackBesideRoad, 2 * HordeRules.PackBesideRoad + 1).Any(dy =>
+                    roads.IsRoad(new GridCell(pack.Cell.X + dx, pack.Cell.Y + dy))));
+            Assert.True(besideRoad, $"{pack.Id} is out of sight of the road");
+            Assert.Equal(TerrainClass.Land, layout.TerrainAt(pack.Cell));
+            Assert.All(layout.Sites, s => Assert.True(Math.Max(Math.Abs(s.Cell.X - pack.Cell.X), Math.Abs(s.Cell.Y - pack.Cell.Y)) >
+                (s.Type == LocationType.Castle ? HordeRules.PackClearOfKeep : HordeRules.PackClearOfSites), $"{pack.Id} is too near {s.SiteId}"));
             Assert.InRange(pack.Size, HordeRules.PackSmallest, HordeRules.PackLargest);
         }
         Assert.Equal(1 + HordeRules.NearLevelsAbove, packs.First().Level);
