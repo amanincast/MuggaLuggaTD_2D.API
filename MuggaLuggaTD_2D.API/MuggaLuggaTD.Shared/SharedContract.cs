@@ -315,6 +315,9 @@ namespace MuggaLuggaTD.Shared
         //   PackClearOfSites 1 (2 for the keep, where a walk starts), and packs may stand on open land a cell beside a road (PackBesideRoad), so a seat has 15
         //   where it had 3-10 (about 6); pack ids and levels re-roll. FirstStepsRules gains Reclaim (seven steps; a seat
         //   not overrun counts it done). The lair's win gives a Skilled worker (HordeRules.ReclaimWorkerTier).
-        public const string Version = "1.79.0";
+        // 1.80.0 - Rarity by level (Mike 2026-11-12, after a first fight dropped a Celestial): a drop can be Legendary
+        //   only from creature level 8 (ItemDropCalculator.LegendaryFromLevel), Celestial from 18, GodLike from 26; below,
+        //   the best is Rare. Odds above a gate are unchanged. The rolls take the caller's Random (one per thread otherwise).
+        public const string Version = "1.80.0";
     }
 }

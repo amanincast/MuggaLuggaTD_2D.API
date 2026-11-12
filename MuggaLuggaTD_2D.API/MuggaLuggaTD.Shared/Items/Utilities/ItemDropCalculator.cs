@@ -11,7 +11,20 @@ namespace Items.Utilities
     /// </summary>
     public static class ItemDropCalculator
     {
-        private static readonly Random _random = new Random();
+        /// <summary>
+        /// The rolls' entropy when the caller passes none. One <see cref="Random"/> per thread: the server rolls
+        /// several claims at once, and a single shared <see cref="Random"/> is not thread-safe (used from two
+        /// threads at once it can break and roll the same value every time).
+        /// </summary>
+        internal static Random Shared => _threadRandom ?? (_threadRandom = NewRandom());
+
+        [ThreadStatic] private static Random _threadRandom;
+        private static readonly Random _seeds = new Random();
+
+        private static Random NewRandom()
+        {
+            lock (_seeds) return new Random(_seeds.Next());
+        }
 
         #region Drop Chance
 
@@ -46,10 +59,10 @@ namespace Items.Utilities
         /// </summary>
         /// <param name="creatureLevel">The level of the creature being killed.</param>
         /// <returns>True if an item should drop.</returns>
-        public static bool ShouldDropItem(int creatureLevel)
+        public static bool ShouldDropItem(int creatureLevel, Random random = null)
         {
             float dropChance = CalculateDropChance(creatureLevel);
-            return _random.NextDouble() < dropChance;
+            return (random ?? Shared).NextDouble() < dropChance;
         }
 
         #endregion
@@ -57,12 +70,26 @@ namespace Items.Utilities
         #region Rarity Calculation
 
         /// <summary>
+        /// The least creature level each rarity drops from (Mike, 2026-11-12): a first fight once dropped a
+        /// Celestial, since every rarity could roll at any level. Below its level a rarity's weight is
+        /// nothing; at or above it the weights are unchanged. Chests and the Forge set their own rarities.
+        /// </summary>
+        public const int LegendaryFromLevel = 8, CelestialFromLevel = 18, GodLikeFromLevel = 26;
+
+        /// <summary>The best rarity a creature of <paramref name="creatureLevel"/> can drop.</summary>
+        public static ItemRarityTypes MaxRarityFor(int creatureLevel) =>
+            creatureLevel >= GodLikeFromLevel ? ItemRarityTypes.GodLike
+            : creatureLevel >= CelestialFromLevel ? ItemRarityTypes.Celestial
+            : creatureLevel >= LegendaryFromLevel ? ItemRarityTypes.Legendary
+            : ItemRarityTypes.Rare;
+
+        /// <summary>
         /// Calculates the rarity of a dropped item based on creature level.
         /// Uses weighted random selection that favors common items, with higher levels increasing rare drop chances.
         /// </summary>
         /// <param name="creatureLevel">The level of the creature.</param>
         /// <returns>The rolled rarity.</returns>
-        public static ItemRarityTypes CalculateRarity(int creatureLevel)
+        public static ItemRarityTypes CalculateRarity(int creatureLevel, Random random = null)
         {
             var weights = new Dictionary<ItemRarityTypes, float>
             {
@@ -75,7 +102,11 @@ namespace Items.Utilities
                 { ItemRarityTypes.GodLike,   0.1f + (creatureLevel * 0.1f) }
             };
 
-            return WeightedRandomSelect(weights);
+            var best = MaxRarityFor(creatureLevel);
+            foreach (var rarity in new List<ItemRarityTypes>(weights.Keys))
+                if (rarity > best) weights.Remove(rarity);
+
+            return WeightedRandomSelect(weights, random);
         }
 
         #endregion
@@ -88,7 +119,7 @@ namespace Items.Utilities
         /// </summary>
         /// <param name="creatureLevel">The level of the creature.</param>
         /// <returns>The rolled power tier.</returns>
-        public static ItemPowerTier CalculatePowerTier(int creatureLevel)
+        public static ItemPowerTier CalculatePowerTier(int creatureLevel, Random random = null)
         {
             // Max tier increases with level: Level 1-3: max T1, Level 4-6: max T2, etc.
             int maxTierValue = Math.Min(10, 1 + (creatureLevel / 3));
@@ -103,7 +134,7 @@ namespace Items.Utilities
                 weights[tierEnum] = weight;
             }
 
-            return WeightedRandomSelect(weights);
+            return WeightedRandomSelect(weights, random);
         }
 
         #endregion
@@ -150,17 +181,17 @@ namespace Items.Utilities
         /// </summary>
         /// <param name="creatureLevel">The level of the creature.</param>
         /// <returns>A DropResult containing all calculated properties.</returns>
-        public static DropResult CalculateDrop(int creatureLevel)
+        public static DropResult CalculateDrop(int creatureLevel, Random random = null)
         {
             var result = new DropResult
             {
-                ShouldDrop = ShouldDropItem(creatureLevel)
+                ShouldDrop = ShouldDropItem(creatureLevel, random)
             };
 
             if (result.ShouldDrop)
             {
-                result.Rarity = CalculateRarity(creatureLevel);
-                result.PowerTier = CalculatePowerTier(creatureLevel);
+                result.Rarity = CalculateRarity(creatureLevel, random);
+                result.PowerTier = CalculatePowerTier(creatureLevel, random);
                 result.InfluenceChance = CalculateInfluenceChance(creatureLevel);
             }
 
@@ -180,11 +211,12 @@ namespace Items.Utilities
             int creatureLevel,
             List<ItemImplicitTypes> implicitPool = null,
             List<ItemExplicitTypes> explicitPool = null,
-            ItemRarityTypes? rarity = null)
+            ItemRarityTypes? rarity = null,
+            Random random = null)
         {
             // Calculate rarity and tier based on creature level
-            item.Rarity = rarity ?? CalculateRarity(creatureLevel);
-            item.PowerTier = CalculatePowerTier(creatureLevel);
+            item.Rarity = rarity ?? CalculateRarity(creatureLevel, random);
+            item.PowerTier = CalculatePowerTier(creatureLevel, random);
 
             // Calculate influence chance and generate attributes
             float influenceChance = CalculateInfluenceChance(creatureLevel);
@@ -198,7 +230,7 @@ namespace Items.Utilities
         /// <summary>
         /// Performs weighted random selection from a dictionary of weights.
         /// </summary>
-        private static T WeightedRandomSelect<T>(Dictionary<T, float> weights)
+        private static T WeightedRandomSelect<T>(Dictionary<T, float> weights, Random random)
         {
             float totalWeight = 0f;
             foreach (var weight in weights.Values)
@@ -206,7 +238,7 @@ namespace Items.Utilities
                 totalWeight += weight;
             }
 
-            float roll = (float)_random.NextDouble() * totalWeight;
+            float roll = (float)(random ?? Shared).NextDouble() * totalWeight;
             float cumulative = 0f;
 
             foreach (var kvp in weights)

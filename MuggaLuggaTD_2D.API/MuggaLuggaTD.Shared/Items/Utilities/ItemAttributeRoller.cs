@@ -12,7 +12,8 @@ namespace Items.Utilities
     /// </summary>
     public static class ItemAttributeRoller
     {
-        private static readonly Random _random = new Random();
+        // Per thread, like the drop rolls (ItemDropCalculator.Shared): the server rolls claims at once.
+        private static Random _random => ItemDropCalculator.Shared;
 
         #region Attribute Count Calculations
 
