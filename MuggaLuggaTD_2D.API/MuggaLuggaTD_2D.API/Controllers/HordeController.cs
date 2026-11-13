@@ -145,8 +145,24 @@ public class HordeController : ControllerBase
             case "clear":
                 (node as JsonObject)?.Remove("Horde");
                 break;
+            case "cleanse":
+                if (!HordeRules.IsWild(target)) return BadRequest(new { message = "That land is not wild." });
+                WorldRegionBlob.Reclaim(node, DateTime.UtcNow);
+                break;
+            case "claim":
+            {
+                // As the keep fight's win would (phase 2a-ii): the rules hold, but no fight is needed.
+                var all = WorldRegionBlob.ReadAllRegions(world);
+                string? why = StewardRules.WhyNotClaim(target, userId, all);
+                if (!StewardRules.IsWildClaim(target)) why = "Only cleansed, unclaimed wild land can be claimed.";
+                if (why != null) return BadRequest(new { message = why });
+                var name = (await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId))?.UserName;
+                WorldRegionBlob.CaptureRegion(node, userId, name);
+                if (StewardRules.WouldNeedSteward(target, userId, all)) WorldRegionBlob.NeedSteward(node, true);
+                break;
+            }
             default:
-                return BadRequest(new { message = "all, overrun, lair, guard, lost or clear." });
+                return BadRequest(new { message = "all, overrun, lair, guard, lost, clear, cleanse or claim." });
         }
         await SaveAsync(gameInstanceId, row, world!);
         return Ok(new { message = $"Wild {target.RegionId}: {what}." });

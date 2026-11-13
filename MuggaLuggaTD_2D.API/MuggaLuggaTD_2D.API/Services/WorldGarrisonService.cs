@@ -131,6 +131,18 @@ public class WorldGarrisonService
 
         WorldRegionBlob.SetGarrison(resolved.RegionNode, request.SiteId, muster.CharacterIds, muster.Power);
 
+        // Land claimed from the wild needs a steward at its keep (Reclaiming row P2-10): the keep's strongest hero of
+        // the level, or nobody, and then the region is unruly until one stands there.
+        string? steward = null;
+        if (region.StewardNeeded && resolved.Site.Type == LocationType.Castle)
+        {
+            var levels = muster.Save?.Characters?.Where(c => c?.Id != null)
+                .GroupBy(c => c.Id).ToDictionary(g => g.Key, g => (int)Math.Max(1, g.First().Level), StringComparer.Ordinal)
+                ?? new Dictionary<string, int>(StringComparer.Ordinal);
+            steward = StewardRules.ChooseSteward(region, muster.CharacterIds, id => levels.TryGetValue(id, out var l) ? l : 0);
+            WorldRegionBlob.SetSteward(resolved.RegionNode, steward);
+        }
+
         // Stationed is stationed: a garrison takes its characters out of whichever company they
         // marched with. (Assigning a whole company as a garrison is the travel phase's; this is the
         // rule that keeps a character from being in both places meanwhile.)
@@ -152,7 +164,7 @@ public class WorldGarrisonService
             await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Garrison);
 
         return (new GarrisonOutcome(GarrisonError.None),
-            new GarrisonResponse(request.SiteId, muster.CharacterIds, muster.Power, assessment.Hold),
+            new GarrisonResponse(request.SiteId, muster.CharacterIds, muster.Power, assessment.Hold, steward),
             world);
     }
 

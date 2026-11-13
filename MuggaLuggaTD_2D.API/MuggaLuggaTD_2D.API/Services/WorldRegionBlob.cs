@@ -98,8 +98,29 @@ public static class WorldRegionBlob
             Resolve = region["Resolve"]?.GetValue<int>() ?? 100,
             ClaimedAtUtcTicks = region["ClaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
             SiteOverrides = ReadOverrides(region),
-            Horde = ReadHorde(region["Horde"])
+            Horde = ReadHorde(region["Horde"]),
+            StewardNeeded = region["StewardNeeded"]?.GetValue<bool>() ?? false,
+            StewardId = region["StewardId"]?.GetValue<string>()
         };
+    }
+
+    // -----------------------------------------------------------------
+    // Stewards (Reclaiming phase 2a-ii)
+    // -----------------------------------------------------------------
+
+    /// <summary>Wild land claimed beyond the seat's ring needs a steward from now on (row P2-10).</summary>
+    public static void NeedSteward(JsonNode regionNode, bool needed)
+    {
+        if (needed) regionNode["StewardNeeded"] = true;
+        else (regionNode as JsonObject)?.Remove("StewardNeeded");
+        (regionNode as JsonObject)?.Remove("StewardId");
+    }
+
+    /// <summary>Appoints the region's steward (null: nobody), when its keep is garrisoned.</summary>
+    public static void SetSteward(JsonNode regionNode, string? characterId)
+    {
+        if (string.IsNullOrEmpty(characterId)) (regionNode as JsonObject)?.Remove("StewardId");
+        else regionNode["StewardId"] = characterId;
     }
 
     // -----------------------------------------------------------------
@@ -480,6 +501,9 @@ public static class WorldRegionBlob
 
         // Works the previous holder paid for stop where they stand; the goods are not returned.
         ClearFortifying(regionNode);
+
+        // A new holder brings no steward, and owes one only if they claimed it from the wild (the caller says so).
+        NeedSteward(regionNode, false);
     }
 
     /// <summary>Marks works under way, so every player sees the region being raised.</summary>
@@ -533,6 +557,7 @@ public static class WorldRegionBlob
         regionNode["IsCapital"] = false;
         regionNode["ClaimedAtUtcTicks"] = claimedAt.Ticks;
         ClearFortifying(regionNode);
+        NeedSteward(regionNode, false);
         regionNode["Entrenchment"] = 0;
         regionNode["Resolve"] = SiegeAssaultRules.WreckedResolve;
 
@@ -669,6 +694,8 @@ public static class WorldRegionBlob
             ["SiteOverrides"] = new JsonObject()
         };
         if (region.Horde != null) node["Horde"] = WriteHorde(region.Horde);
+        if (region.StewardNeeded) node["StewardNeeded"] = true;
+        if (!string.IsNullOrEmpty(region.StewardId)) node["StewardId"] = region.StewardId;
         return node;
     }
 }

@@ -75,6 +75,16 @@ namespace MuggaLuggaTD.Shared.World
         public long ClaimedAtUtcTicks;
 
         /// <summary>
+        /// Land claimed from the wild beyond its holder's seat (Reclaiming row P2-10): it needs a steward, a hero of
+        /// <see cref="Gameplay.StewardRules.LevelFor"/> stationed at its keep, or it is unruly. Set when the claim is
+        /// won; cleared when the region changes hands any other way. Ask <see cref="Gameplay.StewardRules"/>.
+        /// </summary>
+        public bool StewardNeeded;
+
+        /// <summary>The hero appointed steward when the keep was last garrisoned; it counts while it stands there.</summary>
+        public string StewardId;
+
+        /// <summary>
         /// Ids of the sites in this region whose state has diverged from what the seed generates —
         /// a dungeon cleared, a node claimed, a keep garrisoned. Sites absent from this map are
         /// exactly as generated.

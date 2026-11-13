@@ -141,6 +141,9 @@ public partial class WorldPveService
         var check = ValidatePveTarget(resolved, userId);
         if (!check.Succeeded)
             return (check, Guid.Empty);
+        var wild = await WhyNotClaimWildAsync(gameInstanceId, userId, world, resolved);
+        if (wild != null)
+            return (new PveOutcome(PveError.NotPveTarget, wild), Guid.Empty);
 
         // The rotation (SiteRotationRules): a player who has just cleared this site fights elsewhere
         // for ten minutes. Their own clear only - nobody else is locked out by it.
@@ -307,12 +310,26 @@ public partial class WorldPveService
         if (outcome == ConquestOutcome.None)
             return (new PveOutcome(PveError.NoConquestEffect, "Winning here has no conquest effect."), null, null);
 
+        // Wild land (phase 2a-ii): the border and the stewards hold at the claim too; the world may have moved on.
+        // The roster check was made when the fight began: the heroes who won it are the ones who could steward.
+        string? notWild = outcome == ConquestOutcome.CaptureForPlayer
+            ? StewardRules.WhyNotClaim(resolved.Region, userId, WorldRegionBlob.ReadAllRegions(world))
+            : null;
+        if (notWild != null)
+            return (new PveOutcome(PveError.NotPveTarget, notWild), null, null);
+
         switch (outcome)
         {
             case ConquestOutcome.CaptureForPlayer:
+            {
                 // Taking the keep takes the region: regions are what a player owns.
+                bool wildClaim = StewardRules.IsWildClaim(resolved.Region);
                 WorldRegionBlob.CaptureRegion(resolved.RegionNode, userId, displayName);
+                // Claimed from the wild beyond the seat's ring: it needs a steward at its keep (row P2-10).
+                if (wildClaim && StewardRules.WouldNeedSteward(resolved.Region, userId, WorldRegionBlob.ReadAllRegions(world)))
+                    WorldRegionBlob.NeedSteward(resolved.RegionNode, true);
                 break;
+            }
             case ConquestOutcome.RemoveLocation:
                 // A cleared dungeon or portal is no longer written into the shared world: the clear
                 // is this player's alone (SiteRotationRules), recorded below.
@@ -472,6 +489,29 @@ public partial class WorldPveService
     /// every site in an owned region shut that off entirely: a player who took a region could never
     /// fight in it again.</para>
     /// </summary>
+    /// <summary>
+    /// Why this player may not fight for a cleansed wild keep (Reclaiming phase 2a-ii), or null: the land must border
+    /// theirs, none of their land may be unruly, and land beyond their seat's ring needs a hero free and strong enough
+    /// to steward it (not stationed, held or in a siege army).
+    /// </summary>
+    private async Task<string?> WhyNotClaimWildAsync(Guid gameInstanceId, string userId, JsonNode? world, SiteResolution resolved)
+    {
+        if (resolved.Site.Type != LocationType.Castle || !StewardRules.IsWildClaim(resolved.Region)) return null;
+        var regions = WorldRegionBlob.ReadAllRegions(world);
+        int? best = null;
+        if (StewardRules.WouldNeedSteward(resolved.Region, userId, regions))
+        {
+            var save = await MarchingArmy.LoadPlayerSaveAsync(_context, _logger, gameInstanceId, userId);
+            var committed = WorldRegionBlob.CollectCommittedCharacterIds(world, userId);
+            committed.UnionWith(await MarchingArmy.SiegeLockedIdsAsync(_context, gameInstanceId, userId));
+            best = save?.Characters?
+                .Where(c => c?.Id != null && !committed.Contains(c.Id))
+                .Select(c => (int)Math.Max(1, c.Level))
+                .DefaultIfEmpty(0).Max() ?? 0;
+        }
+        return StewardRules.WhyNotClaim(resolved.Region, userId, regions, best);
+    }
+
     private static PveOutcome ValidatePveTarget(SiteResolution resolved, string userId)
     {
         var region = resolved.Region;
