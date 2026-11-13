@@ -51,6 +51,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             if (region == null) return false;
             if (region.Ownership != LocationOwnership.Neutral || !string.IsNullOrEmpty(region.OwnerUserId)) return false;
             if (FactionStrengthRules.IsFaction(region.Faction) || region.IsCapital) return false;
+            // Overrun wild land is the horde's (Reclaiming row P2-6): a faction expands only into land once cleansed.
+            if (HordeRules.IsOverrun(region)) return false;
             if (region.Tier < minimumTier) return false;
             return !BordersCapital(region, regions);
         }

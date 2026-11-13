@@ -233,6 +233,10 @@ public class WorldProvisioningService
         // starts"). The ramp starts at the player's level, so a returning roster still has a fight on its hands.
         foreach (var capital in regions.Where(r => r.IsCapital && !string.IsNullOrEmpty(r.OwnerUserId)))
             capital.Horde = HordeRules.NewHorde(await RealmGoalService.RosterLevelAsync(_context, _logger, gameInstanceId, capital.OwnerUserId));
+        // So does all the wild land between them (Reclaiming phase 2, row P2-1): a horde by its tier, which anyone may
+        // cleanse. A late joiner seated on wild land gets a seat's horde in its place (EnsureSeatAsync).
+        foreach (var wild in regions.Where(HordeRules.IsWildLand))
+            wild.Horde = HordeRules.NewWildHorde(wild.Tier);
         // The cast the generator seated (Factions 2): three drawn from the seed, recorded so every reader agrees.
         return WorldRegionBlob.BuildWorld(seed, regions, WorldMapGenerator.CastFor(seed, regions));
     }

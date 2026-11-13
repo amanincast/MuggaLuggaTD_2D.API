@@ -120,6 +120,29 @@ namespace MuggaLuggaTD.Shared.World
 
         /// <summary>When the warlord fell and the region was reclaimed, as UTC ticks; 0 while it is overrun.</summary>
         public long ReclaimedAtUtcTicks;
+
+        /// <summary>
+        /// A wild horde (Reclaiming phase 2): it holds neutral land nobody owns. Anyone may break its warbands and
+        /// kill its warlord, which <b>cleanses</b> the region for everyone (<see cref="Gameplay.HordeRules.IsWild"/>).
+        /// False for a seat's horde, which only its holder takes back.
+        /// </summary>
+        public bool Wild;
+
+        /// <summary>A wild horde's stakes: who broke how many of its warbands, and their own tries at its lair.</summary>
+        public List<HordeStake> Stakes = new List<HordeStake>();
+    }
+
+    /// <summary>One player's part in cleansing a wild region (Reclaiming phase 2, rows P2-4 and P2-5).</summary>
+    [Serializable]
+    public class HordeStake
+    {
+        public string UserId;
+
+        /// <summary>How many of the region's warbands this player broke.</summary>
+        public int Broken;
+
+        /// <summary>How many times this player began the lair's fight (the warlord eases for each player separately).</summary>
+        public int LairTries;
     }
 
     /// <summary>

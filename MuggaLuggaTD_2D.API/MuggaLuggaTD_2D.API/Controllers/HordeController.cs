@@ -85,12 +85,80 @@ public class HordeController : ControllerBase
                 return BadRequest(new { message = "overrun, lair, guard, lost or clear." });
         }
 
-        row.GameData = world!.ToJsonString();
+        await SaveAsync(gameInstanceId, row, world!);
+        return Ok(new { message = $"Horde: {what}." });
+    }
+
+    /// <summary>
+    /// Wild land (phase 2): <c>all</c> overruns every neutral region of this realm that has no horde (worlds made
+    /// before phase 2); on <paramref name="regionId"/>, <c>overrun</c> (a fresh wild horde), <c>lair</c> (every warband
+    /// broken, by me), <c>guard</c> (the same, but the guard still stands), <c>lost</c> (one more lair try of mine), or
+    /// <c>clear</c> (no horde).
+    /// </summary>
+    [HttpPost("debug/wild/{what}")]
+    public async Task<IActionResult> DebugWild(Guid gameInstanceId, string what, [FromQuery] string? regionId)
+    {
+        if (!_environment.IsDevelopment()) return NotFound();
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null || !await _membership.IsMemberAsync(gameInstanceId, userId)) return Forbid();
+
+        var row = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        if (row == null) return NotFound(new { message = "This realm has no world yet." });
+        var world = JsonNode.Parse(row.GameData);
+        var regions = WorldRegionBlob.GetRegions(world);
+        if (regions == null) return NotFound(new { message = "This realm has no regions." });
+
+        if (what == "all")
+        {
+            int overrun = 0;
+            foreach (var each in regions)
+            {
+                if (each == null) continue;
+                var region = WorldRegionBlob.ReadRegion(each);
+                if (region.Horde != null || !HordeRules.IsWildLand(region)) continue;
+                WorldRegionBlob.SetHorde(each, HordeRules.NewWildHorde(region.Tier));
+                overrun++;
+            }
+            await SaveAsync(gameInstanceId, row, world!);
+            return Ok(new { message = $"Wild land: {overrun} region(s) overrun." });
+        }
+
+        var node = string.IsNullOrEmpty(regionId) ? null : WorldRegionBlob.FindRegion(world, regionId);
+        if (node == null) return BadRequest(new { message = "Name a region." });
+        var target = WorldRegionBlob.ReadRegion(node);
+        switch (what)
+        {
+            case "overrun":
+                if (!HordeRules.IsWildLand(target) && !HordeRules.IsWild(target))
+                    return BadRequest(new { message = "Only unowned, faction-free land can be wild." });
+                WorldRegionBlob.SetHorde(node, HordeRules.NewWildHorde(target.Tier));
+                break;
+            case "lair":
+            case "guard":
+                if (!HordeRules.IsWild(target) || !HordeRules.IsOverrun(target)) return BadRequest(new { message = "That land is not overrun wild land." });
+                foreach (var pack in HordeRules.Packs(target).Where(p => what == "lair" || !HordeRules.IsGuard(p.Id)))
+                    WorldRegionBlob.BreakHordePack(node, pack.Id, userId);
+                break;
+            case "lost":
+                WorldRegionBlob.TryLair(node, userId);
+                break;
+            case "clear":
+                (node as JsonObject)?.Remove("Horde");
+                break;
+            default:
+                return BadRequest(new { message = "all, overrun, lair, guard, lost or clear." });
+        }
+        await SaveAsync(gameInstanceId, row, world!);
+        return Ok(new { message = $"Wild {target.RegionId}: {what}." });
+    }
+
+    private async Task SaveAsync(Guid gameInstanceId, Models.WorldViewGameData row, JsonNode world)
+    {
+        row.GameData = world.ToJsonString();
         row.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         var payload = JsonSerializer.Deserialize<object>(row.GameData) ?? new { };
         await _hub.Clients.Group(gameInstanceId.ToString())
             .SendAsync("WorldViewGameDataUpdated", new WorldViewGameDataUpdated(gameInstanceId, payload, row.UpdatedAt));
-        return Ok(new { message = $"Horde: {what}." });
     }
 }

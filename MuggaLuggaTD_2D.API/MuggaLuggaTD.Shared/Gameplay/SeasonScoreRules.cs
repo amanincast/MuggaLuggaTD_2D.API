@@ -35,7 +35,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Helped the realm reach its goal of the day (Active Content B, phase 3). Its points follow the chest the
         /// share earned (<see cref="RealmGoalRules.SeasonPointsFor"/>); they count as clearing.
         /// </summary>
-        RealmGoalReached = 7
+        RealmGoalReached = 7,
+
+        /// <summary>
+        /// Shared in cleansing a wild region (Reclaiming row P2-7). Its points follow the region's chest
+        /// (<see cref="HordeRules.CleansingPoints"/>); they count as clearing.
+        /// </summary>
+        RegionCleansed = 8
     }
 
     /// <summary>
