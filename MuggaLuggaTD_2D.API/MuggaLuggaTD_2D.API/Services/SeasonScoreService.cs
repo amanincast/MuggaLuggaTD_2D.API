@@ -162,7 +162,7 @@ public class SeasonScoreService
 
         score.SettledPoints += points;
         if (deed == SeasonDeed.SiteCleared || deed == SeasonDeed.RiftSealed || deed == SeasonDeed.BountyClaimed
-            || deed == SeasonDeed.RealmGoalReached)
+            || deed == SeasonDeed.RealmGoalReached || deed == SeasonDeed.RegionCleansed)
             score.ClearingPoints += points;
         else score.RaidingPoints += points;
 

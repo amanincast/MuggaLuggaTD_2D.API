@@ -81,6 +81,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// Detail: "{company}".
         /// </summary>
         CaravanLost,
+
+        /// <summary>
+        /// A wild region you helped cleanse is free (Reclaiming row P2-4): your chest is already in your pack. Region: the
+        /// land cleansed. Actor: who killed its warlord. Detail: "{rarity}".
+        /// </summary>
+        RegionCleansed,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -138,6 +144,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.RiftContractPaid:
                 case LetterKind.RiftContractEnded:
                 case LetterKind.TrialChest:
+                case LetterKind.RegionCleansed:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

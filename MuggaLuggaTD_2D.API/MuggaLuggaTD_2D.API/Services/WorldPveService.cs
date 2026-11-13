@@ -489,8 +489,11 @@ public partial class WorldPveService
         }
 
         // Overrun land (Reclaiming): a site the horde holds is freed first, with its horde fight.
+        // Wild land (phase 2, row P2-6): every site and the keep wait until the region is cleansed.
+        if (HordeRules.KeepLocked(region, resolved.Site))
+            return new PveOutcome(PveError.NotPveTarget, HordeRules.KeepHeld);
         if (HordeRules.IsHeld(region, resolved.Site))
-            return new PveOutcome(PveError.NotPveTarget, HordeRules.SiteHeld);
+            return new PveOutcome(PveError.NotPveTarget, HordeRules.IsWild(region) ? HordeRules.WildSiteHeld : HordeRules.SiteHeld);
 
         if (ConquestResolver.ResolveOnPlayerVictory(resolved.Site.Type) == ConquestOutcome.None)
             return new PveOutcome(PveError.NotPveTarget, "That site has no combat to complete.");

@@ -321,6 +321,11 @@ namespace MuggaLuggaTD.Shared
         // 1.81.0 - Reclaiming phase 1 wrap-up (Mike 2026-11-12): the warlord's guard, a sixteenth warband (the largest, a level
         //   under the lair) at the lair's door (HordeRules.GuardSuffix), which the lair waits for; HordeState.LairTries, and
         //   from the third loss the warlord stands a level lower per loss, at most 3 (HordeRules.LairEase). Packs re-roll.
-        public const string Version = "1.81.0";
+        // 1.82.0 - Reclaiming phase 2a-i, wild land (Mike 2026-11-12): every neutral region starts overrun by a wild horde
+        //   (HordeState.Wild, HordeRules.NewWildHorde): 4/6/8/10 warbands by tier plus the guard, levels by tier
+        //   (WildBaseLevel), the warlord in the strongest site. Anyone may fight it; the warlord's fall cleanses the
+        //   region for everyone and pays a chest to each stakeholder (2+ warbands, HordeState.Stakes). Overrun wild
+        //   land locks its sites and keep (KeepLocked); factions skip it. SeasonDeed.RegionCleansed, LetterKind.RegionCleansed.
+        public const string Version = "1.82.0";
     }
 }

@@ -217,7 +217,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var levels = new List<int>();
             foreach (var region in all.Where(r => lit.Contains(r.RegionId)).OrderBy(r => r.RegionId, StringComparer.Ordinal))
             {
-                if (IsRivals(region, userId)) continue;
+                if (IsRivals(region, userId) || IsWildAndOverrun(region)) continue;
                 var layout = RegionGenerator.Generate(region);
                 levels.Add(AutoFightRules.MobLevel(layout.Sites));
                 foreach (var site in layout.Sites.Where(s => s.Type == LocationType.NeutralHome))
@@ -294,6 +294,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
         private static bool IsRivals(WorldRegionData region, string userId) =>
             region.Ownership == LocationOwnership.Player && !string.IsNullOrEmpty(region.OwnerUserId)
             && !string.Equals(region.OwnerUserId, userId, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Overrun wild land (Reclaiming phase 2, row P2-6): the horde holds its villages and sites, so nobody there gives
+        /// a quest or takes a delivery until it is cleansed.
+        /// </summary>
+        private static bool IsWildAndOverrun(WorldRegionData region) => HordeRules.IsWild(region) && HordeRules.IsOverrun(region);
 
         private static QuestOffer VillageOffer(ref DeterministicRandom random, string id, WorldRegionData region,
             RegionLayout layout, SiteSpec village, IReadOnlyDictionary<BiomeType, IReadOnlyList<string>> peoples, RunTuning tuning,
@@ -424,7 +430,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             foreach (var region in world.Where(r => r != null && r.RegionId != from.RegionId).OrderBy(r => r.RegionId, StringComparer.Ordinal))
             {
                 int hexes = HexCoord.Distance(from.Hex, region.Hex);
-                if (hexes < EscortNearest || hexes > EscortFarthest || IsRivals(region, userId)) continue;
+                if (hexes < EscortNearest || hexes > EscortFarthest || IsRivals(region, userId) || IsWildAndOverrun(region)) continue;
                 var village = RegionGenerator.Generate(region).Sites
                     .Where(s => s.Type == LocationType.NeutralHome).OrderBy(s => s.SiteId, StringComparer.Ordinal).FirstOrDefault();
                 if (village != null) found.Add((village, hexes));

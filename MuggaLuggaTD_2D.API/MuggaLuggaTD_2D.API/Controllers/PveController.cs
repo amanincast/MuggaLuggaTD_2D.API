@@ -28,6 +28,7 @@ public class PveController : ControllerBase
     private readonly SeasonScoreService _seasons;
     private readonly ISessionLog _sessionLog;
     private readonly BountyService _bounties;
+    private readonly LetterService? _letters;
 
     public PveController(
         ApplicationDbContext context,
@@ -35,9 +36,11 @@ public class PveController : ControllerBase
         WorldPveService pve,
         SeasonScoreService seasons,
         ISessionLog sessionLog,
-        BountyService bounties)
+        BountyService bounties,
+        LetterService? letters = null)
     {
         _bounties = bounties;
+        _letters = letters;
         _context = context;
         _hubContext = hubContext;
         _pve = pve;
@@ -161,6 +164,21 @@ public class PveController : ControllerBase
             await PersistAndBroadcastAsync(gameInstanceId, updatedWorld);
             // Reclaimed land starts earning: the rates are worked out again from the changed world.
             if (response.Horde.Reclaimed) await _seasons.SettleAllAsync(gameInstanceId);
+            // A wild region cleansed (phase 2): every sharer gets the season points, and the others a letter (their
+            // chest is already in their pack).
+            if (response.Horde.Cleansed)
+            {
+                var region = response.Horde.RegionId;
+                var tier = Math.Max(1, WorldRegionBlob.ReadAllRegions(updatedWorld).FirstOrDefault(r => r.RegionId == region)?.Tier ?? 1);
+                string? killer = (await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId))?.UserName;
+                foreach (var sharer in response.Horde.Sharers)
+                {
+                    await _seasons.AwardAsync(gameInstanceId, sharer, SeasonDeed.RegionCleansed, HordeRules.CleansingPoints(tier));
+                    if (sharer != userId && _letters != null)
+                        await _letters.SendAsync(gameInstanceId, sharer, LetterKind.RegionCleansed, DateTime.UtcNow,
+                            $"cleansed:{region}", region, actorName: killer, detail: HordeRules.CleansingChest(tier).ToString());
+                }
+            }
             var freed = response.Horde;
             _sessionLog.Log("PVE-CLAIM",
                 $"user={userId} site={response.SiteId} horde freed={freed.Freed}/{freed.Total} reclaimed={freed.Reclaimed} " +

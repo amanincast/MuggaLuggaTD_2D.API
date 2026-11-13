@@ -69,32 +69,36 @@ public partial class WorldPveService
 
         // The lair counts its tries: every one before the win was lost or given up, and from the third loss the
         // warlord eases (HordeRules.LairEase). Counted here, as a loss is never reported, only a win claimed.
-        if (HordeRules.IsLair(layout, target))
+        if (HordeRules.IsLair(resolved.Region, layout, target))
         {
             var tracked = await _context.WorldViewGameData.FirstAsync(w => w.GameInstanceId == gameInstanceId);
             var live = JsonNode.Parse(tracked.GameData)!;
             var liveSite = WorldRegionBlob.ResolveSite(live, target)!;
-            WorldRegionBlob.TryLair(liveSite.RegionNode);
+            WorldRegionBlob.TryLair(liveSite.RegionNode, userId);
             tracked.GameData = live.ToJsonString();
             tracked.UpdatedAt = DateTime.UtcNow;
             resolved = WorldRegionBlob.ResolveSite(live, target)!;
         }
         await _context.SaveChangesAsync();
 
-        var encounter = HordeEncounterOf(resolved, layout);
-        _logger.LogInformation("Horde run {RunId} opened by {User} at {Site} (level {Level}, lair {Lair}, try {Try}, eased {Eased}).",
-            run.Id, userId, target, encounter.Level, encounter.IsLair, resolved.Region.Horde?.LairTries ?? 0, HordeRules.LairEase(resolved.Region));
+        var encounter = HordeEncounterOf(resolved, layout, userId);
+        int tries = HordeRules.IsWild(resolved.Region)
+            ? HordeRules.StakeOf(resolved.Region, userId)?.LairTries ?? 0
+            : resolved.Region.Horde?.LairTries ?? 0;
+        _logger.LogInformation("Horde run {RunId} opened by {User} at {Site} (level {Level}, lair {Lair}, wild {Wild}, try {Try}, eased {Eased}).",
+            run.Id, userId, target, encounter.Level, encounter.IsLair, HordeRules.IsWild(resolved.Region), tries,
+            HordeRules.LairEase(resolved.Region, userId: userId));
         return (new PveOutcome(PveError.None), run.Id, encounter);
     }
 
-    private static HordeEncounterDto HordeEncounterOf(SiteResolution resolved, RegionLayout layout) => new(
+    private static HordeEncounterDto HordeEncounterOf(SiteResolution resolved, RegionLayout layout, string userId) => new(
         resolved.Site.SiteId,
         resolved.Region.RegionId,
         resolved.Site.Type,
         resolved.Region.Biome,
-        HordeRules.LevelAt(resolved.Region, layout, resolved.Site.SiteId),
+        HordeRules.LevelAt(resolved.Region, layout, resolved.Site.SiteId, userId: userId),
         Math.Max(1, resolved.Region.Tier),
-        HordeRules.IsLair(layout, resolved.Site.SiteId));
+        HordeRules.IsLair(resolved.Region, layout, resolved.Site.SiteId));
 
     /// <summary>
     /// Pays a won horde fight and frees its site. The lair's win reclaims the region: a Rare chest at its level and
@@ -130,9 +134,13 @@ public partial class WorldPveService
             return (new PveOutcome(PveError.NotPveTarget, why), null, null);
         }
 
-        var encounter = HordeEncounterOf(resolved, layout);
+        var encounter = HordeEncounterOf(resolved, layout, userId);
         WorldRegionBlob.FreeHordeSite(resolved.RegionNode, target!);
         if (encounter.IsLair) WorldRegionBlob.Reclaim(resolved.RegionNode, now);
+
+        // Wild land (phase 2): the warlord's fall cleanses the region for everyone, and pays its sharers.
+        if (HordeRules.IsWild(resolved.Region))
+            return await CleanseAsync(gameInstanceId, userId, run, request, resolved, layout, encounter, world!);
 
         var rewards = RunRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
             _content.DroppableItems, Random.Shared, site: HordeRules.SiteType);
@@ -177,7 +185,7 @@ public partial class WorldPveService
 
         var after = WorldRegionBlob.ReadRegion(resolved.RegionNode);
         var win = new HordeWinDto(target!, resolved.Region.RegionId, encounter.IsLair,
-            HordeRules.FreedCount(after, layout), HordeRules.Total(layout, resolved.Region.Seed), HordeRules.LairOpen(after, layout),
+            HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), HordeRules.LairOpen(after, layout),
             chestRarity, chest, encounter.IsLair ? HordeRules.ReclaimGold : 0,
             given?.Worker.Name, given?.Worker.Trade.ToString(), given?.SiteId);
 
@@ -187,6 +195,61 @@ public partial class WorldPveService
         return (new PveOutcome(PveError.None), new PveClaimResponse(
             run.LocationId, nameof(ConquestOutcome.RemoveLocation), rewards.Experience, rewards.Items, 0, materials,
             gold, goldBalance, WorldRewards: true, LockedUntil: null, WorldRewardsBackAt: null, Horde: win), world);
+    }
+
+    /// <summary>
+    /// A wild warlord fell (Reclaiming phase 2): the region is cleansed for everyone, and nobody gains land by it. The
+    /// killer is paid the fight; everyone with a stake (row P2-4: 2+ of its warbands broken, the killer too if so) gets
+    /// the cleansing chest. Their season points and letters are paid by the caller, after the world is written.
+    /// </summary>
+    private async Task<(PveOutcome Outcome, PveClaimResponse? Response, JsonNode? World)> CleanseAsync(
+        Guid gameInstanceId, string userId, PveRun run, PveClaimRequest request, SiteResolution resolved, RegionLayout layout,
+        HordeEncounterDto encounter, JsonNode world)
+    {
+        var rewards = RunRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
+            _content.DroppableItems, Random.Shared, site: HordeRules.SiteType);
+        var materials = MaterialRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
+            _content.Materials, Random.Shared, site: HordeRules.SiteType);
+
+        // The chest is the warlord's full strength (row P2-7), whatever it eased to for whoever killed it.
+        int chestLevel = Math.Max(1, resolved.Region.Horde!.BaseLevel) + HordeRules.LairLevelsAbove;
+        var rarity = HordeRules.CleansingChest(encounter.Tier);
+        var sharers = HordeRules.Stakeholders(resolved.Region);
+        var mine = new List<StateManagement.Models.ItemSaveData>();
+        foreach (var sharer in sharers)
+        {
+            var chest = QuestRules.RollChest(_content.DroppableItems.ToList(), Random.Shared, chestLevel, rarity);
+            await _items.GrantAsync(gameInstanceId, sharer, chest, $"horde-cleanse run={run.Id} region={resolved.Region.RegionId}");
+            if (sharer == userId) mine = chest;
+        }
+        bool shared = sharers.Contains(userId);
+
+        await _wallet.GrantAsync(gameInstanceId, userId, materials, $"horde-claim run={run.Id}");
+        await _items.GrantAsync(gameInstanceId, userId, rewards.Items, $"horde-claim run={run.Id}");
+        long goldBalance = await _gold.GrantAsync(gameInstanceId, userId, rewards.Gold, $"horde-claim run={run.Id}");
+        if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
+        if (_quests != null)
+        {
+            await _quests.RecordAsync(gameInstanceId, userId, new QuestDeed
+            {
+                RegionId = resolved.Region.RegionId,
+                Kills = new Dictionary<string, int>(_quests.ClampKills(
+                    request.Kills, resolved.Region.Biome, encounter.Tier, HordeRules.SiteType))
+            });
+        }
+        await _context.SaveChangesAsync();
+
+        var after = WorldRegionBlob.ReadRegion(resolved.RegionNode);
+        var win = new HordeWinDto(HordeRules.TargetOf(run.LocationId)!, resolved.Region.RegionId, Reclaimed: false,
+            HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), LairOpen: false,
+            shared ? rarity : null, mine, 0, Cleansed: true, Shared: shared) { Sharers = sharers };
+
+        _logger.LogInformation("Wild region {Region} cleansed by {User} (run {RunId}): {Sharers} sharer(s), {Rarity} chests, {Xp} XP.",
+            resolved.Region.RegionId, userId, run.Id, sharers.Count, rarity, rewards.Experience);
+
+        return (new PveOutcome(PveError.None), new PveClaimResponse(
+            run.LocationId, nameof(ConquestOutcome.RemoveLocation), rewards.Experience, rewards.Items, 0, materials,
+            rewards.Gold, goldBalance, WorldRewards: true, LockedUntil: null, WorldRewardsBackAt: null, Horde: win), world);
     }
 
     // -----------------------------------------------------------------
@@ -283,7 +346,7 @@ public partial class WorldPveService
         }
 
         var pack = HordeRules.Packs(region).First(p => p.Id == packId);
-        WorldRegionBlob.BreakHordePack(regionNode, packId);
+        WorldRegionBlob.BreakHordePack(regionNode, packId, userId);
 
         // A pack is a skirmish: a camp's pay at its level, scaled by its size against a camp's planned fight.
         var rewards = RunRewardCalculator.Calculate(pack.Level, Math.Max(1, region.Tier), _content.RunTuning,
@@ -314,7 +377,7 @@ public partial class WorldPveService
         var after = WorldRegionBlob.ReadRegion(regionNode);
         var layout = RegionGenerator.Generate(after);
         var win = new HordeWinDto(packId, region.RegionId, false,
-            HordeRules.FreedCount(after, layout), HordeRules.Total(layout, after.Seed), HordeRules.LairOpen(after, layout),
+            HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), HordeRules.LairOpen(after, layout),
             null, new List<StateManagement.Models.ItemSaveData>(), 0);
 
         _logger.LogInformation("Pack {Pack} broken by {User} (run {RunId}): {Freed}/{Total}, {Xp} XP, {Gold} gold.",

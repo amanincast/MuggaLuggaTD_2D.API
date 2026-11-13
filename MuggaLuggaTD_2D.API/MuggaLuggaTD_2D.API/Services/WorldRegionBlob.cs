@@ -115,8 +115,36 @@ public static class WorldRegionBlob
             Freed = ReadStrings(horde["Freed"]),
             Broken = ReadStrings(horde["Broken"]),
             LairTries = horde["LairTries"]?.GetValue<int>() ?? 0,
-            ReclaimedAtUtcTicks = horde["ReclaimedAtUtcTicks"]?.GetValue<long>() ?? 0
+            ReclaimedAtUtcTicks = horde["ReclaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
+            Wild = horde["Wild"]?.GetValue<bool>() ?? false,
+            Stakes = ReadStakes(horde["Stakes"])
         };
+    }
+
+    private static List<HordeStake> ReadStakes(JsonNode? node)
+    {
+        var stakes = new List<HordeStake>();
+        if (node is not JsonArray array) return stakes;
+        foreach (var item in array)
+        {
+            string? userId = item?["UserId"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(userId)) continue;
+            stakes.Add(new HordeStake
+            {
+                UserId = userId,
+                Broken = item!["Broken"]?.GetValue<int>() ?? 0,
+                LairTries = item["LairTries"]?.GetValue<int>() ?? 0
+            });
+        }
+        return stakes;
+    }
+
+    /// <summary>This player's stake in a wild horde, made when they first take part.</summary>
+    private static HordeStake StakeFor(HordeState horde, string userId)
+    {
+        var stake = horde.Stakes.FirstOrDefault(s => s.UserId == userId);
+        if (stake == null) horde.Stakes.Add(stake = new HordeStake { UserId = userId });
+        return stake;
     }
 
     private static JsonObject WriteHorde(HordeState horde)
@@ -125,7 +153,7 @@ public static class WorldRegionBlob
         foreach (var id in horde.Freed) freed.Add(id);
         var broken = new JsonArray();
         foreach (var id in horde.Broken) broken.Add(id);
-        return new JsonObject
+        var written = new JsonObject
         {
             ["BaseLevel"] = horde.BaseLevel,
             ["Freed"] = freed,
@@ -133,6 +161,16 @@ public static class WorldRegionBlob
             ["LairTries"] = horde.LairTries,
             ["ReclaimedAtUtcTicks"] = horde.ReclaimedAtUtcTicks
         };
+        // A seat's horde is written as it always was; a wild one carries its flag and its stakes (phase 2).
+        if (horde.Wild)
+        {
+            var stakes = new JsonArray();
+            foreach (var stake in horde.Stakes)
+                stakes.Add(new JsonObject { ["UserId"] = stake.UserId, ["Broken"] = stake.Broken, ["LairTries"] = stake.LairTries });
+            written["Wild"] = true;
+            written["Stakes"] = stakes;
+        }
+        return written;
     }
 
     /// <summary>Overruns a region: a horde holds every site but the keep until it is reclaimed.</summary>
@@ -149,21 +187,27 @@ public static class WorldRegionBlob
     }
 
     /// <summary>Marks a pack broken. False when the region has no horde, or the pack was already broken.</summary>
-    public static bool BreakHordePack(JsonNode regionNode, string packId)
+    public static bool BreakHordePack(JsonNode regionNode, string packId, string? userId = null)
     {
         var horde = ReadHorde(regionNode["Horde"]);
         if (horde == null || horde.Broken.Contains(packId)) return false;
         horde.Broken.Add(packId);
+        // A wild horde counts who broke it: the stake that shares in the cleansing (row P2-4).
+        if (horde.Wild && !string.IsNullOrEmpty(userId)) StakeFor(horde, userId).Broken++;
         SetHorde(regionNode, horde);
         return true;
     }
 
-    /// <summary>The lair's fight was begun once more (the warlord eases after losses, HordeRules.LairEase).</summary>
-    public static void TryLair(JsonNode regionNode)
+    /// <summary>
+    /// The lair's fight was begun once more (the warlord eases after losses, HordeRules.LairEase). A wild lair counts
+    /// each player's tries apart, as its warlord eases for each separately (row P2-5).
+    /// </summary>
+    public static void TryLair(JsonNode regionNode, string? userId = null)
     {
         var horde = ReadHorde(regionNode["Horde"]);
         if (horde == null) return;
-        horde.LairTries++;
+        if (horde.Wild && !string.IsNullOrEmpty(userId)) StakeFor(horde, userId).LairTries++;
+        else horde.LairTries++;
         SetHorde(regionNode, horde);
     }
 
