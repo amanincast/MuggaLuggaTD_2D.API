@@ -326,6 +326,10 @@ namespace MuggaLuggaTD.Shared
         //   (WildBaseLevel), the warlord in the strongest site. Anyone may fight it; the warlord's fall cleanses the
         //   region for everyone and pays a chest to each stakeholder (2+ warbands, HordeState.Stakes). Overrun wild
         //   land locks its sites and keep (KeepLocked); factions skip it. SeasonDeed.RegionCleansed, LetterKind.RegionCleansed.
-        public const string Version = "1.82.0";
+        // 1.83.0 - Reclaiming phase 2a-ii, the claim rules (Mike 2026-11-12, rows P2-9 and P2-10, StewardRules): a cleansed
+        //   wild keep is claimed only from your border; land claimed beyond your seat's ring needs a steward (a hero of
+        //   warlord level - 2 at its keep, WorldRegionData.StewardNeeded/StewardId), or it is unruly: no gold, no points,
+        //   and no further wild claims. A claim needs a hero free and strong enough. Regions touching the seat need none.
+        public const string Version = "1.83.0";
     }
 }

@@ -15,7 +15,8 @@ public record GarrisonRequest(string SiteId, List<string> CharacterIds, string S
 /// asked for — someone already garrisoned elsewhere, locked into a siege or sitting in a cell is
 /// filtered out rather than refusing the whole request.</para>
 /// </summary>
-public record GarrisonResponse(string SiteId, List<string> CharacterIds, double GarrisonPower, long Hold);
+/// <summary>The garrison stationed, its power and the hold; and, on land claimed from the wild, its steward (null: none of the level).</summary>
+public record GarrisonResponse(string SiteId, List<string> CharacterIds, double GarrisonPower, long Hold, string? StewardId = null);
 
 /// <summary>Buys your prisoners back out of the site holding them. The price is the server's.</summary>
 public record RansomRequest(string SiteId, string SharedContractVersion);
