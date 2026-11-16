@@ -380,16 +380,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return list;
         }
 
+        /// <summary>A pack by its id: an overrun horde's, or a gathering's (phase 3b); null when there is none.</summary>
+        public static Pack FindPack(WorldRegionData region, string packId) =>
+            HordeReturnRules.IsGatheringPack(packId)
+                ? HordeReturnRules.GatheringPacks(region).FirstOrDefault(p => p.Id == packId)
+                : Packs(region).FirstOrDefault(p => p.Id == packId);
+
         /// <summary>The packs still on the roads: overrun land, not yet broken.</summary>
         public static List<Pack> StandingPacks(WorldRegionData region)
         {
-            if (!IsOverrun(region)) return new List<Pack>();
+            // Held land a horde gathers on (phase 3b): its warbands stand on the roads instead.
+            if (!IsOverrun(region)) return HordeReturnRules.StandingGatheringPacks(region);
             return Packs(region).Where(p => !region.Horde.Broken.Contains(p.Id)).ToList();
         }
 
         /// <summary>Why this pack can't be fought now, or null when it can.</summary>
         public static string WhyNotBreak(WorldRegionData region, string packId, string userId)
         {
+            if (HordeReturnRules.IsGatheringPack(packId)) return HordeReturnRules.WhyNotBreak(region, packId, userId);
             if (!IsOverrun(region)) return "No horde holds this land.";
             if (!IsWild(region) && !region.IsOwnedByPlayer(userId)) return "Only its holder can take this land back.";
             if (Packs(region).All(p => p.Id != packId)) return "There is no such warband.";

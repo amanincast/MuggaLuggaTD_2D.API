@@ -63,7 +63,11 @@ public record HordeWinDto(
     /// <summary>A wild region cleansed (phase 2): its sites open for everyone; nobody's land.</summary>
     bool Cleansed = false,
     /// <summary>Whether the winner shared in the cleansing (2+ warbands broken there) and so got its chest.</summary>
-    bool Shared = false)
+    bool Shared = false,
+    /// <summary>A warband of a horde gathering on held land (Reclaiming 3b): Freed/Total count its warbands.</summary>
+    bool Gathering = false,
+    /// <summary>That was its last warband: the horde scattered.</summary>
+    bool Scattered = false)
 {
     /// <summary>Everyone who shares in a cleansing, for the server to pay their points and letters. Never sent.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

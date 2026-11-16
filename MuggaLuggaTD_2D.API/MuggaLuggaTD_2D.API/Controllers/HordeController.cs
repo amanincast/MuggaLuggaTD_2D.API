@@ -195,10 +195,26 @@ public class HordeController : ControllerBase
         var node = string.IsNullOrEmpty(regionId) ? null : WorldRegionBlob.FindRegion(world, regionId);
         if (node == null) return BadRequest(new { message = "Name a region." });
         var target = WorldRegionBlob.ReadRegion(node);
+        // Cleansed wild land is nobody's: anyone may make it grow back (phase 3c).
+        if (what == "regrow")
+        {
+            if (!StewardRules.IsWildClaim(target)) return BadRequest(new { message = "Only cleansed, unclaimed wild land grows back." });
+            var regrown = await returns.SweepAsync(gameInstanceId, now, target.RegionId, what);
+            return Ok(new { message = string.Join(" ", regrown.Done) });
+        }
         if (!target.IsOwnedByPlayer(userId)) return BadRequest(new { message = "That land is not yours." });
 
         switch (what)
         {
+            case "warbands":
+            {
+                // Every warband of the gathering broken but its chieftain's band, so the last fight can be walked to.
+                if (!HordeReturnRules.IsGathering(target)) return BadRequest(new { message = "No horde gathers there." });
+                foreach (var pack in HordeReturnRules.GatheringPacks(target).Where(p => !HordeReturnRules.IsChieftain(p.Id)))
+                    WorldRegionBlob.BreakGatheringPack(node, pack.Id);
+                await SaveAsync(gameInstanceId, row, world!);
+                return Ok(new { message = $"{target.RegionId}: every warband broken but the chieftain's band." });
+            }
             case "unruly":
                 if (!StewardRules.IsUnruly(target)) return BadRequest(new { message = "That land is not unruly: it has a steward, or needs none." });
                 WorldRegionBlob.SetUnrulySince(node, (now - HordeReturnRules.CauseLasts).Ticks);
@@ -216,7 +232,7 @@ public class HordeController : ControllerBase
                 if (!HordeRules.IsReturned(target) || !HordeRules.IsOverrun(target)) return BadRequest(new { message = "That land has not fallen." });
                 break;
             default:
-                return BadRequest(new { message = "gather, scatter, hold, fall, lapse, unruly or sweep." });
+                return BadRequest(new { message = "gather, scatter, hold, fall, lapse, unruly, warbands, regrow or sweep." });
         }
 
         var outcome = await returns.SweepAsync(gameInstanceId, now, target.RegionId, what);
