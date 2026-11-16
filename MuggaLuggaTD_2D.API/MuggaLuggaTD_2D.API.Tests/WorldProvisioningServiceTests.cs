@@ -284,6 +284,24 @@ public class WorldProvisioningServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ALateJoinerIsSeatedInTheSameBandAsEveryoneElse_NotOutOnTheRim()
+    {
+        // Furthest from everyone is the rim, which is tier 4 (Reclaiming 2b): a late joiner gets the band's
+        // country, like the players seated when the world was made.
+        var instance = await _db.AddInstanceAsync();
+        await Service.EnsureWorldAsync(instance.Id);
+
+        await Service.EnsureSeatAsync(instance.Id, TestIds.Player, "Mike");
+        await Service.EnsureSeatAsync(instance.Id, TestIds.Rival, "Rival");
+
+        var capitals = WorldRegionBlob.ReadAllRegions(await _db.ReadWorldAsync(instance.Id))
+            .Where(r => r.IsCapital).ToList();
+        Assert.True(capitals.Count >= 2);
+        Assert.All(capitals, c => Assert.True(WorldMapGenerator.InSettlementBand(c.Hex),
+            $"{c.RegionId} at {HexCoord.Distance(new HexCoord(0, 0), c.Hex)} rings out is outside the band."));
+    }
+
+    [Fact]
     public async Task AFullWorldSeatsNobody()
     {
         // Every region spoken for. Better to say so than to hand out a region somebody holds.

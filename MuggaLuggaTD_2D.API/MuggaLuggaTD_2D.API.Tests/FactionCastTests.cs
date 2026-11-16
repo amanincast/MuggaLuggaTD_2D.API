@@ -17,10 +17,10 @@ public class FactionCastTests
 
     /// <summary>
     /// The map without its factions, over 50 seeds, folded into one number: every region's id, biome, tier, seed and
-    /// owning player. Taken from the generator before the cast existed (2026-10-12), so a change to the seating that
+    /// owning player. Re-pinned for the 127-region map (Reclaiming 2b, 2026-11-16); first taken before the cast existed, so a change to the seating that
     /// shifts the shared random stream fails here.
     /// </summary>
-    private const ulong MapFingerprint = 9118074844005794433UL;
+    private const ulong MapFingerprint = 8347387617773908243UL;
 
     private static ulong Fingerprint()
     {

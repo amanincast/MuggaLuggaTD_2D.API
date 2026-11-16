@@ -330,6 +330,9 @@ namespace MuggaLuggaTD.Shared
         //   wild keep is claimed only from your border; land claimed beyond your seat's ring needs a steward (a hero of
         //   warlord level - 2 at its keep, WorldRegionData.StewardNeeded/StewardId), or it is unruly: no gold, no points,
         //   and no further wild claims. A claim needs a hero free and strong enough. Regions touching the seat need none.
-        public const string Version = "1.83.0";
+        // 1.84.0 - Reclaiming phase 2b, the bigger map (row P2-11): new worlds are a hexagon of 127 regions (radius 6, was
+        //   78); capitals seat in rings 3-5 (was 2-4), late joiners too; tier 3 spans rings 4-5 and tier 4 is the rim.
+        //   Stored worlds keep their size; a season reset regenerates at the new one.
+        public const string Version = "1.84.0";
     }
 }
