@@ -282,6 +282,16 @@ public static class WorldRegionBlob
         };
     }
 
+    /// <summary>A gathering's warband broken on foot (phase 3b). False when nothing gathers, or it was already broken.</summary>
+    public static bool BreakGatheringPack(JsonNode regionNode, string packId)
+    {
+        var gathering = ReadGathering(regionNode["Gathering"]);
+        if (gathering == null || gathering.Broken.Contains(packId)) return false;
+        gathering.Broken.Add(packId);
+        StartGathering(regionNode, gathering);
+        return true;
+    }
+
     /// <summary>The gathering is over. Turned away, the region is safe until <paramref name="safeUntil"/> (row P3-9).</summary>
     public static void EndGathering(JsonNode regionNode, DateTime? safeUntil = null)
     {

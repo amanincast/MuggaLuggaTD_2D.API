@@ -105,6 +105,12 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>Fallen land you didn't reclaim went back to the wild (row P3-6). Region: where.</summary>
         RegionLapsed,
+
+        /// <summary>
+        /// Wild land you helped cleanse, which nobody claimed, is overrun again (row P3-8). Region: where. Subject: when it
+        /// was cleansed (ticks).
+        /// </summary>
+        WildRegrown,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -164,6 +170,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 case LetterKind.RiftContractEnded:
                 case LetterKind.TrialChest:
                 case LetterKind.RegionCleansed:
+                case LetterKind.WildRegrown:
                     return LetterCategory.Realm;
                 default:
                     return LetterCategory.War;

@@ -314,7 +314,7 @@ public partial class WorldPveService
         _context.PveRuns.Add(run);
         await _context.SaveChangesAsync();
 
-        var pack = HordeRules.Packs(region).First(p => p.Id == packId);
+        var pack = HordeRules.FindPack(region, packId)!;
         _logger.LogInformation("Pack run {RunId} opened by {User} against {Pack} (level {Level}, {Size}).", run.Id, userId, packId, pack.Level, pack.Size);
         return (new PveOutcome(PveError.None), run.Id, PackEncounterOf(region, pack));
     }
@@ -349,8 +349,20 @@ public partial class WorldPveService
             return (new PveOutcome(PveError.NotPveTarget, why), null, null);
         }
 
-        var pack = HordeRules.Packs(region).First(p => p.Id == packId);
-        WorldRegionBlob.BreakHordePack(regionNode, packId, userId);
+        var pack = HordeRules.FindPack(region, packId)!;
+        // A gathering's warband (Reclaiming 3b): each one weakens the horde, and the last scatters it (row P3-4).
+        bool gathering = HordeReturnRules.IsGatheringPack(packId);
+        bool scattered = false;
+        if (gathering)
+        {
+            WorldRegionBlob.BreakGatheringPack(regionNode, packId);
+            if (HordeReturnRules.AllBroken(WorldRegionBlob.ReadRegion(regionNode)))
+            {
+                WorldRegionBlob.EndGathering(regionNode, DateTime.UtcNow + HordeReturnRules.SafeFor);
+                scattered = true;
+            }
+        }
+        else WorldRegionBlob.BreakHordePack(regionNode, packId, userId);
 
         // A pack is a skirmish: a camp's pay at its level, scaled by its size against a camp's planned fight.
         var rewards = RunRewardCalculator.Calculate(pack.Level, Math.Max(1, region.Tier), _content.RunTuning,
@@ -380,9 +392,19 @@ public partial class WorldPveService
 
         var after = WorldRegionBlob.ReadRegion(regionNode);
         var layout = RegionGenerator.Generate(after);
-        var win = new HordeWinDto(packId, region.RegionId, false,
-            HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), HordeRules.LairOpen(after, layout),
-            null, new List<StateManagement.Models.ItemSaveData>(), 0);
+        HordeWinDto win;
+        if (gathering)
+        {
+            // Counted against the gathering as it stood (it is gone from the region once scattered).
+            var warbands = HordeReturnRules.GatheringPacks(region);
+            int broken = warbands.Count(p => region.Gathering!.Broken.Contains(p.Id)) + 1;
+            win = new HordeWinDto(packId, region.RegionId, false, broken, warbands.Count, false,
+                null, new List<StateManagement.Models.ItemSaveData>(), 0, Gathering: true, Scattered: scattered);
+        }
+        else
+            win = new HordeWinDto(packId, region.RegionId, false,
+                HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), HordeRules.LairOpen(after, layout),
+                null, new List<StateManagement.Models.ItemSaveData>(), 0);
 
         _logger.LogInformation("Pack {Pack} broken by {User} (run {RunId}): {Freed}/{Total}, {Xp} XP, {Gold} gold.",
             packId, userId, run.Id, win.Freed, win.Total, rewards.Experience, rewards.Gold);

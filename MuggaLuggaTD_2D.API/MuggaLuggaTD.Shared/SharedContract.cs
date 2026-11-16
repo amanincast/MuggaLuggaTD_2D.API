@@ -338,6 +338,10 @@ namespace MuggaLuggaTD.Shared
         //   patrol's power added) faces 1,200 x tier with a siege's dice. Fallen land is the holder's but overrun by a
         //   returned horde (HordeState.Returned: warbands by tier, owner-only, no chest), lapsing to the wild in 3 days.
         //   HordeRules routes the tiered shape through IsTiered; StewardRules.IsUnruly excludes overrun land.
-        public const string Version = "1.85.0";
+        // 1.86.0 - Reclaiming phases 3b and 3c: a gathering stands 2/3/4/5 warbands by tier plus a chieftain's band
+        //   ({region}:w{n}, {region}:chief; HordeReturnRules.GatheringPacks), fought on the walk by its holder; each one
+        //   broken weakens it (StrengthOf), and breaking all scatters it. Cleansed land nobody claims grows a fresh wild
+        //   horde a day after its cleansing (ShouldRegrow). HordeRules.StandingPacks and FindPack include a gathering's.
+        public const string Version = "1.86.0";
     }
 }

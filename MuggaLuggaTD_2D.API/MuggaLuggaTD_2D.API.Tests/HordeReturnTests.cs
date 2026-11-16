@@ -320,6 +320,178 @@ public class HordeReturnTests : IDisposable
         Assert.Null((await StoredAsync(instance, "r0")).Gathering);
     }
 
+    // -----------------------------------------------------------------
+    // 3b: its warbands on foot
+    // -----------------------------------------------------------------
+
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(2, 3)]
+    [InlineData(3, 4)]
+    [InlineData(4, 5)]
+    public void AGathering_StandsWarbandsByTier_AndAChieftainsBand(int tier, int warbands)
+    {
+        var region = Gathering(Unruly(), TimeSpan.FromHours(1));
+        region.Tier = tier;
+        var packs = HordeReturnRules.GatheringPacks(region);
+
+        Assert.Equal(warbands, packs.Count(p => !HordeReturnRules.IsChieftain(p.Id)));
+        var chief = Assert.Single(packs, p => HordeReturnRules.IsChieftain(p.Id));
+        Assert.Equal(HordeRules.PackLargest, chief.Size);
+        Assert.Equal(HordeRules.WildBaseLevel(tier) + HordeRules.GuardLevelsAbove, chief.Level);
+        Assert.All(packs, p => Assert.True(HordeReturnRules.IsGatheringPack(p.Id), p.Id));
+        Assert.All(packs, p => Assert.InRange(p.Level, HordeRules.WildBaseLevel(tier) + 1, HordeRules.WildBaseLevel(tier) + 4));
+        Assert.Equal(packs.Select(p => p.Id), HordeRules.StandingPacks(region).Select(p => p.Id));
+        Assert.Equal(packs.Count, packs.Select(p => p.Cell).Distinct().Count());
+    }
+
+    [Fact]
+    public void AHordesOwnWarbands_AreNotAGatherings()
+    {
+        Assert.False(HordeReturnRules.IsGatheringPack("r2:p0"));
+        Assert.False(HordeReturnRules.IsGatheringPack("r2:guard"));
+        Assert.True(HordeReturnRules.IsGatheringPack("r2:w3"));
+        Assert.True(HordeReturnRules.IsGatheringPack("r2:chief"));
+    }
+
+    [Fact]
+    public void EachWarbandBroken_WeakensIt_AndOnlyItsHolderFightsThem()
+    {
+        var region = Gathering(Unruly(), TimeSpan.FromHours(1));
+        var packs = HordeReturnRules.GatheringPacks(region);
+        double whole = HordeReturnRules.StrengthOf(region);
+        Assert.Equal(HordeReturnRules.Strength(region.Tier), whole);
+
+        region.Gathering!.Broken.Add(packs[1].Id);
+        Assert.True(HordeReturnRules.StrengthOf(region) < whole);
+        Assert.Null(HordeRules.WhyNotBreak(region, packs[2].Id, TestIds.Player));
+        Assert.NotNull(HordeRules.WhyNotBreak(region, packs[2].Id, TestIds.Rival));
+        Assert.NotNull(HordeRules.WhyNotBreak(region, packs[1].Id, TestIds.Player));
+        Assert.False(HordeReturnRules.AllBroken(region));
+
+        foreach (var pack in packs) if (!region.Gathering.Broken.Contains(pack.Id)) region.Gathering.Broken.Add(pack.Id);
+        Assert.True(HordeReturnRules.AllBroken(region));
+        Assert.Empty(HordeRules.StandingPacks(region));
+    }
+
+    [Fact]
+    public async Task BreakingItsLastWarband_OnFoot_ScattersIt_AndPaysTheFight()
+    {
+        var region = Gathering(Unruly(), TimeSpan.FromHours(1));
+        var packs = HordeReturnRules.GatheringPacks(region);
+        foreach (var pack in packs.Skip(1)) region.Gathering!.Broken.Add(pack.Id);
+        var instance = await SeedAsync(Seat(), region);
+        var party = new PlayerParty
+        {
+            GameInstanceId = instance, UserId = TestIds.Player, Name = "The Vanguard",
+            CharacterIdsJson = MarchingArmy.WriteIds(new List<string> { Hero }),
+            State = CompanyState.Idle, RegionId = "r2", SiteId = TestWorld.KeepIn(region),
+        };
+        _db.PlayerParties.Add(party);
+        await _db.SaveChangesAsync();
+
+        var (begun, runId, encounter) = await Pve.BeginPackAsync(instance, TestIds.Player,
+            new PveBeginRequest(HordeRules.PackSiteId(packs[0].Id), SharedContract.Version, null, party.Id));
+        Assert.True(begun.Succeeded, begun.Message);
+        Assert.Equal(packs[0].Level, encounter!.Level);
+
+        var run = await _db.PveRuns.SingleAsync(r => r.Id == runId);
+        run.StartedAt = DateTime.UtcNow - TimeSpan.FromMinutes(2);
+        await _db.SaveChangesAsync();
+        var (claimed, response, world) = await Pve.ClaimAsync(instance, TestIds.Player, TestIds.Player, new PveClaimRequest(runId, SharedContract.Version));
+        Assert.True(claimed.Succeeded, claimed.Message);
+
+        var win = response!.Horde!;
+        Assert.True(win.Gathering);
+        Assert.True(win.Scattered);
+        Assert.Equal(packs.Count, win.Freed);
+        Assert.Equal(packs.Count, win.Total);
+        Assert.True(response.Experience > 0);
+        var after = TestWorld.ReadRegion(world, "r2");
+        Assert.Null(after.Gathering);
+        Assert.True(HordeReturnRules.IsSafe(after, DateTime.UtcNow));
+        Assert.False(HordeRules.IsOverrun(after));
+    }
+
+    [Fact]
+    public async Task TheSweep_ScattersAGatheringWhoseWarbandsAreAllBroken()
+    {
+        var region = Gathering(Unruly(since: TimeSpan.FromHours(14)), TimeSpan.FromHours(2));
+        foreach (var pack in HordeReturnRules.GatheringPacks(region)) region.Gathering!.Broken.Add(pack.Id);
+        var instance = await SeedAsync(Seat(), region);
+
+        await Returns.SweepAsync(instance, Now);
+
+        Assert.Null((await StoredAsync(instance, "r2")).Gathering);
+        Assert.Equal("broken", Assert.Single(await LettersAsync(instance, LetterKind.HordeScattered)).Detail);
+    }
+
+    [Fact]
+    public async Task AtItsClose_TheRollFacesTheHordeLessItsBrokenWarbands()
+    {
+        // The same die that would lose the land to the whole horde holds it against what is left of it.
+        var region = Gathering(Unruly(since: TimeSpan.FromHours(22)), TimeSpan.FromHours(9));
+        var packs = HordeReturnRules.GatheringPacks(region);
+        foreach (var pack in packs.Skip(1)) region.Gathering!.Broken.Add(pack.Id);
+        var instance = await SeedAsync(Seat(), region);
+        var all = new List<WorldRegionData> { Seat(), region };
+        double left = HordeReturnRules.StrengthOf(region);
+        long emptyHold = HordeReturnRules.Hold(region, all, 0);
+        _dice.D20 = 10;
+        Assert.True(HordeReturnRules.Settle(HordeReturnRules.Strength(region.Tier), emptyHold, 10).Fell);
+        Assert.False(HordeReturnRules.Settle(left, emptyHold, 10).Fell, $"{left} vs {emptyHold}");
+
+        await Returns.SweepAsync(instance, Now);
+
+        var held = await StoredAsync(instance, "r2");
+        Assert.False(HordeRules.IsOverrun(held));
+        Assert.Equal("held", Assert.Single(await LettersAsync(instance, LetterKind.HordeScattered)).Detail);
+    }
+
+    // -----------------------------------------------------------------
+    // 3c: the wild grows back
+    // -----------------------------------------------------------------
+
+    private static WorldRegionData Cleansed(TimeSpan ago)
+    {
+        var region = TestWorld.Region("r5", 3, 0, tier: 3);
+        region.Horde = HordeRules.NewWildHorde(3);
+        region.Horde.ReclaimedAtUtcTicks = (Now - ago).Ticks;
+        region.Horde.Broken.Add("r5:p0");
+        region.Horde.Stakes.Add(new HordeStake { UserId = TestIds.Player, Broken = 3 });
+        region.Horde.Stakes.Add(new HordeStake { UserId = TestIds.Rival, Broken = 1 });
+        return region;
+    }
+
+    [Fact]
+    public async Task CleansedLandNobodyClaims_GrowsBackADayOn_AndTellsThoseWhoBrokeIt()
+    {
+        var instance = await SeedAsync(Seat(), Cleansed(TimeSpan.FromHours(23)));
+
+        await Returns.SweepAsync(instance, Now);
+        Assert.True(HordeRules.IsCleansed(await StoredAsync(instance, "r5")));
+
+        await Returns.SweepAsync(instance, Now.AddHours(1));
+        var regrown = await StoredAsync(instance, "r5");
+        Assert.True(HordeRules.IsWild(regrown) && HordeRules.IsOverrun(regrown));
+        Assert.Empty(regrown.Horde!.Broken);
+        Assert.Empty(regrown.Horde.Stakes);
+        Assert.Equal(HordeRules.WildBaseLevel(3), regrown.Horde.BaseLevel);
+        Assert.Null(regrown.Gathering);
+        var letters = await LettersAsync(instance, LetterKind.WildRegrown);
+        Assert.Equal(new[] { TestIds.Player, TestIds.Rival }.OrderBy(u => u), letters.Select(l => l.UserId).OrderBy(u => u));
+    }
+
+    [Fact]
+    public void ClaimedLand_DoesNotGrowBack()
+    {
+        var claimed = Cleansed(TimeSpan.FromDays(3));
+        claimed.Ownership = LocationOwnership.Player;
+        claimed.OwnerUserId = TestIds.Player;
+        Assert.False(HordeReturnRules.ShouldRegrow(claimed, Now));
+        Assert.True(HordeReturnRules.ShouldRegrow(Cleansed(TimeSpan.FromDays(3)), Now));
+    }
+
     [Fact]
     public async Task ReclaimingFallenLand_PaysTheFight_NoChestNoGoldNoWorker()
     {

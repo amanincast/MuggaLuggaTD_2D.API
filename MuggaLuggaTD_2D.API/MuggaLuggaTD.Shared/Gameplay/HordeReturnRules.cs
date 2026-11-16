@@ -144,6 +144,120 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static double Strength(int tier) => StrengthPerTier * Math.Max(1, Math.Min(4, tier));
 
         /// <summary>
+        /// The strength left after warbands broken on foot (row P3-4): each takes its share, the chieftain's band counted
+        /// as one more, so breaking all but one leaves a fraction (and breaking all scatters it).
+        /// </summary>
+        public static double Strength(int tier, int broken, int warbands) =>
+            Strength(tier) * Math.Max(0, 1.0 - Math.Max(0, broken) / (double)(Math.Max(0, warbands) + 1));
+
+        /// <summary>The strength of a region's gathering as it stands: its tier, less its broken warbands.</summary>
+        public static double StrengthOf(WorldRegionData region)
+        {
+            if (region?.Gathering == null) return 0;
+            var packs = GatheringPacks(region);
+            int broken = packs.Count(p => region.Gathering.Broken.Contains(p.Id));
+            return Strength(region.Tier, broken, packs.Count);
+        }
+
+        // -----------------------------------------------------------------
+        // Its warbands on foot (phase 3b, row P3-4)
+        // -----------------------------------------------------------------
+
+        /// <summary>A gathering's warbands by tier, 1 to 4, not counting the chieftain's band.</summary>
+        public static readonly int[] WarbandsByTier = { 2, 3, 4, 5 };
+
+        public static int Warbands(int tier) => WarbandsByTier[Math.Max(1, Math.Min(WarbandsByTier.Length, tier)) - 1];
+
+        /// <summary>A gathering's warband is <c>{regionId}:w{n}</c>; its chieftain's band <c>{regionId}:chief</c>.</summary>
+        public const string WarbandMark = ":w", ChiefSuffix = ":chief";
+
+        public static bool IsChieftain(string packId) => packId != null && packId.EndsWith(ChiefSuffix, StringComparison.Ordinal);
+
+        /// <summary>Whether a pack id is a gathering's (rather than an overrun horde's <c>:p{n}</c> or <c>:guard</c>).</summary>
+        public static bool IsGatheringPack(string packId)
+        {
+            if (string.IsNullOrEmpty(packId)) return false;
+            if (IsChieftain(packId)) return true;
+            int at = packId.LastIndexOf(WarbandMark, StringComparison.Ordinal);
+            return at > 0 && at + WarbandMark.Length < packId.Length && char.IsDigit(packId[at + WarbandMark.Length]);
+        }
+
+        /// <summary>
+        /// A gathering's warbands (row P3-4): <see cref="Warbands"/> by tier on the roads nearest the keep, levelled as a
+        /// wild horde of the tier (P2-5), and the chieftain's band, the largest, nearest the keep's door, a level under a
+        /// wild warlord. Seeded by the region, so every reader agrees; empty when no horde gathers.
+        /// </summary>
+        public static List<HordeRules.Pack> GatheringPacks(WorldRegionData region)
+        {
+            var packs = new List<HordeRules.Pack>();
+            if (region?.Gathering == null) return packs;
+            var layout = RegionGenerator.Generate(region);
+            int tier = Math.Max(1, Math.Min(4, region.Tier));
+            int baseLevel = HordeRules.WildBaseLevel(tier);
+            // The road cells a wild horde of this tier would stand on, under a seed of the gathering's own, nearest the keep first.
+            var spots = HordeRules.Packs(layout, unchecked(region.Seed * 31 + 17), baseLevel, wild: true, tier: tier)
+                .Where(p => !HordeRules.IsGuard(p.Id)).ToList();
+            if (spots.Count == 0) return packs;
+
+            packs.Add(new HordeRules.Pack
+            {
+                Id = region.RegionId + ChiefSuffix, Cell = spots[0].Cell, Size = HordeRules.PackLargest,
+                Level = baseLevel + HordeRules.GuardLevelsAbove,
+            });
+            int count = Math.Min(Warbands(tier), spots.Count - 1);
+            for (int n = 0; n < count; n++)
+            {
+                double t = count <= 1 ? 0 : n / (double)(count - 1);
+                var spot = spots[n + 1];
+                packs.Add(new HordeRules.Pack
+                {
+                    Id = region.RegionId + WarbandMark + n, Cell = spot.Cell, Size = spot.Size,
+                    Level = baseLevel + (int)Math.Round(HordeRules.NearLevelsAbove + t * (HordeRules.FarLevelsAbove - HordeRules.NearLevelsAbove)),
+                });
+            }
+            return packs;
+        }
+
+        /// <summary>The gathering's warbands not yet broken.</summary>
+        public static List<HordeRules.Pack> StandingGatheringPacks(WorldRegionData region) =>
+            region?.Gathering == null ? new List<HordeRules.Pack>()
+                : GatheringPacks(region).Where(p => !region.Gathering.Broken.Contains(p.Id)).ToList();
+
+        /// <summary>Every warband of the gathering is broken: it scatters (row P3-4).</summary>
+        public static bool AllBroken(WorldRegionData region)
+        {
+            if (region?.Gathering == null) return false;
+            var packs = GatheringPacks(region);
+            return packs.Count > 0 && packs.All(p => region.Gathering.Broken.Contains(p.Id));
+        }
+
+        /// <summary>Why this gathering warband can't be fought now, or null when it can: only the holder fights it.</summary>
+        public static string WhyNotBreak(WorldRegionData region, string packId, string userId)
+        {
+            if (!IsGathering(region)) return "No horde gathers here.";
+            if (!region.IsOwnedByPlayer(userId)) return "Only its holder can turn this horde away.";
+            if (GatheringPacks(region).All(p => p.Id != packId)) return "There is no such warband.";
+            if (region.Gathering.Broken.Contains(packId)) return "That warband is already broken.";
+            return null;
+        }
+
+        // -----------------------------------------------------------------
+        // The wild grows back (phase 3c, row P3-8)
+        // -----------------------------------------------------------------
+
+        /// <summary>Cleansed land nobody claims grows a fresh horde this long after its cleansing (Mike 2026-11-16: 1 day).</summary>
+        public static readonly TimeSpan RegrowsAfter = TimeSpan.FromDays(1);
+
+        /// <summary>When cleansed land grows back.</summary>
+        public static DateTime RegrowsAt(WorldRegionData region) =>
+            new DateTime(region?.Horde?.ReclaimedAtUtcTicks ?? 0, DateTimeKind.Utc) + RegrowsAfter;
+
+        /// <summary>Cleansed, still nobody's, and a day on: the wild grows back (row P3-8).</summary>
+        public static bool ShouldRegrow(WorldRegionData region, DateTime now) =>
+            StewardRules.IsWildClaim(region) && region.Faction == FactionId.None && !region.IsCapital
+            && region.Horde.ReclaimedAtUtcTicks > 0 && RegrowsAt(region) <= now;
+
+        /// <summary>
         /// The region's hold against the horde (rows P3-5, P3-10): its garrison and steward as a siege reads them, with
         /// the power of any company patrolling there added to the garrison.
         /// </summary>
@@ -171,8 +285,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static string WhyItCame(HordeCause cause) =>
             cause == HordeCause.Invaded ? "out of an open rift" : "for want of a steward";
 
-        /// <summary>How to scatter it: what the player can do from the map.</summary>
+        /// <summary>How to scatter it: what the player can do (row P3-3), or break its warbands on foot (P3-4).</summary>
         public static string HowToScatter(HordeCause cause) =>
-            cause == HordeCause.Invaded ? "Seal the rift and it scatters." : "Station a steward at the keep and it scatters.";
+            (cause == HordeCause.Invaded ? "Seal the rift" : "Station a steward at the keep") + ", or break its warbands on foot, and it scatters.";
     }
 }

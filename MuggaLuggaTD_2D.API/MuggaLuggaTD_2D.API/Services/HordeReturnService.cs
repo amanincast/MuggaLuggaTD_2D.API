@@ -116,6 +116,16 @@ public class HordeReturnService
                 continue;
             }
 
+            // Every warband broken on foot (phase 3b): it scatters, and the land is safe a day as if it held.
+            if (HordeReturnRules.AllBroken(region))
+            {
+                WorldRegionBlob.EndGathering(node, now + HordeReturnRules.SafeFor);
+                changed = true;
+                letters.Add((gathering.UserId!, LetterKind.HordeScattered, region.RegionId, subject, "broken"));
+                done.Add($"The horde at {region.RegionId} scattered: its warbands were broken.");
+                continue;
+            }
+
             bool stands = HordeReturnRules.CauseStands(region, invaded.ContainsKey(region.RegionId));
             if ((!stands && !(forced && (force == "hold" || force == "fall"))) || (forced && force == "scatter"))
             {
@@ -132,7 +142,7 @@ public class HordeReturnService
 
             double patrol = await PatrolPowerAsync(gameInstanceId, gathering.UserId!, region.RegionId, world);
             long hold = HordeReturnRules.Hold(region, regions, patrol);
-            double strength = HordeReturnRules.Strength(region.Tier);
+            double strength = HordeReturnRules.StrengthOf(region);
             var result = HordeReturnRules.Settle(strength, hold, _random.Next(1, 21));
             bool fell = forced && force == "fall" || !(forced && force == "hold") && result.Fell;
             var at = forced ? now : HordeReturnRules.StrikesAt(region);
@@ -171,6 +181,22 @@ public class HordeReturnService
             done.Add($"{region.RegionId} went back to the wild: nobody reclaimed it.");
             _sessionLog.Log("HORDE-LAPSE", $"instance={gameInstanceId} region={region.RegionId} user={owner}");
             changed = holdings = true;
+        }
+
+        // 3c. Cleansed land nobody claimed grows a fresh horde a day on (row P3-8), quietly: no gathering, nobody holds it.
+        foreach (var region in regions)
+        {
+            bool forced = forceRegionId == region.RegionId && force == "regrow" && StewardRules.IsWildClaim(region);
+            if (!HordeReturnRules.ShouldRegrow(region, now) && !forced) continue;
+            var node = WorldRegionBlob.FindRegion(world, region.RegionId);
+            if (node == null) continue;
+            string cleansed = region.Horde!.ReclaimedAtUtcTicks.ToString();
+            foreach (var stake in region.Horde.Stakes.Where(s => s.Broken > 0 && !string.IsNullOrEmpty(s.UserId)))
+                letters.Add((stake.UserId, LetterKind.WildRegrown, region.RegionId, cleansed, null));
+            WorldRegionBlob.SetHorde(node, HordeRules.NewWildHorde(region.Tier));
+            done.Add($"{region.RegionId} grew back: nobody claimed it, and a fresh horde holds it.");
+            _sessionLog.Log("HORDE-REGROW", $"instance={gameInstanceId} region={region.RegionId}");
+            changed = true;
         }
 
         // 4. New gatherings (rows P3-1, P3-9): one per player, none in the season's last day.
