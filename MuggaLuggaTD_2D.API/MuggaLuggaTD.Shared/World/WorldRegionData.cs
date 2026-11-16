@@ -98,6 +98,21 @@ namespace MuggaLuggaTD.Shared.World
         /// </summary>
         public HordeState Horde;
 
+        /// <summary>
+        /// When this region was first seen unruly (Reclaiming phase 3, row P3-1), as UTC ticks; 0 while it is not. Stamped
+        /// and cleared by the server's sweep. Ask <see cref="Gameplay.HordeReturnRules"/>.
+        /// </summary>
+        public long UnrulySinceUtcTicks;
+
+        /// <summary>
+        /// A horde gathering to take this region back (Reclaiming phase 3, row P3-3), or null. It strikes at its time
+        /// unless its cause is fixed first. Written only by the server.
+        /// </summary>
+        public HordeGathering Gathering;
+
+        /// <summary>A region that turned a horde away is safe from another until then, as UTC ticks (row P3-9).</summary>
+        public long HordeSafeUntilUtcTicks;
+
         public bool IsOwnedByPlayer(string userId)
         {
             return Ownership == LocationOwnership.Player
@@ -140,6 +155,46 @@ namespace MuggaLuggaTD.Shared.World
 
         /// <summary>A wild horde's stakes: who broke how many of its warbands, and their own tries at its lair.</summary>
         public List<HordeStake> Stakes = new List<HordeStake>();
+
+        /// <summary>
+        /// A horde that came back and took held land (Reclaiming phase 3, row P3-6). Shaped like a wild horde (warbands
+        /// by tier, a warlord whose fall opens the sites) but only the land's holder may take it back.
+        /// </summary>
+        public bool Returned;
+
+        /// <summary>When a returned horde took the land, as UTC ticks: it lapses to the wild after three days (row P3-6).</summary>
+        public long FellAtUtcTicks;
+    }
+
+    /// <summary>Why a horde came back to held land (Reclaiming row P3-1). Appended only: the integers are stored.</summary>
+    public enum HordeCause
+    {
+        None = 0,
+
+        /// <summary>Land claimed from the wild that has stood without a steward.</summary>
+        Unruly = 1,
+
+        /// <summary>Land a Lesser rift invaded and nobody sealed.</summary>
+        Invaded = 2,
+    }
+
+    /// <summary>A horde gathering on held land (Reclaiming phase 3, row P3-3): it strikes when its time is up.</summary>
+    [Serializable]
+    public class HordeGathering
+    {
+        /// <summary>When it began to gather, as UTC ticks.</summary>
+        public long StartedAtUtcTicks;
+
+        /// <summary>When it strikes, as UTC ticks.</summary>
+        public long StrikesAtUtcTicks;
+
+        /// <summary>The holder it gathers against; if the land changes hands, it is called off.</summary>
+        public string UserId;
+
+        public HordeCause Cause;
+
+        /// <summary>Its warbands broken on foot (phase 3b), each one weakening it.</summary>
+        public List<string> Broken = new List<string>();
     }
 
     /// <summary>One player's part in cleansing a wild region (Reclaiming phase 2, rows P2-4 and P2-5).</summary>

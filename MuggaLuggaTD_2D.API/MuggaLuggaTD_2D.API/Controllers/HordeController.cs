@@ -168,6 +168,61 @@ public class HordeController : ControllerBase
         return Ok(new { message = $"Wild {target.RegionId}: {what}." });
     }
 
+    /// <summary>
+    /// The horde returns (phase 3): on <paramref name="regionId"/>, one of mine, <c>gather</c> (a horde gathers now,
+    /// whatever the cause), <c>scatter</c>, <c>hold</c> or <c>fall</c> (close the gathering now, with that outcome),
+    /// <c>lapse</c> (fallen land goes back to the wild now), <c>unruly</c> (the unruly stamp 12 hours back, so the
+    /// next sweep gathers), or <c>sweep</c> (run the sweep as the scheduler does).
+    /// </summary>
+    [HttpPost("debug/return/{what}")]
+    public async Task<IActionResult> DebugReturn(Guid gameInstanceId, string what, [FromQuery] string? regionId,
+        [FromServices] HordeReturnService returns)
+    {
+        if (!_environment.IsDevelopment()) return NotFound();
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null || !await _membership.IsMemberAsync(gameInstanceId, userId)) return Forbid();
+        var now = DateTime.UtcNow;
+
+        if (what == "sweep")
+        {
+            var swept = await returns.SweepAsync(gameInstanceId, now);
+            return Ok(new { message = swept.Done.Count == 0 ? "Horde sweep: nothing to do." : string.Join(" ", swept.Done) });
+        }
+
+        var row = await _context.WorldViewGameData.FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+        if (row == null) return NotFound(new { message = "This realm has no world yet." });
+        var world = JsonNode.Parse(row.GameData);
+        var node = string.IsNullOrEmpty(regionId) ? null : WorldRegionBlob.FindRegion(world, regionId);
+        if (node == null) return BadRequest(new { message = "Name a region." });
+        var target = WorldRegionBlob.ReadRegion(node);
+        if (!target.IsOwnedByPlayer(userId)) return BadRequest(new { message = "That land is not yours." });
+
+        switch (what)
+        {
+            case "unruly":
+                if (!StewardRules.IsUnruly(target)) return BadRequest(new { message = "That land is not unruly: it has a steward, or needs none." });
+                WorldRegionBlob.SetUnrulySince(node, (now - HordeReturnRules.CauseLasts).Ticks);
+                await SaveAsync(gameInstanceId, row, world!);
+                return Ok(new { message = $"{target.RegionId} has been unruly 12 hours; the next sweep gathers a horde." });
+            case "gather":
+                if (!HordeReturnRules.CanBeStruck(target)) return BadRequest(new { message = "A horde can't come to that land: it is your seat, or overrun." });
+                break;
+            case "scatter":
+            case "hold":
+            case "fall":
+                if (!HordeReturnRules.IsGathering(target)) return BadRequest(new { message = "No horde gathers there." });
+                break;
+            case "lapse":
+                if (!HordeRules.IsReturned(target) || !HordeRules.IsOverrun(target)) return BadRequest(new { message = "That land has not fallen." });
+                break;
+            default:
+                return BadRequest(new { message = "gather, scatter, hold, fall, lapse, unruly or sweep." });
+        }
+
+        var outcome = await returns.SweepAsync(gameInstanceId, now, target.RegionId, what);
+        return Ok(new { message = outcome.Done.Count == 0 ? $"Horde {what}: nothing happened." : string.Join(" ", outcome.Done) });
+    }
+
     private async Task SaveAsync(Guid gameInstanceId, Models.WorldViewGameData row, JsonNode world)
     {
         row.GameData = world.ToJsonString();

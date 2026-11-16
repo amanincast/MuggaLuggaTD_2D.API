@@ -147,11 +147,15 @@ public partial class WorldPveService
         var materials = MaterialRewardCalculator.Calculate(encounter.Level, encounter.Tier, _content.RunTuning,
             _content.Materials, Random.Shared, site: HordeRules.SiteType);
 
+        // Land a horde took back (phase 3, row P3-7, Mike: "the fights pay and any drops by the mobs"): no chest, no
+        // reclaim gold, no worker. Defence is upkeep, not a windfall.
+        bool returned = HordeRules.IsReturned(resolved.Region);
+
         // The reclaim reward (row 5): something to look forward to, and the step into the game proper.
         var chest = new List<StateManagement.Models.ItemSaveData>();
         Enums.ItemRarityTypes? chestRarity = null;
         long gold = rewards.Gold;
-        if (encounter.IsLair)
+        if (encounter.IsLair && !returned)
         {
             chestRarity = Enums.ItemRarityTypes.Rare;
             chest = QuestRules.RollChest(_content.DroppableItems.ToList(), Random.Shared, encounter.Level, chestRarity.Value);
@@ -164,11 +168,11 @@ public partial class WorldPveService
 
         // Freeing your land counts as First Steps' "clear" (the ledger's fight); the warlord's fall is "reclaim".
         if (_firstSteps != null) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Clear);
-        if (_firstSteps != null && encounter.IsLair) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Reclaim);
+        if (_firstSteps != null && encounter.IsLair && !returned) await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Reclaim);
 
         // The reclaim reward's free worker (row 5), at work at the first resource site freed.
         (Models.HiredWorker Worker, string SiteId)? given = null;
-        if (encounter.IsLair && _hiring != null)
+        if (encounter.IsLair && !returned && _hiring != null)
             given = await _hiring.GrantReclaimWorkerAsync(gameInstanceId, userId, WorldRegionBlob.ReadRegion(resolved.RegionNode),
                 WorldRegionBlob.ReadAllRegions(world));
 
@@ -186,7 +190,7 @@ public partial class WorldPveService
         var after = WorldRegionBlob.ReadRegion(resolved.RegionNode);
         var win = new HordeWinDto(target!, resolved.Region.RegionId, encounter.IsLair,
             HordeRules.FreedCount(after, layout), HordeRules.Total(after, layout), HordeRules.LairOpen(after, layout),
-            chestRarity, chest, encounter.IsLair ? HordeRules.ReclaimGold : 0,
+            chestRarity, chest, encounter.IsLair && !returned ? HordeRules.ReclaimGold : 0,
             given?.Worker.Name, given?.Worker.Trade.ToString(), given?.SiteId);
 
         _logger.LogInformation("Horde site {Site} freed by {User} (run {RunId}): {Freed}/{Total}, reclaimed={Reclaimed}, {Xp} XP, {Gold} gold.",

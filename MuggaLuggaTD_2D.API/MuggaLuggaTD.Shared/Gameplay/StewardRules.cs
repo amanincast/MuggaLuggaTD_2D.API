@@ -48,9 +48,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
             region != null && !string.IsNullOrEmpty(region.StewardId) && region.SiteOverrides != null &&
             region.SiteOverrides.Values.Any(o => o?.GarrisonCharacterIds != null && o.GarrisonCharacterIds.Contains(region.StewardId));
 
-        /// <summary>Held, in need of a steward, and without one.</summary>
+        /// <summary>
+        /// Held, in need of a steward, and without one. Land a horde took back (Reclaiming phase 3) is overrun rather than
+        /// unruly: there is nowhere to station a steward until it is reclaimed.
+        /// </summary>
         public static bool IsUnruly(WorldRegionData region) =>
-            region != null && region.StewardNeeded && region.Ownership == LocationOwnership.Player && !HasSteward(region);
+            region != null && region.StewardNeeded && region.Ownership == LocationOwnership.Player && !HasSteward(region)
+            && !HordeRules.IsOverrun(region);
 
         /// <summary>The first of this player's regions that is unruly, or null.</summary>
         public static WorldRegionData FirstUnruly(string userId, IEnumerable<WorldRegionData> regions) =>

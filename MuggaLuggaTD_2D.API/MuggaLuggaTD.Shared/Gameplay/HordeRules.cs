@@ -122,9 +122,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             !string.IsNullOrEmpty(siteId) && LairOf(layout, wild)?.SiteId == siteId;
 
         /// <summary>The region's lair: a seat's or a wild horde's.</summary>
-        public static SiteSpec LairOf(WorldRegionData region, RegionLayout layout) => LairOf(layout, IsWild(region));
+        public static SiteSpec LairOf(WorldRegionData region, RegionLayout layout) => LairOf(layout, IsTiered(region));
 
-        public static bool IsLair(WorldRegionData region, RegionLayout layout, string siteId) => IsLair(layout, siteId, IsWild(region));
+        public static bool IsLair(WorldRegionData region, RegionLayout layout, string siteId) => IsLair(layout, siteId, IsTiered(region));
 
         /// <summary>
         /// The level of the horde at a held site: a ramp outward from the keep (row 4), the lair at its top. A wild
@@ -133,7 +133,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static int LevelAt(WorldRegionData region, RegionLayout layout, string siteId, bool nextFight = false, string userId = null)
         {
             int baseLevel = Math.Max(1, region?.Horde?.BaseLevel ?? 1);
-            bool wild = IsWild(region);
+            bool wild = IsTiered(region);
             if (IsLair(layout, siteId, wild)) return baseLevel + LairLevelsAbove - LairEase(region, nextFight, userId);
             var ramp = HeldSites(layout).Where(s => !IsLair(layout, s.SiteId, wild)).ToList();
             int index = ramp.FindIndex(s => s.SiteId == siteId);
@@ -150,7 +150,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// (row P2-2), so its count is its warbands and the lair.
         /// </summary>
         public static int Total(WorldRegionData region, RegionLayout layout) =>
-            IsWild(region) ? PacksOf(region, layout).Count + (LairOf(region, layout) != null ? 1 : 0) : Total(layout, region?.Seed ?? 0);
+            IsTiered(region) ? PacksOf(region, layout).Count + (LairOf(region, layout) != null ? 1 : 0) : Total(layout, region?.Seed ?? 0);
 
         /// <summary>How much of it is taken back: sites freed and packs broken.</summary>
         public static int FreedCount(WorldRegionData region, RegionLayout layout)
@@ -167,7 +167,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             if (!IsOverrun(region)) return 0;
             int packs = PacksOf(region, layout).Count(p => !region.Horde.Broken.Contains(p.Id));
             // A wild warlord waits for its warbands only: the region's sites open with its fall (row P2-2).
-            if (IsWild(region)) return packs;
+            if (IsTiered(region)) return packs;
             return HeldSites(layout).Count(s => !IsLair(layout, s.SiteId) && !region.Horde.Freed.Contains(s.SiteId)) + packs;
         }
 
@@ -182,8 +182,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public static string WhyNotFree(WorldRegionData region, RegionLayout layout, string siteId, string userId)
         {
             if (!IsOverrun(region)) return "No horde holds this land.";
-            bool wild = IsWild(region);
-            if (!wild && !region.IsOwnedByPlayer(userId)) return "Only its holder can take this land back.";
+            bool wild = IsTiered(region);
+            if (!IsWild(region) && !region.IsOwnedByPlayer(userId)) return "Only its holder can take this land back.";
             var site = layout?.Sites?.FirstOrDefault(s => s.SiteId == siteId);
             if (site == null || !CanBeHeld(site)) return "The horde does not hold that.";
             if (region.Horde.Freed.Contains(siteId)) return "That is already free.";
@@ -280,7 +280,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>The region's packs over a layout already made: a seat's, or a wild horde's (fewer, by tier).</summary>
         public static List<Pack> PacksOf(WorldRegionData region, RegionLayout layout) =>
             region == null ? new List<Pack>() : Packs(layout, region.Seed, Math.Max(1, region.Horde?.BaseLevel ?? 1),
-                IsWild(region), Math.Max(1, region.Tier));
+                IsTiered(region), Math.Max(1, region.Tier));
 
         /// <summary>
         /// The packs a horde puts on a region's roads: seeded by the region, so every reader agrees. They stand on the
@@ -422,6 +422,20 @@ namespace MuggaLuggaTD.Shared.Gameplay
             && region.Faction == FactionId.None && !region.IsCapital;
 
         public static bool IsWild(WorldRegionData region) => region?.Horde?.Wild == true;
+
+        /// <summary>A horde that came back and took held land (phase 3, row P3-6): only its holder takes it back.</summary>
+        public static bool IsReturned(WorldRegionData region) => region?.Horde?.Returned == true;
+
+        /// <summary>
+        /// A horde shaped by the region's tier: a wild one, or one that came back (row P3-6, "the way you reclaim your
+        /// seat: its warbands and a warlord at the lair"). Its warbands are by tier, its warlord waits only for them, and
+        /// its fall opens every site at once.
+        /// </summary>
+        public static bool IsTiered(WorldRegionData region) => IsWild(region) || IsReturned(region);
+
+        /// <summary>The horde that takes held land when its garrison fails (row P3-6): a wild horde of its tier, the holder's to beat.</summary>
+        public static HordeState NewReturnedHorde(int tier, DateTime at) =>
+            new HordeState { BaseLevel = WildBaseLevel(tier), Returned = true, FellAtUtcTicks = at.Ticks };
 
         /// <summary>A wild region whose warlord has fallen: its sites are open to everyone, and its keep may be claimed.</summary>
         public static bool IsCleansed(WorldRegionData region) => IsWild(region) && IsReclaimed(region);

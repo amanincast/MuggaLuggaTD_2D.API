@@ -100,7 +100,10 @@ public static class WorldRegionBlob
             SiteOverrides = ReadOverrides(region),
             Horde = ReadHorde(region["Horde"]),
             StewardNeeded = region["StewardNeeded"]?.GetValue<bool>() ?? false,
-            StewardId = region["StewardId"]?.GetValue<string>()
+            StewardId = region["StewardId"]?.GetValue<string>(),
+            UnrulySinceUtcTicks = region["UnrulySinceUtcTicks"]?.GetValue<long>() ?? 0,
+            Gathering = ReadGathering(region["Gathering"]),
+            HordeSafeUntilUtcTicks = region["HordeSafeUntilUtcTicks"]?.GetValue<long>() ?? 0
         };
     }
 
@@ -138,7 +141,9 @@ public static class WorldRegionBlob
             LairTries = horde["LairTries"]?.GetValue<int>() ?? 0,
             ReclaimedAtUtcTicks = horde["ReclaimedAtUtcTicks"]?.GetValue<long>() ?? 0,
             Wild = horde["Wild"]?.GetValue<bool>() ?? false,
-            Stakes = ReadStakes(horde["Stakes"])
+            Stakes = ReadStakes(horde["Stakes"]),
+            Returned = horde["Returned"]?.GetValue<bool>() ?? false,
+            FellAtUtcTicks = horde["FellAtUtcTicks"]?.GetValue<long>() ?? 0
         };
     }
 
@@ -191,6 +196,12 @@ public static class WorldRegionBlob
             written["Wild"] = true;
             written["Stakes"] = stakes;
         }
+        // A horde that came back (phase 3) carries its flag and when it took the land.
+        if (horde.Returned)
+        {
+            written["Returned"] = true;
+            written["FellAtUtcTicks"] = horde.FellAtUtcTicks;
+        }
         return written;
     }
 
@@ -230,6 +241,92 @@ public static class WorldRegionBlob
         if (horde.Wild && !string.IsNullOrEmpty(userId)) StakeFor(horde, userId).LairTries++;
         else horde.LairTries++;
         SetHorde(regionNode, horde);
+    }
+
+    // -----------------------------------------------------------------
+    // The horde returns (Reclaiming phase 3)
+    // -----------------------------------------------------------------
+
+    private static HordeGathering? ReadGathering(JsonNode? node)
+    {
+        if (node is not JsonObject gathering) return null;
+        return new HordeGathering
+        {
+            StartedAtUtcTicks = gathering["StartedAtUtcTicks"]?.GetValue<long>() ?? 0,
+            StrikesAtUtcTicks = gathering["StrikesAtUtcTicks"]?.GetValue<long>() ?? 0,
+            UserId = gathering["UserId"]?.GetValue<string>(),
+            Cause = (HordeCause)(gathering["Cause"]?.GetValue<int>() ?? 0),
+            Broken = ReadStrings(gathering["Broken"])
+        };
+    }
+
+    /// <summary>Stamps when the region became unruly (0 clears it).</summary>
+    public static void SetUnrulySince(JsonNode regionNode, long ticks)
+    {
+        if (ticks > 0) regionNode["UnrulySinceUtcTicks"] = ticks;
+        else (regionNode as JsonObject)?.Remove("UnrulySinceUtcTicks");
+    }
+
+    /// <summary>A horde begins to gather on the region (row P3-3).</summary>
+    public static void StartGathering(JsonNode regionNode, HordeGathering gathering)
+    {
+        var broken = new JsonArray();
+        foreach (var id in gathering.Broken) broken.Add(id);
+        regionNode["Gathering"] = new JsonObject
+        {
+            ["StartedAtUtcTicks"] = gathering.StartedAtUtcTicks,
+            ["StrikesAtUtcTicks"] = gathering.StrikesAtUtcTicks,
+            ["UserId"] = gathering.UserId,
+            ["Cause"] = (int)gathering.Cause,
+            ["Broken"] = broken
+        };
+    }
+
+    /// <summary>The gathering is over. Turned away, the region is safe until <paramref name="safeUntil"/> (row P3-9).</summary>
+    public static void EndGathering(JsonNode regionNode, DateTime? safeUntil = null)
+    {
+        (regionNode as JsonObject)?.Remove("Gathering");
+        if (safeUntil.HasValue) regionNode["HordeSafeUntilUtcTicks"] = safeUntil.Value.Ticks;
+    }
+
+    /// <summary>
+    /// The garrison failed (row P3-6): the land stays its holder's but a horde of its tier holds it. Its garrison and
+    /// steward come home unhurt, and the horde takes no captives. Returns how many came home.
+    /// </summary>
+    public static int Fall(JsonNode regionNode, int tier, DateTime at)
+    {
+        int home = 0;
+        if (regionNode["SiteOverrides"] is JsonObject overrides)
+        {
+            foreach (var (_, node) in overrides)
+            {
+                if (node is not JsonObject entry) continue;
+                if (entry["GarrisonCharacterIds"] is JsonArray ids) home += ids.Count;
+                entry["GarrisonCharacterIds"] = new JsonArray();
+                entry["GarrisonPower"] = 0f;
+            }
+        }
+        SetSteward(regionNode, null);
+        EndGathering(regionNode);
+        SetUnrulySince(regionNode, 0);
+        ClearFortifying(regionNode);
+        SetHorde(regionNode, HordeRules.NewReturnedHorde(tier, at));
+        return home;
+    }
+
+    /// <summary>Fallen land nobody reclaimed in three days goes back to the wild (row P3-6): neutral, with a fresh wild horde.</summary>
+    public static void Lapse(JsonNode regionNode, int tier)
+    {
+        regionNode["Ownership"] = (int)LocationOwnership.Neutral;
+        regionNode["OwnerUserId"] = string.Empty;
+        regionNode["OwnerDisplayName"] = string.Empty;
+        regionNode["Faction"] = (int)FactionId.None;
+        regionNode["IsCapital"] = false;
+        NeedSteward(regionNode, false);
+        SetUnrulySince(regionNode, 0);
+        EndGathering(regionNode);
+        (regionNode as JsonObject)?.Remove("HordeSafeUntilUtcTicks");
+        SetHorde(regionNode, HordeRules.NewWildHorde(tier));
     }
 
     /// <summary>The warlord fell: the region is reclaimed.</summary>
@@ -504,6 +601,11 @@ public static class WorldRegionBlob
 
         // A new holder brings no steward, and owes one only if they claimed it from the wild (the caller says so).
         NeedSteward(regionNode, false);
+
+        // Nor the old holder's troubles: an unruly stamp or a horde gathering against them (Reclaiming phase 3).
+        SetUnrulySince(regionNode, 0);
+        EndGathering(regionNode);
+        (regionNode as JsonObject)?.Remove("HordeSafeUntilUtcTicks");
     }
 
     /// <summary>Marks works under way, so every player sees the region being raised.</summary>
@@ -696,6 +798,9 @@ public static class WorldRegionBlob
         if (region.Horde != null) node["Horde"] = WriteHorde(region.Horde);
         if (region.StewardNeeded) node["StewardNeeded"] = true;
         if (!string.IsNullOrEmpty(region.StewardId)) node["StewardId"] = region.StewardId;
+        if (region.UnrulySinceUtcTicks > 0) SetUnrulySince(node, region.UnrulySinceUtcTicks);
+        if (region.Gathering != null) StartGathering(node, region.Gathering);
+        if (region.HordeSafeUntilUtcTicks > 0) node["HordeSafeUntilUtcTicks"] = region.HordeSafeUntilUtcTicks;
         return node;
     }
 }
