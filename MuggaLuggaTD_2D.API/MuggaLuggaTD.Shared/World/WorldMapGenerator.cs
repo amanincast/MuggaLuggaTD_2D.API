@@ -5,19 +5,34 @@ using System.Linq;
 namespace MuggaLuggaTD.Shared.World
 {
     /// <summary>
-    /// Lays out a world of regions (design 7d): roughly eighty hexes, each with a biome, a tier and
-    /// a seed, with the players spaced apart and the NPC factions holding ground between them.
+    /// Lays out a world of regions (design 7d): a hexagon of 127 hexes (radius 6), each with a biome, a tier
+    /// and a seed, with the players spaced apart and the NPC factions holding ground between them.
     ///
     /// <para>Deterministic from the world seed, so the same world can be rebuilt rather than stored,
     /// and so the server can reconstruct what the client is looking at.</para>
     /// </summary>
     public static class WorldMapGenerator
     {
-        public const int DefaultRegionCount = 78;
+        /// <summary>
+        /// A whole hexagon of radius 6 (Reclaiming 2b, row P2-11: "about 120", up from 78). A full ring keeps the map
+        /// round; 78 was radius 4 plus part of ring 5, which left one side of the world shallower than the other.
+        /// Stored worlds keep the size they were made with, so this reaches new worlds and new seasons only.
+        /// </summary>
+        public const int DefaultRegionCount = 127;
 
-        /// <summary>Capitals are seated in this band of rings, leaving the centre neutral heartland.</summary>
-        private const int SettlementBandInner = 2;
-        private const int SettlementBandOuter = 4;
+        /// <summary>
+        /// Capitals are seated in this band of rings (3 to 5 of 6), leaving the centre neutral heartland and the
+        /// wild land between seats wide enough to be worth cleansing (row P2-11: seat players further apart).
+        /// </summary>
+        public const int SettlementBandInner = 3;
+        public const int SettlementBandOuter = 5;
+
+        /// <summary>Whether a hex is in the band capitals are seated in, at generation or for a late joiner.</summary>
+        public static bool InSettlementBand(HexCoord hex)
+        {
+            int distance = HexCoord.Distance(new HexCoord(0, 0), hex);
+            return distance >= SettlementBandInner && distance <= SettlementBandOuter;
+        }
 
         /// <summary>
         /// Builds a world. <paramref name="players"/> maps user id to display name; each gets a
@@ -98,13 +113,14 @@ namespace MuggaLuggaTD.Shared.World
 
         /// <summary>
         /// The map gets harder outward from the centre, so a player always has somewhere gentler
-        /// behind them and somewhere worth taking ahead.
+        /// behind them and somewhere worth taking ahead. Over radius 6: the heart (7 regions) is tier 1, rings 2-3
+        /// (30) tier 2, rings 4-5 (54) tier 3, and the rim (36) tier 4.
         /// </summary>
         private static int TierFor(int distanceFromCentre)
         {
             if (distanceFromCentre <= 1) return 1;
             if (distanceFromCentre <= 3) return 2;
-            if (distanceFromCentre <= 4) return 3;
+            if (distanceFromCentre <= 5) return 3;
             return 4;
         }
 
@@ -145,11 +161,8 @@ namespace MuggaLuggaTD.Shared.World
 
             var band = new List<WorldRegionData>();
             foreach (var region in regions)
-            {
-                int distance = HexCoord.Distance(new HexCoord(0, 0), region.Hex);
-                if (distance >= SettlementBandInner && distance <= SettlementBandOuter)
+                if (InSettlementBand(region.Hex))
                     band.Add(region);
-            }
 
             // Nothing in the band (a tiny world) — fall back to the whole map rather than seating
             // nobody.

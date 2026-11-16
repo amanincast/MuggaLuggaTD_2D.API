@@ -165,9 +165,14 @@ public class WorldProvisioningService
 
     /// <summary>
     /// Picks the unclaimed region furthest from every seat already taken, so a late joiner is not
-    /// dropped on a neighbour's doorstep.
+    /// dropped on a neighbour's doorstep. Drawn from the generator's settlement band like the first
+    /// seats (Reclaiming 2b), so a late joiner is not pushed out to the tier-4 rim just because it is
+    /// furthest from everyone; the whole map only when the band has no free region left.
     /// </summary>
     private static JsonNode? ChooseSeat(JsonArray regions)
+        => ChooseSeat(regions, inBandOnly: true) ?? ChooseSeat(regions, inBandOnly: false);
+
+    private static JsonNode? ChooseSeat(JsonArray regions, bool inBandOnly)
     {
         var taken = new List<HexCoord>();
         foreach (var region in regions)
@@ -191,6 +196,7 @@ public class WorldProvisioningService
             var hex = new HexCoord(
                 region["Hex"]?["Q"]?.GetValue<int>() ?? 0,
                 region["Hex"]?["R"]?.GetValue<int>() ?? 0);
+            if (inBandOnly && !WorldMapGenerator.InSettlementBand(hex)) continue;
 
             int score = taken.Count == 0 ? 0 : taken.Min(t => HexCoord.Distance(hex, t));
             if (score <= bestScore) continue;

@@ -45,7 +45,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
 
         /// <summary>
         /// Where territory stops paying out, so a runaway leader's roster does not run away with them.
-        /// A world is ~78 regions and a dominant player can hold far more than fourteen; past this
+        /// A world is 127 regions (78 before Reclaiming 2b) and a dominant player can hold far more than fourteen; past this
         /// point more ground is its own reward.
         /// </summary>
         public const int MaximumFromTerritory = 14;
