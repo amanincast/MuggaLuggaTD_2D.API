@@ -328,6 +328,25 @@ public class LetterService
                     flagged.Add(letter.Id);
         }
 
+        // The horde (Reclaiming phase 3): a gathering while it gathers, fallen land while it stays overrun.
+        var horde = candidates.Where(l => l.RegionId != null && l.SubjectId != null &&
+            (l.Kind == nameof(LetterKind.HordeGathers) || l.Kind == nameof(LetterKind.RegionFell))).ToList();
+        if (horde.Count > 0)
+        {
+            var row = await _context.WorldViewGameData.AsNoTracking().FirstOrDefaultAsync(w => w.GameInstanceId == gameInstanceId);
+            var regions = row == null ? new List<MuggaLuggaTD.Shared.World.WorldRegionData>()
+                : WorldRegionBlob.ReadAllRegions(System.Text.Json.Nodes.JsonNode.Parse(row.GameData));
+            var byId = regions.ToDictionary(r => r.RegionId, StringComparer.Ordinal);
+            foreach (var letter in horde)
+            {
+                if (!byId.TryGetValue(letter.RegionId!, out var region) || !region.IsOwnedByPlayer(userId)) continue;
+                bool live = letter.Kind == nameof(LetterKind.HordeGathers)
+                    ? region.Gathering?.StartedAtUtcTicks.ToString() == letter.SubjectId
+                    : HordeRules.IsReturned(region) && HordeRules.IsOverrun(region) && region.Horde!.FellAtUtcTicks.ToString() == letter.SubjectId;
+                if (live) flagged.Add(letter.Id);
+            }
+        }
+
         var seasons = candidates.Where(l => l.Kind == nameof(LetterKind.SeasonEnded)).ToList();
         if (seasons.Count > 0)
         {

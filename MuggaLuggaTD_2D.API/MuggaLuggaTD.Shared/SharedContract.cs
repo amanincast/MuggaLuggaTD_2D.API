@@ -333,6 +333,11 @@ namespace MuggaLuggaTD.Shared
         // 1.84.0 - Reclaiming phase 2b, the bigger map (row P2-11): new worlds are a hexagon of 127 regions (radius 6, was
         //   78); capitals seat in rings 3-5 (was 2-4), late joiners too; tier 3 spans rings 4-5 and tier 4 is the rim.
         //   Stored worlds keep their size; a season reset regenerates at the new one.
-        public const string Version = "1.84.0";
+        // 1.85.0 - Reclaiming phase 3a, the horde returns (spec §6): land unruly or invaded for 12h gathers a horde
+        //   (WorldRegionData.Gathering, UnrulySinceUtcTicks, HordeSafeUntilUtcTicks); 8h on, the garrison's hold (a
+        //   patrol's power added) faces 1,200 x tier with a siege's dice. Fallen land is the holder's but overrun by a
+        //   returned horde (HordeState.Returned: warbands by tier, owner-only, no chest), lapsing to the wild in 3 days.
+        //   HordeRules routes the tiered shape through IsTiered; StewardRules.IsUnruly excludes overrun land.
+        public const string Version = "1.85.0";
     }
 }

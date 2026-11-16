@@ -87,6 +87,24 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// land cleansed. Actor: who killed its warlord. Detail: "{rarity}".
         /// </summary>
         RegionCleansed,
+
+        /// <summary>
+        /// A horde gathers on your land (Reclaiming row P3-3). Region: where. Subject: when it began (ticks). Detail: its
+        /// cause, a <see cref="World.HordeCause"/> name. Flagged while it gathers.
+        /// </summary>
+        HordeGathers,
+
+        /// <summary>The horde on your land scattered. Region: where. Subject: the gathering. Detail: "fixed" or "held".</summary>
+        HordeScattered,
+
+        /// <summary>
+        /// Your garrison failed and the horde took your land back (row P3-6). Region: where. Subject: when it fell (ticks).
+        /// Detail: how many came home. Flagged while it stays overrun.
+        /// </summary>
+        RegionFell,
+
+        /// <summary>Fallen land you didn't reclaim went back to the wild (row P3-6). Region: where.</summary>
+        RegionLapsed,
     }
 
     /// <summary>The Letters book's filter chips.</summary>
@@ -119,7 +137,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             kind == LetterKind.SiegeDeclaredOnYou || kind == LetterKind.HeroesCaptured ||
             kind == LetterKind.CompanyAmbushed || kind == LetterKind.QuestReady || kind == LetterKind.SeasonEnded ||
             kind == LetterKind.RiftOmen || kind == LetterKind.RegionInvaded || kind == LetterKind.RiftSealed ||
-            kind == LetterKind.CaravanAmbushed || kind == LetterKind.CaravanDelivered;
+            kind == LetterKind.CaravanAmbushed || kind == LetterKind.CaravanDelivered ||
+            kind == LetterKind.HordeGathers || kind == LetterKind.RegionFell;
 
         public static LetterCategory CategoryOf(LetterKind kind)
         {

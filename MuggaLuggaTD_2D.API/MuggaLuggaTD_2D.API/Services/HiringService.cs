@@ -375,7 +375,8 @@ public class HiringService
             // Land lost: home to the Hall, with what they had gathered already paid above. The fraction
             // they carry is kept for their next site.
             byId.TryGetValue(SiteSpec.RegionIdOf(worker.SiteId!), out var region);
-            if (region == null || !region.IsOwnedByPlayer(worker.UserId))
+            // Land a horde took back (Reclaiming row P3-6) stops its workers too: they come home until it is reclaimed.
+            if (region == null || !region.IsOwnedByPlayer(worker.UserId) || (HordeRules.IsReturned(region) && HordeRules.IsOverrun(region)))
             {
                 touched.Add(worker.SiteId);
                 worker.SiteId = null;

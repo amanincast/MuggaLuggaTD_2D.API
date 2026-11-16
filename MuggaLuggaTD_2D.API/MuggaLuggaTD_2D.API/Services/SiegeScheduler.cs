@@ -81,6 +81,11 @@ public class SiegeScheduler : BackgroundService
                 if (moved > 0)
                     _logger.LogInformation("Rift sweep: {Count} rift(s) announced or moved on.", moved);
 
+                // The horde returns to neglected land (Reclaiming phase 3): gatherings start, scatter, strike and lapse.
+                int horde = await scope.ServiceProvider.GetRequiredService<HordeReturnService>().SweepAllAsync();
+                if (horde > 0)
+                    _logger.LogInformation("Horde sweep: {Count} thing(s) done.", horde);
+
                 // The NPC factions take their turn every quarter hour, not every minute
                 // (docs/design/npc-factions.md §4).
                 var now = DateTime.UtcNow;
