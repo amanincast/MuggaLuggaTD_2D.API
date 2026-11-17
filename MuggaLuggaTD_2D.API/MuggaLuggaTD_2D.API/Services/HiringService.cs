@@ -324,8 +324,14 @@ public class HiringService
         // shared by its workers, as each works the hours out once.
         var held = RegionConditionRules.HeldIds(regions);
         var fairs = new Dictionary<string, Func<long, double>?>(StringComparer.Ordinal);
-        Func<long, double>? FairsIn(string regionId) =>
-            fairs.TryGetValue(regionId, out var f) ? f : fairs[regionId] = RegionConditionRules.GoodsFactor(realm, regionId, held);
+        // A Huntmaster steward lifts them too, for as long as it stands at the keep (Reclaiming phase 4).
+        Func<long, double>? FairsIn(string regionId)
+        {
+            if (fairs.TryGetValue(regionId, out var f)) return f;
+            var fair = RegionConditionRules.GoodsFactor(realm, regionId, held);
+            double steward = byId.TryGetValue(regionId, out var r) ? StewardBonusRules.GoodsFactor(r) : 1.0;
+            return fairs[regionId] = steward == 1.0 ? fair : fair == null ? _ => steward : h => fair(h) * steward;
+        }
 
         // Mentors lift the experience of the others at their site; computed before anyone changes.
         var mentorsAt = workers.Where(w => w.PerkList.Contains(WorkerPerk.Mentor))

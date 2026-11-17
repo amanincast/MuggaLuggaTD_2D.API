@@ -76,7 +76,9 @@ namespace MuggaLuggaTD.Shared.Gameplay
             return BaseGoldPerHour
                    * SeasonScoreRules.TierMultiplier(region.Tier)
                    * (1.0 + (entrenchment * SeasonScoreRules.EntrenchmentStep))
-                   * (SeasonScoreRules.IsHeartland(region) ? SeasonScoreRules.HeartlandMultiplier : 1.0);
+                   * (SeasonScoreRules.IsHeartland(region) ? SeasonScoreRules.HeartlandMultiplier : 1.0)
+                   // A Magister steward keeps the ledgers (Reclaiming phase 4). Gold only: season points are untouched.
+                   * StewardBonusRules.GoldFactor(region);
         }
 
         /// <summary>What everything a player holds pays them per hour, together.</summary>

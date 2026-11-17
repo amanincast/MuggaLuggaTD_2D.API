@@ -101,6 +101,8 @@ public static class WorldRegionBlob
             Horde = ReadHorde(region["Horde"]),
             StewardNeeded = region["StewardNeeded"]?.GetValue<bool>() ?? false,
             StewardId = region["StewardId"]?.GetValue<string>(),
+            StewardClass = region["StewardClass"]?.GetValue<string>(),
+            StewardLevel = region["StewardLevel"]?.GetValue<int>() ?? 0,
             UnrulySinceUtcTicks = region["UnrulySinceUtcTicks"]?.GetValue<long>() ?? 0,
             Gathering = ReadGathering(region["Gathering"]),
             HordeSafeUntilUtcTicks = region["HordeSafeUntilUtcTicks"]?.GetValue<long>() ?? 0
@@ -116,14 +118,28 @@ public static class WorldRegionBlob
     {
         if (needed) regionNode["StewardNeeded"] = true;
         else (regionNode as JsonObject)?.Remove("StewardNeeded");
-        (regionNode as JsonObject)?.Remove("StewardId");
+        SetSteward(regionNode, null);
     }
 
-    /// <summary>Appoints the region's steward (null: nobody), when its keep is garrisoned.</summary>
-    public static void SetSteward(JsonNode regionNode, string? characterId)
+    /// <summary>
+    /// Appoints the region's steward (null: nobody), when its keep is garrisoned, with its class and level for its
+    /// bonus (Reclaiming phase 4, <see cref="StewardBonusRules"/>).
+    /// </summary>
+    public static void SetSteward(JsonNode regionNode, string? characterId, string? className = null, int level = 0)
     {
-        if (string.IsNullOrEmpty(characterId)) (regionNode as JsonObject)?.Remove("StewardId");
-        else regionNode["StewardId"] = characterId;
+        var obj = regionNode as JsonObject;
+        if (string.IsNullOrEmpty(characterId))
+        {
+            obj?.Remove("StewardId");
+            obj?.Remove("StewardClass");
+            obj?.Remove("StewardLevel");
+            return;
+        }
+        regionNode["StewardId"] = characterId;
+        if (string.IsNullOrEmpty(className)) obj?.Remove("StewardClass");
+        else regionNode["StewardClass"] = className;
+        if (level > 0) regionNode["StewardLevel"] = level;
+        else obj?.Remove("StewardLevel");
     }
 
     // -----------------------------------------------------------------
@@ -807,7 +823,7 @@ public static class WorldRegionBlob
         };
         if (region.Horde != null) node["Horde"] = WriteHorde(region.Horde);
         if (region.StewardNeeded) node["StewardNeeded"] = true;
-        if (!string.IsNullOrEmpty(region.StewardId)) node["StewardId"] = region.StewardId;
+        if (!string.IsNullOrEmpty(region.StewardId)) SetSteward(node, region.StewardId, region.StewardClass, region.StewardLevel);
         if (region.UnrulySinceUtcTicks > 0) SetUnrulySince(node, region.UnrulySinceUtcTicks);
         if (region.Gathering != null) StartGathering(node, region.Gathering);
         if (region.HordeSafeUntilUtcTicks > 0) node["HordeSafeUntilUtcTicks"] = region.HordeSafeUntilUtcTicks;

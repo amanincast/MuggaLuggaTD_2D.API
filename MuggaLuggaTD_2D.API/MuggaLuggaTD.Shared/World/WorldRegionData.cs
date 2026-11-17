@@ -85,6 +85,15 @@ namespace MuggaLuggaTD.Shared.World
         public string StewardId;
 
         /// <summary>
+        /// The steward's class when it was appointed ("Warrior", "Archer", "Mage", "Cleric"): its bonus to the region
+        /// (Reclaiming phase 4, <see cref="Gameplay.StewardBonusRules"/>). Null with no steward.
+        /// </summary>
+        public string StewardClass;
+
+        /// <summary>The steward's level when it was appointed: its bonus grows with it (<see cref="Gameplay.StewardBonusRules"/>).</summary>
+        public int StewardLevel;
+
+        /// <summary>
         /// Ids of the sites in this region whose state has diverged from what the seed generates —
         /// a dungeon cleared, a node claimed, a keep garrisoned. Sites absent from this map are
         /// exactly as generated.

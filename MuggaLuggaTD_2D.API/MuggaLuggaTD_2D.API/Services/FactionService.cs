@@ -478,7 +478,7 @@ public partial class FactionService
     private FactionRaid Strike(Guid gameInstanceId, FactionState row, WorldRegionData region, long hold, double march,
         JsonNode? world, DateTime now, bool charged)
     {
-        var result = RaidResolver.Resolve(march, hold, region.Resolve, _random.Next(1, 21));
+        var result = RaidResolver.Resolve(march, hold, region.Resolve, _random.Next(1, 21), StewardBonusRules.ResolveLossFactor(region));
 
         if (result.ResolveDamage > 0)
         {

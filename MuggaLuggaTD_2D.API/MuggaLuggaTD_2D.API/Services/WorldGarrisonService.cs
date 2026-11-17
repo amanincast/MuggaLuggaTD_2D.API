@@ -133,14 +133,22 @@ public class WorldGarrisonService
 
         // Land claimed from the wild needs a steward at its keep (Reclaiming row P2-10): the keep's strongest hero of
         // the level, or nobody, and then the region is unruly until one stands there.
-        string? steward = null;
+        string? steward = null, stewardClass = null;
+        int stewardLevel = 0;
         if (region.StewardNeeded && resolved.Site.Type == LocationType.Castle)
         {
-            var levels = muster.Save?.Characters?.Where(c => c?.Id != null)
-                .GroupBy(c => c.Id).ToDictionary(g => g.Key, g => (int)Math.Max(1, g.First().Level), StringComparer.Ordinal)
-                ?? new Dictionary<string, int>(StringComparer.Ordinal);
-            steward = StewardRules.ChooseSteward(region, muster.CharacterIds, id => levels.TryGetValue(id, out var l) ? l : 0);
-            WorldRegionBlob.SetSteward(resolved.RegionNode, steward);
+            var heroes = muster.Save?.Characters?.Where(c => c?.Id != null)
+                .GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal)
+                ?? new Dictionary<string, StateManagement.Models.CharacterSaveData>(StringComparer.Ordinal);
+            steward = StewardRules.ChooseSteward(region, muster.CharacterIds,
+                id => heroes.TryGetValue(id, out var h) ? (int)Math.Max(1, h.Level) : 0);
+            // Its class and level give the region its bonus (Reclaiming phase 4, StewardBonusRules).
+            if (steward != null && heroes.TryGetValue(steward, out var hero))
+            {
+                stewardClass = StewardBonusRules.ClassOf(hero, _content.Signatures, _content.RecruitSheets);
+                stewardLevel = (int)Math.Max(1, hero.Level);
+            }
+            WorldRegionBlob.SetSteward(resolved.RegionNode, steward, stewardClass, stewardLevel);
         }
 
         // Stationed is stationed: a garrison takes its characters out of whichever company they
@@ -164,7 +172,7 @@ public class WorldGarrisonService
             await _firstSteps.RecordAsync(gameInstanceId, userId, FirstStepsRules.Garrison);
 
         return (new GarrisonOutcome(GarrisonError.None),
-            new GarrisonResponse(request.SiteId, muster.CharacterIds, muster.Power, assessment.Hold, steward),
+            new GarrisonResponse(request.SiteId, muster.CharacterIds, muster.Power, assessment.Hold, steward, stewardClass, stewardLevel),
             world);
     }
 
