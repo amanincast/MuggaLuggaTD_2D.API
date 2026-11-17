@@ -132,6 +132,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         public const int HallOffers = 2;
 
         /// <summary>
+        /// The Hall offers one more while fewer than this many villages can give a quest (the realm at 127, spec §8, row
+        /// S-2): a new seat's neighbours are overrun wild land, whose villages give nothing until cleansed, so a fresh
+        /// board would otherwise hold one village quest where the 78-region map's held four.
+        /// </summary>
+        public const int FewVillages = 2;
+
+        /// <summary>
         /// How many wandering quest-givers offer a quest at once (Mike, 2026-10-08: NPCs in the regions as well as
         /// villages, on top of them). A giver stands in the region only while it has an offer or a quest of it is
         /// in hand. <i>(tune)</i>
@@ -273,7 +280,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             var homeVillages = HallEscortOrigins(all, userId);
             if (homeVillages.Count > 0) kinds.Add(QuestKind.Escort);
             hall.Shuffle(kinds);
-            for (int i = 0; i < HallOffers && i < kinds.Count; i++)
+            int hallOffers = HallOffers + (chosen.Count < FewVillages ? 1 : 0);
+            for (int i = 0; i < hallOffers && i < kinds.Count; i++)
             {
                 string offerId = $"{hour}.{set}.{HallGiver}.{i}";
                 offers.Add(kinds[i] == QuestKind.Escort

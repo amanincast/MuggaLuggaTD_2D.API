@@ -85,6 +85,13 @@ namespace MuggaLuggaTD.Shared.World
         /// <summary>Every faction of the cast holds at least this much land when the world begins (spec §3.2).</summary>
         public const int MinimumFactionRegions = 3;
 
+        /// <summary>
+        /// And at most this much (the realm at 127, spec §8, row S-1). Half the hard country of a 127-region map is 30-45
+        /// regions, two and a half times what the cast held on the 78-region map, and a faction's strength grows with
+        /// its land while a player's hold does not. A banner rolled past the cap stays wild, for players to cleanse.
+        /// </summary>
+        public const int MaximumFactionRegions = 6;
+
         /// <summary>A player to seat in the world.</summary>
         public class PlayerSeat
         {
@@ -285,17 +292,21 @@ namespace MuggaLuggaTD.Shared.World
             FactionId Pick(IEnumerable<FactionId> candidates, HexCoord hex) =>
                 candidates.OrderBy(f => Nearest(f, hex)).ThenBy(f => IndexIn(cast, f)).First();
 
-            // Home biomes first, in spiral order, so each faction's first land is in its own country.
+            // Home biomes first, in spiral order, so each faction's first land is in its own country. A faction at
+            // MaximumFactionRegions takes no more; a banner nobody under the cap can take is struck (the land stays wild).
+            bool Room(FactionId f) => held[f].Count < MaximumFactionRegions;
             foreach (var region in bannered)
             {
-                var homes = cast.Where(f => FactionCatalog.Of(f)?.HomeBiomes.Contains(region.Biome) == true).ToList();
+                var homes = cast.Where(f => FactionCatalog.Of(f)?.HomeBiomes.Contains(region.Biome) == true && Room(f)).ToList();
                 if (homes.Count == 0) continue;
                 Seat(region, Pick(homes, region.Hex), held);
             }
             foreach (var region in bannered.Where(r => r.Faction == FactionId.None))
             {
-                var anyone = cast.Where(f => held[f].Count > 0).ToList();
-                Seat(region, anyone.Count > 0 ? Pick(anyone, region.Hex) : cast[0], held);
+                var anyone = cast.Where(f => held[f].Count > 0 && Room(f)).ToList();
+                if (anyone.Count == 0 && cast.Any(f => held[f].Count == 0)) anyone = cast.Where(f => held[f].Count == 0).Take(1).ToList();
+                if (anyone.Count == 0) { region.Entrenchment = 0; continue; }
+                Seat(region, Pick(anyone, region.Hex), held);
             }
 
             // Every faction of the cast holds some land from the start.

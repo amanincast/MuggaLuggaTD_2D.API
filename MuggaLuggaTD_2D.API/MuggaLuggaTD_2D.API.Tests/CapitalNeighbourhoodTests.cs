@@ -1,3 +1,4 @@
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD.Shared.World;
 
 namespace MuggaLuggaTD_2D.API.Tests;
@@ -46,7 +47,8 @@ public class CapitalNeighbourhoodTests
     {
         var seats = new List<WorldMapGenerator.PlayerSeat> { new("user-a", "Aldric") };
         int flagged = Enumerable.Range(1, 20)
-            .Sum(seed => WorldMapGenerator.Generate(seed, seats).Count(r => r.Faction is FactionId.Ashkin or FactionId.Grimjaw));
-        Assert.True(flagged > 20 * 10, $"only {flagged} warband regions across 20 worlds");
+            .Sum(seed => WorldMapGenerator.Generate(seed, seats).Count(r => FactionStrengthRules.IsFaction(r.Faction)));
+        // The cast of three holds 3-6 regions each (row S-1): never fewer than nine between them.
+        Assert.True(flagged >= 20 * 9, $"only {flagged} warband regions across 20 worlds");
     }
 }
