@@ -1,3 +1,4 @@
+using MuggaLuggaTD.Shared.Gameplay;
 using MuggaLuggaTD.Shared.World;
 
 namespace MuggaLuggaTD_2D.API.Tests;
@@ -72,16 +73,18 @@ public class BiggerMapTests
     }
 
     [Fact]
-    public void FactionsStillHoldAboutHalfTheHardCountry()
+    public void EachFactionHoldsThreeToSix_AndTheRestOfTheHardCountryIsWild()
     {
-        // "Factions keep their share of the outer ring": roughly half the eligible tier-3+ land, as before.
-        var seats = SeatsFor(2);
-        double share = Enumerable.Range(1, 40).Average(seed =>
+        // The realm at 127 (spec §8, row S-1): half the hard country was 30-45 regions; a faction now starts with at most
+        // MaximumFactionRegions, and the banners past it stay wild for players to cleanse.
+        var seats = SeatsFor(4);
+        foreach (int seed in Enumerable.Range(1, 40))
         {
             var regions = WorldMapGenerator.Generate(seed, seats);
-            var hard = regions.Where(r => r.Tier >= 3 && !r.IsCapital).ToList();
-            return hard.Count(r => r.Faction != FactionId.None && r.Faction != FactionId.Player) / (double)hard.Count;
-        });
-        Assert.InRange(share, 0.35, 0.65);
+            var held = regions.Where(r => FactionStrengthRules.IsFaction(r.Faction)).GroupBy(r => r.Faction).ToList();
+            Assert.Equal(3, held.Count);
+            Assert.All(held, g => Assert.InRange(g.Count(), WorldMapGenerator.MinimumFactionRegions, WorldMapGenerator.MaximumFactionRegions));
+            Assert.True(regions.Count(r => r.Tier >= 3 && r.Ownership == LocationOwnership.Neutral) > 40, $"seed {seed}: little wild hard country");
+        }
     }
 }

@@ -81,6 +81,19 @@ public class QuestTests : IDisposable
     }
 
     [Fact]
+    public void WithFewVillagesInSight_TheHallOffersOneMore()
+    {
+        // The realm at 127 (spec §8, row S-2): a new seat's neighbours are overrun wild land, whose villages give nothing.
+        var world = World();
+        foreach (var region in world.Where(r => r.RegionId is "r0" or "r1")) region.Horde = HordeRules.NewWildHorde(1);
+        var board = BoardOf(world: world);
+
+        Assert.True(board.Count(o => o.GiverId != QuestRules.HallGiver && !QuestRules.IsNpcGiver(o.GiverId)) < QuestRules.FewVillages);
+        Assert.Equal(QuestRules.HallOffers + 1, board.Count(o => o.GiverId == QuestRules.HallGiver));
+        Assert.Equal(board.Count(o => o.GiverId == QuestRules.HallGiver), board.Where(o => o.GiverId == QuestRules.HallGiver).Select(o => o.Kind).Distinct().Count());
+    }
+
+    [Fact]
     public void AVillageGivesTheSameQuestWhenMoreLandComesIntoSight()
     {
         var before = BoardOf();

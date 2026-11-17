@@ -345,6 +345,9 @@ namespace MuggaLuggaTD.Shared
         // 1.87.0 - Reclaiming phase 4: a steward gives its land a bonus by class, growing with its level (StewardBonusRules):
         //   Warrior hold +10..20%, Archer goods +15..30%, Mage gold +15..30%, Cleric resolve loss -30..50% and clears +30..50%.
         //   WorldRegionData.StewardClass/StewardLevel; RegionHoldCalculator.Hold/Assess and RaidResolver.Resolve take the factors.
-        public const string Version = "1.87.0";
+        // 1.88.0 - The realm at 127: a faction is seated on at most 6 regions (WorldMapGenerator.MaximumFactionRegions; the
+        //   rest of its rolled banners stay wild), and the Hall offers a third quest while fewer than 2 villages can give one
+        //   (QuestRules.FewVillages).
+        public const string Version = "1.88.0";
     }
 }
