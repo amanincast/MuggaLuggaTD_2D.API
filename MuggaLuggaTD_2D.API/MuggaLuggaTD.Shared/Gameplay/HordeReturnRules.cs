@@ -266,7 +266,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
             if (region == null) return 0;
             double garrison = RegionHoldCalculator.GarrisonPowerOf(region) + Math.Max(0, patrolPower);
             return RegionHoldCalculator.Hold(garrison, region.Tier, region.Entrenchment,
-                SupplyCalculator.SupplyFor(region, regions), region.Resolve);
+                SupplyCalculator.SupplyFor(region, regions), region.Resolve, StewardBonusRules.HoldFactor(region));
         }
 
         /// <summary>The roll when the gathering's time is up, with the server's d20: the dice a faction's siege uses.</summary>

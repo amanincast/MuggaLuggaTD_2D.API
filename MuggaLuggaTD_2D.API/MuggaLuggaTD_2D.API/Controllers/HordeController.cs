@@ -204,6 +204,23 @@ public class HordeController : ControllerBase
         }
         if (!target.IsOwnedByPlayer(userId)) return BadRequest(new { message = "That land is not yours." });
 
+        // A steward's calling (Reclaiming phase 4): make the steward standing here a Warrior/Archer/Mage/Cleric, or 5 levels
+        // higher, to see each bonus without a roster of every class.
+        if (what.StartsWith("calling-", StringComparison.Ordinal) || what == "steward-up")
+        {
+            if (!StewardRules.HasSteward(target)) return BadRequest(new { message = "No steward stands at that keep." });
+            string cls = target.StewardClass ?? "";
+            int level = Math.Max(target.StewardLevel, StewardRules.LevelFor(target.Tier));
+            if (what == "steward-up") level += 5;
+            else cls = what.Substring("calling-".Length);
+            if (StewardBonusRules.CallingOf(cls) == StewardCalling.None) return BadRequest(new { message = "warrior, archer, mage or cleric." });
+            cls = char.ToUpperInvariant(cls[0]) + cls.Substring(1).ToLowerInvariant();
+            WorldRegionBlob.SetSteward(node, target.StewardId, cls, level);
+            await SaveAsync(gameInstanceId, row, world!);
+            var after = WorldRegionBlob.ReadRegion(node);
+            return Ok(new { message = $"{target.RegionId}: steward is a {cls} of lv {level} · {StewardBonusRules.DescribeAt(after)}." });
+        }
+
         switch (what)
         {
             case "warbands":

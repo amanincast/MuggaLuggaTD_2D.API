@@ -104,10 +104,19 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// repelled, rather than a guaranteed tick of damage for anyone who clears the bar.</para>
         /// </summary>
         public static RaidResult Resolve(double marchingPower, long hold, int resolveBefore, int d20Roll)
+            => Resolve(marchingPower, hold, resolveBefore, d20Roll, 1.0);
+
+        /// <summary>
+        /// As above, with <paramref name="damageFactor"/>: a Chaplain steward softens what a raid takes
+        /// (<see cref="StewardBonusRules.ResolveLossFactor"/>, Reclaiming phase 4). 1 for none.
+        /// </summary>
+        public static RaidResult Resolve(double marchingPower, long hold, int resolveBefore, int d20Roll, double damageFactor)
         {
             var fight = PassivePvPResolver.Resolve((float)marchingPower, hold, d20Roll);
 
             int damage = fight.AttackerWins ? ResolveDamage(marchingPower, hold) : 0;
+            if (damage > 0 && damageFactor > 0 && damageFactor != 1.0)
+                damage = Math.Max(1, (int)Math.Round(damage * damageFactor, MidpointRounding.AwayFromZero));
             int after = resolveBefore - damage;
             if (after < MinimumResolve) after = MinimumResolve;
 

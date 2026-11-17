@@ -124,6 +124,10 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <summary>A region's resolve once the tide has passed over it.</summary>
         public static int Flooded(int resolve) => RegionResolveRules.Clamp(resolve - TideResolveLoss);
 
+        /// <summary>The tide on this region: a Chaplain steward softens it (Reclaiming phase 4).</summary>
+        public static int Flooded(WorldRegionData region) =>
+            RegionResolveRules.Clamp(region.Resolve - StewardBonusRules.SoftenLoss(region, TideResolveLoss));
+
         // --- The dead rise -------------------------------------------------------------------------------------
 
         /// <summary>Whether losing a region to anyone leaves dead behind to raid its new holder (the Bone Synod's).</summary>

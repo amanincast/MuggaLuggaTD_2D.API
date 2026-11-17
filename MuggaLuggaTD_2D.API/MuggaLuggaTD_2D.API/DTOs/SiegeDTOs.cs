@@ -16,7 +16,8 @@ public record GarrisonRequest(string SiteId, List<string> CharacterIds, string S
 /// filtered out rather than refusing the whole request.</para>
 /// </summary>
 /// <summary>The garrison stationed, its power and the hold; and, on land claimed from the wild, its steward (null: none of the level).</summary>
-public record GarrisonResponse(string SiteId, List<string> CharacterIds, double GarrisonPower, long Hold, string? StewardId = null);
+public record GarrisonResponse(string SiteId, List<string> CharacterIds, double GarrisonPower, long Hold, string? StewardId = null,
+    string? StewardClass = null, int StewardLevel = 0);
 
 /// <summary>Buys your prisoners back out of the site holding them. The price is the server's.</summary>
 public record RansomRequest(string SiteId, string SharedContractVersion);

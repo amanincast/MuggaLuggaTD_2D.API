@@ -364,7 +364,8 @@ public partial class WorldPveService
         int resolveRestored = 0;
         if (worldRewards && resolved.Region.IsOwnedByPlayer(userId))
         {
-            resolveRestored = RegionResolveRules.RestoredByClearing(resolved.Site.Type);
+            // A Chaplain steward builds it back faster (Reclaiming phase 4).
+            resolveRestored = StewardBonusRules.RaiseGain(resolved.Region, RegionResolveRules.RestoredByClearing(resolved.Site.Type));
             if (resolveRestored > 0)
             {
                 int before = resolved.Region.Resolve;

@@ -209,7 +209,7 @@ public partial class FactionService
                     if (flooded != null && floodNode != null)
                     {
                         int before = flooded.Resolve;
-                        int after = WorldRegionBlob.SetResolve(floodNode, FactionSignatureRules.Flooded(before));
+                        int after = WorldRegionBlob.SetResolve(floodNode, FactionSignatureRules.Flooded(flooded));
                         floods.Add((siege.Faction, flooded, before, after, at));
                         done.Add($"{TemperamentOf(siege.Faction).Name}'s tide flooded {flooded.RegionId} (resolve {before} → {after}).");
                     }

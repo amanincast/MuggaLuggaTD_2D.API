@@ -135,7 +135,9 @@ public class WorldRaidService
 
         // Server-side dice, as everywhere else. The client renders what comes back.
         int roll = Random.Shared.Next(1, 21);
-        var result = RaidResolver.Resolve(marchingPower, assessment.Hold, region.Resolve, roll);
+        // A Chaplain steward softens what the raid takes (Reclaiming phase 4).
+        var result = RaidResolver.Resolve(marchingPower, assessment.Hold, region.Resolve, roll,
+            StewardBonusRules.ResolveLossFactor(region));
 
         if (result.ResolveDamage > 0)
             WorldRegionBlob.SetResolve(regionNode, result.ResolveAfter);

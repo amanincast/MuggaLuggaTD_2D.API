@@ -99,6 +99,13 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// as well would square it.</para>
         /// </summary>
         public static long Hold(double garrisonPower, int tier, int entrenchment, double supply, int resolve)
+            => Hold(garrisonPower, tier, entrenchment, supply, resolve, 1.0);
+
+        /// <summary>
+        /// As above, with <paramref name="stewardFactor"/>: a Warden steward's lift to the whole hold
+        /// (<see cref="StewardBonusRules.HoldFactor"/>, Reclaiming phase 4). 1 for none.
+        /// </summary>
+        public static long Hold(double garrisonPower, int tier, int entrenchment, double supply, int resolve, double stewardFactor)
         {
             double garrison = garrisonPower > 0 ? garrisonPower : 0;
 
@@ -106,7 +113,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             double value = (garrison + HoldFloor(tier))
                            * EntrenchmentMultiplier(entrenchment)
                            * supply
-                           * clampedResolve;
+                           * clampedResolve
+                           * (stewardFactor > 0 ? stewardFactor : 1.0);
 
             return (long)Math.Round(value, MidpointRounding.AwayFromZero);
         }
@@ -128,8 +136,16 @@ namespace MuggaLuggaTD.Shared.Gameplay
         /// <paramref name="supply"/> comes from <see cref="SupplyCalculator"/>.
         /// </summary>
         public static SiegeAssessment Assess(double garrisonPower, int tier, int entrenchment, double supply, int resolve, double marchingPower)
+            => Assess(garrisonPower, tier, entrenchment, supply, resolve, marchingPower, 1.0, 1.0);
+
+        /// <summary>
+        /// As above, with a steward's bonuses (Reclaiming phase 4): <paramref name="stewardFactor"/> lifts the hold (a
+        /// Warden), <paramref name="resolveLossFactor"/> softens a raid's expected damage (a Chaplain). 1 for none.
+        /// </summary>
+        public static SiegeAssessment Assess(double garrisonPower, int tier, int entrenchment, double supply, int resolve,
+            double marchingPower, double stewardFactor, double resolveLossFactor)
         {
-            long hold = Hold(garrisonPower, tier, entrenchment, supply, resolve);
+            long hold = Hold(garrisonPower, tier, entrenchment, supply, resolve, stewardFactor);
             long gate = SiegeGate(hold);
             long raidBar = RaidResolver.RaidBar(hold);
 
@@ -146,7 +162,7 @@ namespace MuggaLuggaTD.Shared.Gameplay
                 ShortBy = marchingPower >= gate ? 0 : (long)Math.Round(gate - marchingPower, MidpointRounding.AwayFromZero),
                 Surplus = marchingPower >= gate ? (long)Math.Round(marchingPower - gate, MidpointRounding.AwayFromZero) : 0,
                 ExpectedRaidDamage = marchingPower >= raidBar
-                    ? RaidResolver.ResolveDamage(marchingPower, hold)
+                    ? (int)Math.Round(RaidResolver.ResolveDamage(marchingPower, hold) * resolveLossFactor, MidpointRounding.AwayFromZero)
                     : 0
             };
         }
@@ -170,7 +186,8 @@ namespace MuggaLuggaTD.Shared.Gameplay
             double supply = SupplyCalculator.SupplyFor(region, allRegions);
 
             var assessment = Assess(
-                GarrisonPowerOf(region), region.Tier, region.Entrenchment, supply, region.Resolve, marchingPower);
+                GarrisonPowerOf(region), region.Tier, region.Entrenchment, supply, region.Resolve, marchingPower,
+                StewardBonusRules.HoldFactor(region), StewardBonusRules.ResolveLossFactor(region));
 
             assessment.GarrisonCount = GarrisonCountOf(region);
             return assessment;

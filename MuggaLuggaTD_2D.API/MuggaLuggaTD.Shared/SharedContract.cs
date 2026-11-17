@@ -342,6 +342,9 @@ namespace MuggaLuggaTD.Shared
         //   ({region}:w{n}, {region}:chief; HordeReturnRules.GatheringPacks), fought on the walk by its holder; each one
         //   broken weakens it (StrengthOf), and breaking all scatters it. Cleansed land nobody claims grows a fresh wild
         //   horde a day after its cleansing (ShouldRegrow). HordeRules.StandingPacks and FindPack include a gathering's.
-        public const string Version = "1.86.0";
+        // 1.87.0 - Reclaiming phase 4: a steward gives its land a bonus by class, growing with its level (StewardBonusRules):
+        //   Warrior hold +10..20%, Archer goods +15..30%, Mage gold +15..30%, Cleric resolve loss -30..50% and clears +30..50%.
+        //   WorldRegionData.StewardClass/StewardLevel; RegionHoldCalculator.Hold/Assess and RaidResolver.Resolve take the factors.
+        public const string Version = "1.87.0";
     }
 }
