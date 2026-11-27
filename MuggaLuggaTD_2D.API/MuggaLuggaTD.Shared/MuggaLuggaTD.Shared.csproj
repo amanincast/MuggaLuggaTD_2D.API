@@ -31,15 +31,21 @@
     server reject the attack rather than let the two disagree).
 
     Conditioned on the directory existing, so a standalone/CI build of the API just skips it.
+
+    Clone sets: the Unity clone shares this API clone's suffix. MuggaLuggaTD_2D.API_2 copies into
+    MuggaLuggaTD_2D_2, never into the main clone. Pass -p:UnityProjectDir=... to aim somewhere else.
   -->
   <PropertyGroup>
-    <UnityPluginDir>$(MSBuildThisFileDirectory)..\..\..\MuggaLuggaTD_2D\Assets\Plugins\MuggaLuggaTD.Shared\</UnityPluginDir>
+    <ApiRepoName>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))))</ApiRepoName>
+    <CloneSuffix>$(ApiRepoName.Replace('MuggaLuggaTD_2D.API', ''))</CloneSuffix>
+    <UnityProjectDir Condition="'$(UnityProjectDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\MuggaLuggaTD_2D$(CloneSuffix)\</UnityProjectDir>
+    <UnityPluginDir>$(UnityProjectDir)Assets\Plugins\MuggaLuggaTD.Shared\</UnityPluginDir>
   </PropertyGroup>
 
   <Target Name="CopyToUnityPlugins" AfterTargets="Build"
           Condition="'$(Configuration)' == 'Release' AND Exists('$(UnityPluginDir)')">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(UnityPluginDir)" />
-    <Message Importance="high" Text="Copied $(TargetFileName) to the Unity project's Plugins folder." />
+    <Message Importance="high" Text="Copied $(TargetFileName) to $(UnityPluginDir)" />
   </Target>
 
 </Project>
