@@ -126,7 +126,7 @@
         "BaseValue": 5
       },
       "Range": {
-        "BaseValue": 10
+        "BaseValue": 12
       },
       "AnimationPrefix": "SpellCast",
       "AffinityStats": [
@@ -138,7 +138,7 @@
         }
       ],
       "Classification": 1,
-      "TravelSpeed": 30
+      "TravelSpeed": 55
     },
     {
       "AbilityName": "Lightning Strike",
@@ -208,7 +208,7 @@
         "BaseValue": 3
       },
       "Range": {
-        "BaseValue": 20
+        "BaseValue": 14
       },
       "AnimationPrefix": "Shoot",
       "AffinityStats": [
@@ -220,7 +220,7 @@
         }
       ],
       "Classification": 1,
-      "TravelSpeed": 80
+      "TravelSpeed": 55
     },
     {
       "AbilityName": "Snipe Shot",
@@ -234,7 +234,7 @@
         "BaseValue": 5
       },
       "Range": {
-        "BaseValue": 18
+        "BaseValue": 16
       },
       "PierceCount": {
         "BaseValue": 2
@@ -249,7 +249,7 @@
         }
       ],
       "Classification": 1,
-      "TravelSpeed": 120
+      "TravelSpeed": 90
     },
     {
       "AbilityName": "Inferno Blast",
@@ -491,7 +491,7 @@
         "BaseValue": 5
       },
       "Range": {
-        "BaseValue": 14
+        "BaseValue": 12
       },
       "ProjectileCount": {
         "BaseValue": 3
@@ -506,7 +506,7 @@
         }
       ],
       "Classification": 1,
-      "TravelSpeed": 70
+      "TravelSpeed": 55
     },
     {
       "AbilityName": "Frost Nova",
