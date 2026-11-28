@@ -618,7 +618,7 @@
       "Classification": 1,
       "TravelSpeed": 30,
       "Healing": {
-        "BaseValue": 15
+        "BaseValue": 6
       },
       "HealTargets": 1
     },
@@ -651,7 +651,7 @@
       "Classification": 1,
       "TravelSpeed": 0,
       "Healing": {
-        "BaseValue": 35
+        "BaseValue": 15
       },
       "HealTargets": 1,
       "HealTargetCount": {
@@ -690,7 +690,7 @@
         "BaseValue": 1.5
       },
       "Healing": {
-        "BaseValue": 15
+        "BaseValue": 8
       },
       "HealTargets": 2,
       "SupportRadius": {
