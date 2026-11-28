@@ -118,6 +118,24 @@ public class WalkTests : IDisposable
     }
 
     [Fact]
+    public async Task SwappingTheLeaderOnAWalk_DoesNotRestartTheWalkClock()
+    {
+        // Mike 2026-11-28: after a leader swap on a walk (saved at once as the company's new first member), E at a
+        // village never let him in. Re-manning stamped the walk clock, so every arrival was refused as too fast again.
+        var (instance, company, keep, far, cells) = await SeedAsync();
+        await Service.WalkBeginAsync(instance, TestIds.Player, company.Id, At(keep));
+        await BackdateAsync(company.Id, WalkRules.Floor(cells) + TimeSpan.FromSeconds(1));
+
+        var reordered = company.CharacterIds.Skip(1).Append(company.CharacterIds[0]).ToList();
+        var (set, _) = await Service.UpdateAsync(instance, TestIds.Player, company.Id,
+            new PartyUpdateRequest(null, null, reordered, SharedContract.Version));
+        var (arrived, _) = await Service.WalkArriveAsync(instance, TestIds.Player, company.Id, At(far));
+
+        Assert.True(set.Succeeded, set.Message);
+        Assert.True(arrived.Succeeded, arrived.Message);
+    }
+
+    [Fact]
     public async Task ACompanyOnTheRoad_CannotWalk()
     {
         var (instance, company, keep, far, _) = await SeedAsync();
