@@ -250,7 +250,9 @@ public class PartyService
         var check = await ApplyAsync(party, request.Name, request.Banner, request.CharacterIds, parties, world, gameInstanceId, userId);
         if (!check.Succeeded) return (check, null);
 
-        party.UpdatedAt = DateTime.UtcNow;
+        // UpdatedAt is the company's walk clock (WalkArriveAsync's floor is measured from it), and re-manning moves
+        // nobody: stamping it here meant a leader swapped on a walk (the client saves the new leader at once) had every
+        // arrival refused as too fast for the whole walk again, so a site's card never let it in (Mike, 2026-11-28).
         await _context.SaveChangesAsync();
         _sessionLog.Log("PARTY-SET", $"user={userId} party={party.Id} name=\"{party.Name}\" members={party.CharacterIdsJson}");
         return (check, await ResponseAsync(gameInstanceId, userId, world));
