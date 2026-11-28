@@ -494,14 +494,14 @@
         "BaseValue": 14
       },
       "ProjectileCount": {
-        "BaseValue": 5
+        "BaseValue": 3
       },
       "AnimationPrefix": "Shoot",
       "AffinityStats": [
         {
           "AffinityType": 0,
           "Damage": {
-            "BaseValue": 40
+            "BaseValue": 30
           }
         }
       ],
